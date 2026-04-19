@@ -601,17 +601,23 @@ export function createApp() {
     if (session.receivers.size >= getMaxReceivers())
       return c.json({ error: "too_many_receivers" }, 429, { "cache-control": "no-store" })
 
-    session.downloadCount++
-    notifyLive(session)
-
     const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>()
     const writer = writable.getWriter()
     session.receivers.add(writer)
     notifyReceiverAvailable(session)
 
+    let counted = false
+    const count = () => {
+      if (counted) return
+      counted = true
+      session.downloadCount++
+      notifyLive(session)
+    }
+
     const onAbort = () => {
       removeReceiver(session, writer)
       writer.abort().catch(() => {})
+      count()
     }
 
     c.req.raw.signal.addEventListener("abort", onAbort, { once: true })
@@ -622,7 +628,7 @@ export function createApp() {
     headers.set("accept-ranges", "none")
     setAttachmentContentDisposition(headers, "streamdrop.enc")
 
-    return new Response(readable, { status: 200, headers })
+    return new Response(wrapReadableWithDone(readable, count), { status: 200, headers })
   })
 
   app.get("/cli/d/:downloadToken", async (c) => {
@@ -637,17 +643,23 @@ export function createApp() {
     if (session.receivers.size >= getMaxReceivers())
       return c.json({ error: "too_many_receivers" }, 429, { "cache-control": "no-store" })
 
-    session.downloadCount++
-    notifyLive(session)
-
     const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>()
     const writer = writable.getWriter()
     session.receivers.add(writer)
     notifyReceiverAvailable(session)
 
+    let counted = false
+    const count = () => {
+      if (counted) return
+      counted = true
+      session.downloadCount++
+      notifyLive(session)
+    }
+
     const onAbort = () => {
       removeReceiver(session, writer)
       writer.abort().catch(() => {})
+      count()
     }
     c.req.raw.signal.addEventListener("abort", onAbort, { once: true })
 
@@ -657,7 +669,7 @@ export function createApp() {
     headers.set("accept-ranges", "none")
     setAttachmentContentDisposition(headers, "streamdrop.enc")
 
-    return new Response(readable, { status: 200, headers })
+    return new Response(wrapReadableWithDone(readable, count), { status: 200, headers })
   })
 
   app.get("/raw/d/:downloadToken", async (c) => {
@@ -668,17 +680,23 @@ export function createApp() {
     if (session.receivers.size >= getMaxReceivers())
       return c.json({ error: "too_many_receivers" }, 429, { "cache-control": "no-store" })
 
-    session.downloadCount++
-    notifyLive(session)
-
     const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>()
     const writer = writable.getWriter()
     session.receivers.add(writer)
     notifyReceiverAvailable(session)
 
+    let counted = false
+    const count = () => {
+      if (counted) return
+      counted = true
+      session.downloadCount++
+      notifyLive(session)
+    }
+
     const onAbort = () => {
       removeReceiver(session, writer)
       writer.abort().catch(() => {})
+      count()
     }
 
     c.req.raw.signal.addEventListener("abort", onAbort, { once: true })
@@ -689,7 +707,7 @@ export function createApp() {
     headers.set("accept-ranges", "none")
     setAttachmentContentDisposition(headers, "streamdrop.bin")
 
-    return new Response(readable, { status: 200, headers })
+    return new Response(wrapReadableWithDone(readable, count), { status: 200, headers })
   })
 
   return app
@@ -819,6 +837,32 @@ function createFileStreamWithDone(session: Session) {
     },
     async cancel() {
       done()
+      await reader.cancel().catch(() => {})
+    },
+  })
+}
+
+function wrapReadableWithDone(readable: ReadableStream<Uint8Array>, done: () => void) {
+  const reader = readable.getReader()
+  let doneCalled = false
+  const callDone = () => {
+    if (doneCalled) return
+    doneCalled = true
+    done()
+  }
+
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const { value, done: isDone } = await reader.read()
+      if (isDone) {
+        callDone()
+        controller.close()
+        return
+      }
+      if (value) controller.enqueue(value)
+    },
+    async cancel() {
+      callDone()
       await reader.cancel().catch(() => {})
     },
   })

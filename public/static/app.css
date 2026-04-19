@@ -290,9 +290,9 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
   transition: transform .15s ease, background .15s ease;
 }
 .switch-input:checked + .switch-track {
-  background: var(--v-surface);
-  border-color: var(--v-border);
-  box-shadow: 0 0 0 3px rgba(124,92,255,.10);
+  background: #34c759;
+  border-color: #34c759;
+  box-shadow: 0 0 0 3px rgba(52,199,89,.22);
 }
 .switch-input:checked + .switch-track .switch-thumb {
   transform: translateX(18px);

@@ -62,7 +62,7 @@ export function renderUploadPage(session: Session | null) {
             <span class="step-arrow">›</span>
             <div class="step" data-step="wait">
               <div class="dot"></div>
-              <div class="label">Wait</div>
+              <div class="label">Ready</div>
             </div>
             <span class="step-arrow">›</span>
             <div class="step" data-step="stream">
@@ -80,7 +80,7 @@ export function renderUploadPage(session: Session | null) {
 
           <div id="share" class="share">
             <div class="kicker">Files</div>
-            <div class="row" style="margin-top:10px; align-items:center">
+            <div class="row" style="margin-top:10px; align-items:center; justify-content:flex-end; gap:12px">
               <div class="dim" style="font-size:13px; display:flex; gap:8px; align-items:center">
                 CLI (curl/wget)
                 <span class="tooltip">
@@ -96,6 +96,7 @@ export function renderUploadPage(session: Session | null) {
               </label>
             </div>
             <div id="share-empty" class="dim" style="font-size:13px;margin-top:10px">Select files above to generate share links.</div>
+            <div style="height:10px"></div>
             <div id="shares" class="shares"></div>
             <template id="share-item-template">
               <section class="share-item">

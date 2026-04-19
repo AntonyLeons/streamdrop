@@ -380,6 +380,11 @@ function setStep(name, keepDone = false) {
   for (let j = 0; j < i; j++) steps[j].classList.add("done")
 }
 
+function markStepDone(name) {
+  const step = document.querySelector(`.step[data-step="${name}"]`)
+  if (step) step.classList.add("done")
+}
+
 function showError(msg) {
   elError.textContent = msg
   elError.classList.remove("hidden")
@@ -458,6 +463,7 @@ function ensureLive(sessionId, item) {
     }
     if (msg && msg.type === "stats" && typeof msg.downloads === "number") {
       item.setDownloads(msg.downloads)
+      if (msg.downloads > 0) markStepDone("ready")
     }
   }
 
