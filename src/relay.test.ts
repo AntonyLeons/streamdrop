@@ -78,7 +78,6 @@ test("xfr endpoints expose human links and redirect upload to a trailing-slash U
   try {
     const txt = await fetch(`${base}/xfr`).then((r) => r.text())
     expect(txt).toContain("human-transfer-url:")
-    expect(txt).toContain("human-send-url:")
     expect(txt).toContain("human-recv-url:")
 
     const res = await fetch(`${base}/xfr`, {
@@ -89,35 +88,42 @@ test("xfr endpoints expose human links and redirect upload to a trailing-slash U
     })
     expect(res.status).toBe(307)
     const loc = res.headers.get("location") || ""
-    expect(loc).toMatch(new RegExp(`^${base}/xfr/[A-Za-z0-9_-]+$`))
+    expect(loc).toMatch(new RegExp(`^${base}/xfr/[A-Za-z0-9_-]+/$`))
   } finally {
     server.stop(true)
   }
 })
 
 test("GET /d/:token returns 429 when receiver limit is reached", async () => {
+  const old = Bun.env.MAX_RECEIVERS
+  Bun.env.MAX_RECEIVERS = "25"
   const app = createApp()
-  const sessionRes = await app.request("/")
-  const html = await sessionRes.text()
-  const cfg = extractCfg(html)
+  try {
+    const sessionRes = await app.request("/")
+    const html = await sessionRes.text()
+    const cfg = extractCfg(html)
 
-  const pending: Promise<Response>[] = []
-  const max = getMaxReceivers()
-  for (let i = 0; i < max; i++) {
-    pending.push(app.request(`/d/${cfg.downloadToken}`) as Promise<Response>)
+    const pending: Promise<Response>[] = []
+    const max = getMaxReceivers()
+    for (let i = 0; i < max; i++) {
+      pending.push(app.request(`/d/${cfg.downloadToken}`) as Promise<Response>)
+    }
+    await sleep(20)
+
+    const limitRes = await app.request(`/d/${cfg.downloadToken}`)
+    expect(limitRes.status).toBe(429)
+    expect(await limitRes.json()).toEqual({ error: "too_many_receivers" })
+
+    app.request(`/upload/${cfg.uploadToken}`, {
+      method: "PUT",
+      headers: { "content-type": "application/octet-stream" },
+      body: new Uint8Array([0]),
+    })
+    await Promise.allSettled(pending)
+  } finally {
+    if (old === undefined) delete Bun.env.MAX_RECEIVERS
+    else Bun.env.MAX_RECEIVERS = old
   }
-  await sleep(20)
-
-  const limitRes = await app.request(`/d/${cfg.downloadToken}`)
-  expect(limitRes.status).toBe(429)
-  expect(await limitRes.json()).toEqual({ error: "too_many_receivers" })
-
-  app.request(`/upload/${cfg.uploadToken}`, {
-    method: "PUT",
-    headers: { "content-type": "application/octet-stream" },
-    body: new Uint8Array([0]),
-  })
-  await Promise.allSettled(pending)
 })
 
 test("upload returns 409 when session is already done", async () => {

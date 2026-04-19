@@ -9,7 +9,12 @@ export type Session = {
   fileName?: string
   downloadCount: number
   liveSinks: Set<(data: string) => void>
+  uploaded: boolean
+  tempFilePath?: string
+  uploadWaiters: Set<Waiter>
+  downloadDoneWaiters: Set<Waiter>
   createdAt: number
+  lastTouchedAt: number
   deleteTimer?: Timer
   status: SessionStatus
   senderAttached: boolean
@@ -17,18 +22,29 @@ export type Session = {
   receiverWaiters: Set<Waiter>
 }
 
-
-const MAX_RECEIVERS = 100
+const DEFAULT_MAX_RECEIVERS = 1000
+const DEFAULT_MAX_SESSIONS = 10000
+const DEFAULT_SESSION_TTL_MS = 2 * 60 * 60 * 1000
+const DEFAULT_REAPER_INTERVAL_MS = 60 * 1000
 
 const sessionsById = new Map<string, Session>()
 const sessionsByUploadToken = new Map<string, Session>()
 const sessionsByDownloadToken = new Map<string, Session>()
 
 export function getMaxReceivers() {
-  return MAX_RECEIVERS
+  return getEnvPositiveInt("MAX_RECEIVERS", DEFAULT_MAX_RECEIVERS)
 }
 
-export function createSession(now = Date.now()): Session {
+export function getSessionCount() {
+  return sessionsById.size
+}
+
+export function getMaxSessions() {
+  return getEnvPositiveInt("MAX_SESSIONS", DEFAULT_MAX_SESSIONS)
+}
+
+export function createSession(now = Date.now()): Session | null {
+  if (sessionsById.size >= getMaxSessions()) return null
   const id = randomId(10)
   const uploadToken = randomToken()
   const downloadToken = randomToken()
@@ -37,12 +53,16 @@ export function createSession(now = Date.now()): Session {
     uploadToken,
     downloadToken,
     createdAt: now,
+    lastTouchedAt: now,
     status: "waiting",
     senderAttached: false,
     receivers: new Set(),
     receiverWaiters: new Set(),
     downloadCount: 0,
     liveSinks: new Set(),
+    uploaded: false,
+    uploadWaiters: new Set(),
+    downloadDoneWaiters: new Set(),
   }
 
   sessionsById.set(id, session)
@@ -52,18 +72,22 @@ export function createSession(now = Date.now()): Session {
 }
 
 export function getSessionById(id: string) {
-  return sessionsById.get(id)
+  const s = sessionsById.get(id)
+  if (s) s.lastTouchedAt = Date.now()
+  return s
 }
 
 export function getSessionByUploadToken(uploadToken: string) {
-  return sessionsByUploadToken.get(uploadToken)
+  const s = sessionsByUploadToken.get(uploadToken)
+  if (s) s.lastTouchedAt = Date.now()
+  return s
 }
 
 export function getSessionByDownloadToken(downloadToken: string) {
-  return sessionsByDownloadToken.get(downloadToken)
+  const s = sessionsByDownloadToken.get(downloadToken)
+  if (s) s.lastTouchedAt = Date.now()
+  return s
 }
-
-
 
 export function deleteSession(session: Session) {
   sessionsById.delete(session.id)
@@ -125,7 +149,36 @@ export function removeReceiver(session: Session, writer: WritableStreamDefaultWr
   session.receivers.delete(writer)
 }
 
+export function startSessionReaper() {
+  const ttlMs = getEnvPositiveInt("SESSION_TTL_MS", DEFAULT_SESSION_TTL_MS)
+  const intervalMs = getEnvPositiveInt("REAPER_INTERVAL_MS", DEFAULT_REAPER_INTERVAL_MS)
+  const run = () => {
+    const now = Date.now()
+    for (const session of sessionsById.values()) {
+      if (now - session.lastTouchedAt <= ttlMs) continue
+      if (session.status === "active") continue
+      if (session.senderAttached) continue
+      if (session.receivers.size > 0) continue
+      if (session.liveSinks.size > 0) continue
+      for (const w of session.uploadWaiters) w.reject(new Error("session_expired"))
+      for (const w of session.receiverWaiters) w.reject(new Error("session_expired"))
+      for (const w of session.downloadDoneWaiters) w.reject(new Error("session_expired"))
+      deleteSession(session)
+    }
+  }
 
+  const t = setInterval(run, intervalMs)
+  run()
+  return () => clearInterval(t)
+}
+
+function getEnvPositiveInt(name: string, fallback: number) {
+  const raw = Bun.env[name]
+  if (!raw) return fallback
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n <= 0) return fallback
+  return Math.floor(n)
+}
 
 function randomId(byteLen: number) {
   return base64url(crypto.getRandomValues(new Uint8Array(byteLen))).slice(0, 12)

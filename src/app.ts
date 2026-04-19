@@ -1,6 +1,8 @@
 import { Hono } from "hono"
 import { serveStatic } from "hono/bun"
-import QRCode from "qrcode"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { unlink } from "node:fs/promises"
 import {
   createSession,
   getMaxReceivers,
@@ -11,6 +13,7 @@ import {
   type Session,
   removeReceiver,
   deleteSession,
+  waitForReceiver,
   waitForReceiverWithTimeout,
 } from "./sessions"
 import { streamSSE } from "hono/streaming"
@@ -23,9 +26,16 @@ import {
   renderXfrReceivePage,
   renderXfrSendPage,
 } from "./pages"
+import { getQRCodeVendorJS } from "./vendor/qrcode"
 
 export function createApp() {
   const app = new Hono()
+
+  app.use("*", async (c, next) => {
+    await next()
+    setSecurityHeaders(c.res.headers)
+    return c.res
+  })
 
   app.get("/static/app.css", async () => {
     const file = Bun.file(new URL("../public/static/app.css", import.meta.url))
@@ -67,9 +77,9 @@ export function createApp() {
     })
   })
 
-  app.get("/static/vendor/qr-creator.min.js", async () => {
-    const file = Bun.file(new URL("../node_modules/qr-creator/dist/qr-creator.min.js", import.meta.url))
-    return new Response(file, {
+  app.get("/static/vendor/qrcode.min.js", async () => {
+    const text = await getQRCodeVendorJS()
+    return new Response(text, {
       headers: {
         "content-type": "text/javascript; charset=utf-8",
         "cache-control": "public, max-age=31536000, immutable",
@@ -104,6 +114,7 @@ export function createApp() {
 
     for (const writer of session.receivers) writer.abort().catch(() => {})
     for (const w of session.receiverWaiters) w.reject(new Error("session_deleted"))
+    cleanupSession(session)
     deleteSession(session)
     return c.json({ ok: true }, 200, { "cache-control": "no-store" })
   })
@@ -139,6 +150,7 @@ export function createApp() {
         session.deleteTimer = setTimeout(() => {
           for (const writer of session.receivers) writer.abort().catch(() => {})
           for (const w of session.receiverWaiters) w.reject(new Error("session_expired"))
+          cleanupSession(session)
           deleteSession(session)
         }, 30_000)
       })
@@ -167,50 +179,78 @@ export function createApp() {
 
   app.get("/xfr", async (c) => {
     const session = createSession()
+    if (!session) return c.json({ error: "at_capacity" }, 503, { "cache-control": "no-store" })
     const origin = new URL(c.req.url).origin
     const transferUrl = `${origin}/xfr/${session.id}`
     const recvUrl = `${origin}/recv/${session.id}`
-    const sendUrl = `${origin}/send/${session.id}`
 
     const headers = new Headers()
     headers.set("cache-control", "no-store")
     headers.set("content-type", "text/plain; charset=utf-8")
-    headers.set("content-disposition", 'attachment; filename="xfr.txt"')
-    setHumanHeaders(headers, { transferUrl, recvUrl, sendUrl })
-    addHumanQrHeadersIndexed(headers, recvUrl)
-    const bodyText = await humanBodyTextAsync({ transferUrl, recvUrl, sendUrl })
+    setAttachmentContentDisposition(headers, "xfr.txt")
+    setHumanHeaders(headers, { transferUrl, recvUrl })
+    const bodyText = await humanBodyTextAsync({ transferUrl, recvUrl })
     return new Response(bodyText, { status: 200, headers })
   })
 
-  app.get("/xfr/", (c) => c.redirect("/xfr"))
+  app.get("/xfr/", async (c) => {
+    const session = createSession()
+    if (!session) return c.json({ error: "at_capacity" }, 503, { "cache-control": "no-store" })
+    const origin = new URL(c.req.url).origin
+    const transferUrl = `${origin}/xfr/${session.id}`
+    const recvUrl = `${origin}/recv/${session.id}`
+
+    const headers = new Headers()
+    headers.set("cache-control", "no-store")
+    headers.set("content-type", "text/plain; charset=utf-8")
+    setAttachmentContentDisposition(headers, "xfr.txt")
+    setHumanHeaders(headers, { transferUrl, recvUrl })
+    const bodyText = await humanBodyTextAsync({ transferUrl, recvUrl })
+    return new Response(bodyText, { status: 200, headers })
+  })
 
   app.get("/recv", (c) => {
     const session = createSession()
+    if (!session) return c.html(renderServiceUnavailablePage(), 503, { "cache-control": "no-store" })
     return c.redirect(`/recv/${session.id}`)
   })
 
   app.on(["PUT", "POST"], "/xfr", (c) => {
     const session = createSession()
+    if (!session) return c.json({ error: "at_capacity" }, 503, { "cache-control": "no-store" })
     const origin = new URL(c.req.url).origin
-    const loc = `${origin}/xfr/${session.id}`
+    const loc = `${origin}/xfr/${session.id}/`
     const transferUrl = `${origin}/xfr/${session.id}`
     const recvUrl = `${origin}/recv/${session.id}`
-    const sendUrl = `${origin}/send/${session.id}`
 
     const headers = new Headers()
     headers.set("cache-control", "no-store")
     headers.set("location", loc)
     headers.set("content-type", "text/plain; charset=utf-8")
-    setHumanHeaders(headers, { transferUrl, recvUrl, sendUrl })
-    addHumanQrHeadersIndexed(headers, recvUrl)
+    setHumanHeaders(headers, { transferUrl, recvUrl })
     return new Response(null, { status: 307, headers })
   })
 
-  app.on(["PUT", "POST"], "/xfr/", (c) => c.redirect("/xfr"))
+  app.on(["PUT", "POST"], "/xfr/", (c) => {
+    const session = createSession()
+    if (!session) return c.json({ error: "at_capacity" }, 503, { "cache-control": "no-store" })
+    const origin = new URL(c.req.url).origin
+    const loc = `${origin}/xfr/${session.id}/`
+    const transferUrl = `${origin}/xfr/${session.id}`
+    const recvUrl = `${origin}/recv/${session.id}`
+
+    const headers = new Headers()
+    headers.set("cache-control", "no-store")
+    headers.set("location", loc)
+    headers.set("content-type", "text/plain; charset=utf-8")
+    setHumanHeaders(headers, { transferUrl, recvUrl })
+    return new Response(null, { status: 307, headers })
+  })
 
   app.on(["PUT", "POST"], "/xfr/:fileName", (c) => {
     const fileName = c.req.param("fileName")
     const session = createSession()
+    if (!session) return c.json({ error: "at_capacity" }, 503, { "cache-control": "no-store" })
     if (fileName) session.fileName = safeFileName(fileName) || undefined
     const origin = new URL(c.req.url).origin
     const loc = session.fileName
@@ -221,6 +261,11 @@ export function createApp() {
     headers.set("cache-control", "no-store")
     headers.set("location", loc)
     headers.set("content-type", "text/plain; charset=utf-8")
+    const transferUrl = session.fileName
+      ? `${origin}/xfr/${session.id}/${encodeURIComponent(session.fileName)}`
+      : `${origin}/xfr/${session.id}`
+    const recvUrl = `${origin}/recv/${session.id}`
+    setHumanHeaders(headers, { transferUrl, recvUrl })
     return new Response(null, { status: 307, headers })
   })
 
@@ -245,29 +290,33 @@ export function createApp() {
       ? `${origin}/xfr/${session.id}/${encodeURIComponent(session.fileName)}`
       : `${origin}/xfr/${session.id}`
     const recvUrl = `${origin}/recv/${session.id}`
-    const sendUrl = `${origin}/send/${session.id}`
+
+    const tmpPath = join(tmpdir(), `streamdrop-xfr-${session.id}-${Date.now()}`)
+    session.tempFilePath = tmpPath
+
+    try {
+      await writeBodyToTempFile(tmpPath, body, c.req.raw.signal)
+      session.uploaded = true
+      notifyUploadDone(session)
+    } catch (e) {
+      cleanupSession(session)
+      throw e
+    }
 
     const headers = new Headers()
     headers.set("cache-control", "no-store")
     headers.set("content-type", "text/plain; charset=utf-8")
-    setHumanHeaders(headers, { transferUrl, recvUrl, sendUrl })
-    addHumanQrHeadersIndexed(headers, recvUrl)
+    setHumanHeaders(headers, { transferUrl, recvUrl })
+
     const { readable, writable } = new TransformStream<string, string>()
     const writer = writable.getWriter()
-
-    const bodyHead = await humanBodyTextAsync({ transferUrl, recvUrl, sendUrl })
-    await writer.write(bodyHead).catch(() => {})
+    const bodyText = await humanBodyTextAsync({ transferUrl, recvUrl })
+    await writer.write(bodyText).catch(() => {})
 
     ;(async () => {
       try {
-        await fanout(session, body)
-      } catch (e) {
-        const isAbort =
-          (e instanceof DOMException && e.name === "AbortError") ||
-          (e instanceof Error && /abort|cancel|closed/i.test(e.message))
-        if (!isAbort) throw e
+        await waitForFirstDownloadDone(session, c.req.raw.signal)
       } finally {
-        session.status = "done"
         writer.close().catch(() => {})
       }
     })().catch(() => {})
@@ -291,31 +340,42 @@ export function createApp() {
     session.senderAttached = true
     session.status = "active"
 
-    try {
-      await fanout(session, body)
-    } catch (e) {
-      const isAbort =
-        (e instanceof DOMException && e.name === "AbortError") ||
-        (e instanceof Error && /abort|cancel|closed/i.test(e.message))
-      if (!isAbort) throw e
-    } finally {
-      session.status = "done"
-    }
-
     const origin = new URL(c.req.url).origin
     const transferUrl = session.fileName
       ? `${origin}/xfr/${session.id}/${encodeURIComponent(session.fileName)}`
       : `${origin}/xfr/${session.id}`
     const recvUrl = `${origin}/recv/${session.id}`
-    const sendUrl = `${origin}/send/${session.id}`
+
+    const tmpPath = join(tmpdir(), `streamdrop-xfr-${session.id}-${Date.now()}`)
+    session.tempFilePath = tmpPath
+
+    try {
+      await writeBodyToTempFile(tmpPath, body, c.req.raw.signal)
+      session.uploaded = true
+      notifyUploadDone(session)
+    } catch (e) {
+      cleanupSession(session)
+      throw e
+    }
 
     const headers = new Headers()
     headers.set("cache-control", "no-store")
     headers.set("content-type", "text/plain; charset=utf-8")
-    setHumanHeaders(headers, { transferUrl, recvUrl, sendUrl })
-    const qr = await QRCode.toString(recvUrl, { type: "utf8" })
-    const bodyText = `${transferUrl}\n${sendUrl}\n${recvUrl}\n${qr}\n`
-    return new Response(bodyText, { status: 200, headers })
+    setHumanHeaders(headers, { transferUrl, recvUrl })
+    const { readable, writable } = new TransformStream<string, string>()
+    const writer = writable.getWriter()
+    const bodyText = await humanBodyTextAsync({ transferUrl, recvUrl })
+    await writer.write(bodyText).catch(() => {})
+
+    ;(async () => {
+      try {
+        await waitForFirstDownloadDone(session, c.req.raw.signal)
+      } finally {
+        writer.close().catch(() => {})
+      }
+    })().catch(() => {})
+
+    return new Response(readable, { status: 200, headers })
   })
 
   app.get("/xfr/:id/:fileName", async (c) => {
@@ -328,6 +388,24 @@ export function createApp() {
     const fileName = c.req.param("fileName")
     if (fileName && !session.fileName) session.fileName = safeFileName(fileName) || undefined
 
+    if (!session.uploaded) {
+      const ok = await waitForUploadWithTimeout(session, 0, c.req.raw.signal)
+      if (!ok) return jsonResponse({ error: "aborted" }, 499)
+    }
+
+    if (session.uploaded && session.tempFilePath) {
+      session.downloadCount++
+      notifyLive(session)
+      const filename = safeFileName(session.fileName) || "file"
+
+      const headers = new Headers()
+      headers.set("content-type", "application/octet-stream")
+      headers.set("cache-control", "no-store")
+      headers.set("accept-ranges", "none")
+      setAttachmentContentDisposition(headers, filename)
+      return new Response(createFileStreamWithDone(session), { status: 200, headers })
+    }
+
     const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>()
     const writer = writable.getWriter()
     session.receivers.add(writer)
@@ -352,7 +430,7 @@ export function createApp() {
     headers.set("content-type", "application/octet-stream")
     headers.set("cache-control", "no-store")
     headers.set("accept-ranges", "none")
-    headers.set("content-disposition", `attachment; filename="${filename}"`)
+    setAttachmentContentDisposition(headers, filename)
     return new Response(readable, { status: 200, headers })
   })
 
@@ -364,6 +442,24 @@ export function createApp() {
     if (session.receivers.size >= getMaxReceivers()) return c.json({ error: "too_many_receivers" }, 429)
 
     if (session.fileName) return c.redirect(`/xfr/${session.id}/${encodeURIComponent(session.fileName)}`)
+
+    if (!session.uploaded) {
+      const ok = await waitForUploadWithTimeout(session, 0, c.req.raw.signal)
+      if (!ok) return jsonResponse({ error: "aborted" }, 499)
+    }
+
+    if (session.uploaded && session.tempFilePath) {
+      session.downloadCount++
+      notifyLive(session)
+      const filename = safeFileName(session.fileName) || "file"
+
+      const headers = new Headers()
+      headers.set("content-type", "application/octet-stream")
+      headers.set("cache-control", "no-store")
+      headers.set("accept-ranges", "none")
+      setAttachmentContentDisposition(headers, filename)
+      return new Response(createFileStreamWithDone(session), { status: 200, headers })
+    }
 
     const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>()
     const writer = writable.getWriter()
@@ -390,7 +486,7 @@ export function createApp() {
     headers.set("content-type", "application/octet-stream")
     headers.set("cache-control", "no-store")
     headers.set("accept-ranges", "none")
-    headers.set("content-disposition", `attachment; filename="${filename}"`)
+    setAttachmentContentDisposition(headers, filename)
     return new Response(readable, { status: 200, headers })
   })
 
@@ -415,6 +511,7 @@ export function createApp() {
 
     for (const writer of session.receivers) writer.abort().catch(() => {})
     for (const w of session.receiverWaiters) w.reject(new Error("session_deleted"))
+    cleanupSession(session)
     deleteSession(session)
     return c.json({ ok: true }, 200, { "cache-control": "no-store" })
   })
@@ -442,12 +539,15 @@ export function createApp() {
     try {
       await fanout(session, body)
     } catch (e) {
+      const isReceiverLost = e instanceof Error && /receivers_lost/i.test(e.message)
       const isAbort =
         (e instanceof DOMException && e.name === "AbortError") ||
         (e instanceof Error && /abort|cancel|closed/i.test(e.message))
+      if (isReceiverLost) return c.json({ error: "receivers_lost" }, 409, { "cache-control": "no-store" })
       if (!isAbort) throw e
     } finally {
-      session.status = "done"
+      session.senderAttached = false
+      session.status = session.liveSinks.size > 0 ? "waiting" : "done"
     }
 
     return c.json({ ok: true }, 200, { "cache-control": "no-store" })
@@ -469,12 +569,15 @@ export function createApp() {
     try {
       await fanout(session, body)
     } catch (e) {
+      const isReceiverLost = e instanceof Error && /receivers_lost/i.test(e.message)
       const isAbort =
         (e instanceof DOMException && e.name === "AbortError") ||
         (e instanceof Error && /abort|cancel|closed/i.test(e.message))
+      if (isReceiverLost) return c.json({ error: "receivers_lost" }, 409, { "cache-control": "no-store" })
       if (!isAbort) throw e
     } finally {
-      session.status = "done"
+      session.senderAttached = false
+      session.status = session.liveSinks.size > 0 ? "waiting" : "done"
     }
 
     return c.json({ ok: true }, 200, { "cache-control": "no-store" })
@@ -483,9 +586,10 @@ export function createApp() {
   app.get("/d/:downloadToken", async (c) => {
     const downloadToken = c.req.param("downloadToken")
     const session = getSessionByDownloadToken(downloadToken)
-    if (!session) return c.json({ error: "not_found" }, 404)
-    if (session.status === "done") return c.json({ error: "done" }, 410)
-    if (session.receivers.size >= getMaxReceivers()) return c.json({ error: "too_many_receivers" }, 429)
+    if (!session) return c.json({ error: "not_found" }, 404, { "cache-control": "no-store" })
+    if (session.status === "done") return c.json({ error: "done" }, 410, { "cache-control": "no-store" })
+    if (session.receivers.size >= getMaxReceivers())
+      return c.json({ error: "too_many_receivers" }, 429, { "cache-control": "no-store" })
 
     session.downloadCount++
     notifyLive(session)
@@ -506,7 +610,7 @@ export function createApp() {
     headers.set("content-type", "application/octet-stream")
     headers.set("cache-control", "no-store")
     headers.set("accept-ranges", "none")
-    headers.set("content-disposition", 'attachment; filename="streamdrop.enc"')
+    setAttachmentContentDisposition(headers, "streamdrop.enc")
 
     return new Response(readable, { status: 200, headers })
   })
@@ -514,9 +618,10 @@ export function createApp() {
   app.get("/raw/d/:downloadToken", async (c) => {
     const downloadToken = c.req.param("downloadToken")
     const session = getSessionByDownloadToken(downloadToken)
-    if (!session) return c.json({ error: "not_found" }, 404)
-    if (session.status === "done") return c.json({ error: "done" }, 410)
-    if (session.receivers.size >= getMaxReceivers()) return c.json({ error: "too_many_receivers" }, 429)
+    if (!session) return c.json({ error: "not_found" }, 404, { "cache-control": "no-store" })
+    if (session.status === "done") return c.json({ error: "done" }, 410, { "cache-control": "no-store" })
+    if (session.receivers.size >= getMaxReceivers())
+      return c.json({ error: "too_many_receivers" }, 429, { "cache-control": "no-store" })
 
     session.downloadCount++
     notifyLive(session)
@@ -537,7 +642,7 @@ export function createApp() {
     headers.set("content-type", "application/octet-stream")
     headers.set("cache-control", "no-store")
     headers.set("accept-ranges", "none")
-    headers.set("content-disposition", 'attachment; filename="streamdrop.bin"')
+    setAttachmentContentDisposition(headers, "streamdrop.bin")
 
     return new Response(readable, { status: 200, headers })
   })
@@ -553,50 +658,132 @@ function safeFileName(name?: string) {
   return cleaned.slice(0, 120)
 }
 
+function setAttachmentContentDisposition(headers: Headers, filename: string) {
+  const cleaned = safeFileName(filename) || "file"
+  const ascii = cleaned.replaceAll(/[^\x20-\x7E]/g, "_").replaceAll(/["\\]/g, "_").slice(0, 120) || "file"
+  const utf8 = encodeRFC5987ValueChars(cleaned)
+  headers.set("content-disposition", `attachment; filename="${ascii}"; filename*=UTF-8''${utf8}`)
+}
+
+function encodeRFC5987ValueChars(str: string) {
+  return encodeURIComponent(str)
+    .replaceAll(/['()]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
+    .replaceAll("*", "%2A")
+}
+
+function setSecurityHeaders(headers: Headers) {
+  headers.set("x-content-type-options", "nosniff")
+  headers.set("referrer-policy", "strict-origin-when-cross-origin")
+  headers.set("permissions-policy", "geolocation=(), microphone=(), camera=()")
+  headers.set("x-frame-options", "DENY")
+  headers.set(
+    "content-security-policy",
+    [
+      "default-src 'self'",
+      "base-uri 'none'",
+      "object-src 'none'",
+      "frame-ancestors 'none'",
+      "form-action 'self'",
+      "img-src 'self' data:",
+      "font-src 'self' https://fonts.gstatic.com data:",
+      "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'",
+      "script-src 'self' 'unsafe-inline'",
+      "connect-src 'self'",
+    ].join("; "),
+  )
+}
+
 function notifyLive(session: Session) {
   const payload = JSON.stringify({ type: "stats", downloads: session.downloadCount })
   for (const sink of session.liveSinks) sink(payload)
 }
 
-function setHumanHeaders(headers: Headers, urls: { transferUrl: string; recvUrl: string; sendUrl: string }) {
+function setHumanHeaders(headers: Headers, urls: { transferUrl: string; recvUrl: string }) {
   headers.set("human-transfer-url", urls.transferUrl)
   headers.set("human-recv-url", urls.recvUrl)
-  headers.set("human-send-url", urls.sendUrl)
 }
 
-function addHumanQrHeadersIndexed(headers: Headers, url: string) {
-  try {
-    const qr = QRCode.create(url, { errorCorrectionLevel: "M" })
-    const size = qr.modules.size
-    const data = qr.modules.data as unknown as boolean[]
-    const margin = 2
-    const get = (x: number, y: number) => data[y * size + x]
+function humanBodyText(urls: { transferUrl: string; recvUrl: string }) {
+  return `human-transfer-url: ${urls.transferUrl}\nhuman-recv-url: ${urls.recvUrl}\n`
+}
 
-    let i = 0
-    for (let y = -margin; y < size + margin; y++) {
-      let line = ""
-      for (let x = -margin; x < size + margin; x++) {
-        const on = x >= 0 && y >= 0 && x < size && y < size ? get(x, y) : false
-        line += on ? "##" : "  "
-      }
-      headers.set(`human-qr-${String(i).padStart(2, "0")}`, line)
-      i++
+async function humanBodyTextAsync(urls: { transferUrl: string; recvUrl: string }) {
+  return humanBodyText(urls)
+}
+
+function notifyUploadDone(session: Session) {
+  for (const w of session.uploadWaiters) w.resolve()
+  session.uploadWaiters.clear()
+}
+
+async function waitForUploadWithTimeout(session: Session, timeoutMs: number, signal?: AbortSignal) {
+  if (session.uploaded) return true
+  const start = Date.now()
+  while (!session.uploaded) {
+    if (signal?.aborted) return false
+    if (timeoutMs > 0 && Date.now() - start > timeoutMs) return false
+    await new Promise((r) => setTimeout(r, 150))
+  }
+  return true
+}
+
+function notifyDownloadDone(session: Session) {
+  for (const w of session.downloadDoneWaiters) w.resolve()
+  session.downloadDoneWaiters.clear()
+}
+
+async function waitForFirstDownloadDone(session: Session, signal?: AbortSignal) {
+  if (signal?.aborted) return false
+  return new Promise<boolean>((resolve) => {
+    const waiter = {
+      resolve: () => resolve(true),
+      reject: () => resolve(false),
     }
-  } catch {}
+    session.downloadDoneWaiters.add(waiter)
+    signal?.addEventListener(
+      "abort",
+      () => {
+        session.downloadDoneWaiters.delete(waiter)
+        resolve(false)
+      },
+      { once: true },
+    )
+  })
 }
 
-function humanBodyText(urls: { transferUrl: string; recvUrl: string; sendUrl: string }) {
-  return `human-transfer-url: ${urls.transferUrl}\nhuman-send-url: ${urls.sendUrl}\nhuman-recv-url: ${urls.recvUrl}\n`
+function createFileStreamWithDone(session: Session) {
+  const path = session.tempFilePath
+  if (!path) return new ReadableStream<Uint8Array>()
+  const reader = Bun.file(path).stream().getReader()
+  let doneCalled = false
+  const done = () => {
+    if (doneCalled) return
+    doneCalled = true
+    notifyDownloadDone(session)
+  }
+
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const { value, done: isDone } = await reader.read()
+      if (isDone) {
+        done()
+        controller.close()
+        return
+      }
+      if (value) controller.enqueue(value)
+    },
+    async cancel() {
+      done()
+      await reader.cancel().catch(() => {})
+    },
+  })
 }
 
-async function humanBodyTextAsync(urls: { transferUrl: string; recvUrl: string; sendUrl: string }) {
-  const qr = await QRCode.toString(urls.recvUrl, { type: "utf8" })
-  const qrLines = qr
-    .split("\n")
-    .filter(Boolean)
-    .map((l) => `human-qr-code: ${l}`)
-    .join("\n")
-  return `${humanBodyText(urls)}${qrLines}\n`
+function cleanupSession(session: Session) {
+  const p = session.tempFilePath
+  if (!p) return
+  session.tempFilePath = undefined
+  unlink(p).catch(() => {})
 }
 
 async function waitForSenderWithTimeout(session: Session, timeoutMs: number, signal?: AbortSignal) {
@@ -612,12 +799,14 @@ async function waitForSenderWithTimeout(session: Session, timeoutMs: number, sig
 
 async function fanout(session: Session, sender: ReadableStream<Uint8Array>) {
   const reader = sender.getReader()
+  let started = false
 
   try {
     while (true) {
       if (session.status === "done") break
 
       if (session.receivers.size === 0) {
+        if (started) throw new Error("receivers_lost")
         try {
           await waitForReceiver(session)
         } catch {
@@ -630,6 +819,7 @@ async function fanout(session: Session, sender: ReadableStream<Uint8Array>) {
       if (done) break
       if (!value || value.byteLength === 0) continue
 
+      started = true
       const writers = Array.from(session.receivers)
       const writePromises = writers.map((writer) => {
         return Promise.race([
@@ -643,6 +833,7 @@ async function fanout(session: Session, sender: ReadableStream<Uint8Array>) {
       await Promise.all(writePromises)
     }
   } finally {
+    await reader.cancel().catch(() => {})
     const writers = Array.from(session.receivers)
     session.receivers.clear()
     await Promise.all(
@@ -653,4 +844,27 @@ async function fanout(session: Session, sender: ReadableStream<Uint8Array>) {
       }),
     )
   }
+}
+
+async function writeBodyToTempFile(path: string, body: ReadableStream<Uint8Array>, signal?: AbortSignal) {
+  const sink = Bun.file(path).writer()
+  const reader = body.getReader()
+  try {
+    while (true) {
+      if (signal?.aborted) throw new DOMException("Aborted", "AbortError")
+      const { value, done } = await reader.read()
+      if (done) break
+      if (value && value.byteLength) sink.write(value)
+    }
+  } finally {
+    reader.cancel().catch(() => {})
+    sink.end()
+  }
+}
+
+function jsonResponse(obj: unknown, status: number) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+  })
 }

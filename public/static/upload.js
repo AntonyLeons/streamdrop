@@ -2,7 +2,6 @@ import { base64urlEncode, createEncryptStream } from "./crypto.js"
 
 const seedCfg = window.__STREAMDROP__ || {}
 let seedUsed = false
-if (seedCfg && seedCfg.id) new EventSource(`/live/${seedCfg.id}`)
 
 const elDrop = document.getElementById("dropzone")
 const elFile = document.getElementById("file")
@@ -110,26 +109,17 @@ document.addEventListener("click", async (e) => {
       const elQr = root.querySelector(".share-qr")
       const text = root.dataset.shareUrl || ""
       try {
-        if (window.QrCreator && elQr && text) {
-          window.QrCreator.render(
-            {
-              text,
-              radius: 0.4,
-              ecLevel: "M",
-              fill: {
-                type: "linear-gradient",
-                position: [0, 0, 1, 1],
-                colorStops: [
-                  [0, "#a78bff"],
-                  [1, "#7c5cff"],
-                ],
-              },
-              background: "#0d1020",
-              size: 200,
-            },
-            elQr,
-          )
-          root.dataset.qrRendered = "1"
+        if (window.QRCode && elQr && text) {
+          const opts = {
+            width: 200,
+            margin: 1,
+            errorCorrectionLevel: "M",
+            color: { dark: "#7c5cff", light: "#0d1020" },
+          }
+          window.QRCode.toCanvas(elQr, text, opts, (err) => {
+            if (err) return
+            root.dataset.qrRendered = "1"
+          })
         }
       } catch {}
     }
@@ -227,54 +217,75 @@ async function startTransfer(file) {
     item.setBar(0)
     setStep("wait", true)
 
-    transferStats.set(session.id, { done: 0, total: cipherBlob.size, name: file.name })
-
-    item.setState("Waiting for receiver")
-    await waitForReceiverOnline(session.id, abortController.signal)
-    if (abortController.signal.aborted) return
-
-    item.setState("Uploading")
-
-    let res
-    try {
-      const uploadStream = wrapStreamWithProgress({
-        stream: cipherBlob.stream(),
-        total: cipherBlob.size,
-        signal: abortController.signal,
-        onProgress: (done, total) => {
-          const pct = total ? Math.min(1, done / total) : 0
-          item.setBar(pct)
-          if (done > 0) setStep("stream", true)
-          transferStats.set(session.id, { done, total, name: file.name })
-        },
-      })
-
-      res = await fetch(`/upload/${session.uploadToken}`, {
-        method: "PUT",
-        headers: { "content-type": "application/octet-stream" },
-        body: uploadStream,
-        duplex: "half",
-        signal: abortController.signal,
-      })
-    } catch (e) {
+    while (true) {
+      transferStats.set(session.id, { done: 0, total: cipherBlob.size, name: file.name })
+      item.setState("Waiting for receiver")
+      await waitForReceiverOnline(session.id, abortController.signal)
       if (abortController.signal.aborted) return
-      item.setState("Error")
-      throw new Error(e?.message ?? "upload_failed")
-    }
 
-    if (!res.ok) {
-      const msg = await safeText(res)
-      item.setState("Error")
-      throw new Error(msg || `upload_failed_${res.status}`)
-    }
+      item.setState("Uploading")
+      item.setBar(0)
 
-    item.setState("Ready")
-    item.setBar(1)
-    transferStats.set(session.id, { done: 1, total: 1, name: file.name })
+      let res
+      try {
+        const uploadStream = wrapStreamWithProgress({
+          stream: cipherBlob.stream(),
+          total: cipherBlob.size,
+          signal: abortController.signal,
+          onProgress: (done, total) => {
+            const pct = total ? Math.min(1, done / total) : 0
+            item.setBar(pct)
+            if (done > 0) setStep("stream", true)
+            transferStats.set(session.id, { done, total, name: file.name })
+          },
+        })
 
-    if (getActiveTransferCount() === 0 && transferStats.size > 0) {
-      setStep("ready", true)
-      setMeta("Ready. Share the links below.")
+        res = await fetch(`/upload/${session.uploadToken}`, {
+          method: "PUT",
+          headers: { "content-type": "application/octet-stream" },
+          body: uploadStream,
+          duplex: "half",
+          signal: abortController.signal,
+        })
+      } catch (e) {
+        if (abortController.signal.aborted) return
+        item.setState("Error")
+        throw new Error(e?.message ?? "upload_failed")
+      }
+
+      if (!res.ok) {
+        let err = ""
+        try {
+          const ct = res.headers.get("content-type") || ""
+          if (ct.includes("application/json")) {
+            const body = await res.json()
+            if (body && typeof body.error === "string") err = body.error
+          } else {
+            err = await safeText(res)
+          }
+        } catch {}
+
+        if (err === "receivers_lost" || err === "aborted") {
+          setStep("wait", true)
+          item.setState("Waiting for receiver")
+          await sleep(250)
+          continue
+        }
+
+        item.setState("Error")
+        throw new Error(err || `upload_failed_${res.status}`)
+      }
+
+      item.setState("Ready")
+      item.setBar(1)
+      transferStats.set(session.id, { done: 1, total: 1, name: file.name })
+
+      if (getActiveTransferCount() === 0 && transferStats.size > 0) {
+        setStep("ready", true)
+        setMeta("Ready. Share the links below.")
+      }
+
+      setStep("wait", true)
     }
   } finally {
     abortControllersBySessionId.delete(session.id)
@@ -506,11 +517,11 @@ function openRecipesModal() {
 
         <div class="kicker space-top" style="margin-top:18px">Request a file (receiver-first)</div>
         <div class="copy-row" style="margin-bottom:8px">
-          <input class="input mono" readonly value='curl -s -J -O -L -D - "${location.origin}/xfr" | grep -i human' />
+          <input class="input mono" readonly value='curl -s -L "${location.origin}/xfr" | tee xfr.txt' />
           <button class="btn btn-small" type="button" data-copy>Copy</button>
         </div>
         <div class="copy-row">
-          <input class="input mono" readonly value='wget --content-disposition -S -o - "${location.origin}/xfr" | grep -i human' />
+          <input class="input mono" readonly value='wget -qO- "${location.origin}/xfr" | tee xfr.txt' />
           <button class="btn btn-small" type="button" data-copy>Copy</button>
         </div>
 
@@ -590,11 +601,11 @@ function openRecipesModal() {
 
         <div class="kicker space-top" style="margin-top:18px">Request a file (receiver-first)</div>
         <div class="copy-row" style="margin-bottom:8px">
-          <input class="input mono" readonly value='curl -s -J -O -L -D - "${host}/xfr" | grep -i human' />
+          <input class="input mono" readonly value='curl -s -L "${host}/xfr" | tee xfr.txt' />
           <button class="btn btn-small" type="button" data-copy>Copy</button>
         </div>
         <div class="copy-row">
-          <input class="input mono" readonly value='wget --content-disposition -S -o - "${host}/xfr" | grep -i human' />
+          <input class="input mono" readonly value='wget -qO- "${host}/xfr" | tee xfr.txt' />
           <button class="btn btn-small" type="button" data-copy>Copy</button>
         </div>
 

@@ -12,8 +12,7 @@
   },
   "dependencies": {
     "hono": "^4.9.0",
-    "qrcode": "^1.5.4",
-    "qr-creator": "^1.0.0"
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",

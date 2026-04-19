@@ -140,7 +140,7 @@ export function renderUploadPage(session: Session | null) {
       </div>
 
       <script>window.__STREAMDROP__=${config}</script>
-      <script src="/static/vendor/qr-creator.min.js"></script>
+      <script src="/static/vendor/qrcode.min.js"></script>
       <script type="module" src="/static/upload.js"></script>
     `,
   })
@@ -226,8 +226,8 @@ export function renderRecipesPage(opts: { id?: string; uploadToken?: string; dow
   const humanUrl = id ? `HOST_PH/xfr/${id}` : `HOST_PH/xfr/<id>`
   const webUrl = id ? `HOST_PH/recv/${id}` : `HOST_PH/recv/<id>`
 
-  const reqCurl = `curl -s -J -O -L -D - "${createUrl}" | grep -i human`.replaceAll('"', "&quot;")
-  const reqWget = `wget --content-disposition -S -o - "${createUrl}" | grep -i human`.replaceAll('"', "&quot;")
+  const reqCurl = `curl -s -L "${createUrl}" | tee xfr.txt`.replaceAll('"', "&quot;")
+  const reqWget = `wget -qO- "${createUrl}" | tee xfr.txt`.replaceAll('"', "&quot;")
   const sendCurl = `curl -T <myfile> -s -L -D - "${createUrl}/" | grep -i human`
   const sendWget = `wget --post-file <myfile> -S -o - "${createUrl}" | grep -i human`
   const recvCurl = `curl -s -J -O -L "<transfer_url>"`
