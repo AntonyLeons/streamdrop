@@ -1,0 +1,22 @@
+{
+  "name": "streamdrop",
+  "module": "src/server.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun --watch src/server.ts",
+    "start": "bun src/server.ts",
+    "test": "bun test",
+    "test:e2e": "playwright test",
+    "check": "bunx tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "hono": "^4.9.0",
+    "qr-creator": "^1.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@types/bun": "latest",
+    "typescript": "^5.9.3"
+  }
+}

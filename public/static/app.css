@@ -1,0 +1,417 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* ─────────────────────────────────────────────────────
+   StreamDrop Design System
+   Identity: Dark space, electric violet, glass panels
+   ───────────────────────────────────────────────────── */
+
+:root {
+  /* Core palette */
+  --bg: #080a12;
+  --bg-mid: #0d1020;
+  --glass: rgba(255,255,255,.04);
+  --glass-border: rgba(255,255,255,.08);
+  --glass-hover: rgba(255,255,255,.07);
+
+  /* Text */
+  --text: #eef0f8;
+  --text-muted: rgba(238,240,248,.52);
+  --text-faint: rgba(238,240,248,.28);
+
+  /* Brand accent — electric violet */
+  --v: #7c5cff;
+  --v-bright: #a78bff;
+  --v-glow: rgba(124,92,255,.22);
+  --v-border: rgba(124,92,255,.35);
+  --v-surface: rgba(124,92,255,.08);
+
+  /* Functional */
+  --good: #34d399;
+  --good-glow: rgba(52,211,153,.18);
+  --bad: #f87171;
+  --bad-surface: rgba(248,113,113,.08);
+
+  /* Surfaces */
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --radius: 16px;
+  --radius-sm: 10px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+  font-family: var(--sans);
+  color: var(--text);
+  background: var(--bg);
+  min-height: 100vh;
+  /* Signature background: two slow radial "aurora" blobs */
+  background-image:
+    radial-gradient(ellipse 900px 600px at 15% -5%, rgba(124,92,255,.20) 0%, transparent 60%),
+    radial-gradient(ellipse 600px 400px at 90% 10%, rgba(56,182,255,.09) 0%, transparent 55%),
+    radial-gradient(ellipse 500px 500px at 70% 95%, rgba(124,92,255,.10) 0%, transparent 60%);
+  background-attachment: fixed;
+}
+
+a { color: var(--v-bright); text-decoration: none; }
+a:hover { color: #fff; }
+
+/* ── Layout ──────────────────────────────────────────── */
+.shell {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 52px 24px 80px;
+}
+
+/* ── Header ──────────────────────────────────────────── */
+.hero { margin-bottom: 32px; }
+.brand { display: flex; gap: 16px; align-items: center; }
+
+.logo {
+  width: 52px; height: 52px;
+  border-radius: 14px;
+  display: grid; place-items: center;
+  font-family: var(--sans);
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: .5px;
+  color: #fff;
+  /* Violet gradient badge */
+  background: linear-gradient(135deg, #7c5cff 0%, #5b3fe0 100%);
+  box-shadow: 0 0 0 1px rgba(124,92,255,.5), 0 8px 32px rgba(124,92,255,.35);
+  position: relative;
+  overflow: hidden;
+}
+/* Subtle sheen */
+.logo::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,.18) 0%, transparent 60%);
+  border-radius: inherit;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -.5px;
+  background: linear-gradient(135deg, var(--text) 40%, var(--v-bright) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6; }
+
+/* ── Glassmorphism card ───────────────────────────────── */
+.card {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  padding: 24px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.06) inset,
+    0 32px 80px rgba(0,0,0,.45);
+}
+
+.row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+
+/* ── Kicker ──────────────────────────────────────────── */
+.kicker {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.mono { font-family: var(--mono); }
+.dim { color: var(--text-muted); }
+.space-top { margin-top: 18px; }
+
+/* ── Nav pill link ───────────────────────────────────── */
+.link {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--v-bright);
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--v-border);
+  background: var(--v-surface);
+  transition: background .15s, box-shadow .15s, color .15s;
+  white-space: nowrap;
+}
+.link:hover {
+  background: rgba(124,92,255,.18);
+  box-shadow: 0 0 0 3px rgba(124,92,255,.12);
+  color: #fff;
+}
+
+/* ── Dropzone ─────────────────────────────────────────── */
+.dropzone {
+  margin-top: 16px;
+  position: relative;
+  border: 1.5px dashed rgba(124,92,255,.30);
+  border-radius: var(--radius);
+  background: rgba(124,92,255,.04);
+  min-height: 176px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color .2s, background .2s, box-shadow .2s;
+}
+.dropzone:hover {
+  border-color: var(--v);
+  background: rgba(124,92,255,.08);
+  box-shadow: 0 0 0 4px rgba(124,92,255,.08), 0 0 40px rgba(124,92,255,.06);
+}
+.dropzone:focus {
+  border-color: var(--v);
+  box-shadow: 0 0 0 4px rgba(124,92,255,.14);
+}
+.dropzone.drag {
+  border-color: var(--v-bright);
+  background: rgba(124,92,255,.12);
+  box-shadow: 0 0 0 6px rgba(124,92,255,.12), 0 0 60px rgba(124,92,255,.08);
+}
+
+.drop-inner {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center; padding: 24px;
+  gap: 0;
+}
+
+.drop-icon {
+  width: 48px; height: 48px;
+  border-radius: 14px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+  display: grid; place-items: center;
+  margin-bottom: 14px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.3);
+}
+
+.drop-title { font-size: 15px; font-weight: 600; color: var(--text); }
+.drop-sub { margin-top: 5px; font-size: 13px; color: var(--text-muted); }
+
+.file { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+/* ── Step pipeline ───────────────────────────────────── */
+.status {
+  margin-top: 18px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.step {
+  display: flex; gap: 8px; align-items: center;
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border);
+  background: rgba(255,255,255,.03);
+  transition: border-color .25s, background .25s, box-shadow .25s;
+}
+.step.on {
+  border-color: var(--v-border);
+  background: var(--v-surface);
+  box-shadow: 0 0 0 3px rgba(124,92,255,.10);
+}
+.step.done {
+  border-color: rgba(52,211,153,.28);
+  background: rgba(52,211,153,.06);
+}
+
+.dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  transition: background .25s, box-shadow .25s;
+  flex-shrink: 0;
+}
+.step.on .dot {
+  background: var(--v-bright);
+  box-shadow: 0 0 0 3px var(--v-glow), 0 0 8px var(--v);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+.step.done .dot {
+  background: var(--good);
+  box-shadow: 0 0 0 3px var(--good-glow);
+}
+
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 3px var(--v-glow), 0 0 8px var(--v); }
+  50% { box-shadow: 0 0 0 5px var(--v-glow), 0 0 16px var(--v); }
+}
+
+.label { font-size: 12px; font-weight: 600; color: var(--text-muted); letter-spacing: .01em; }
+.step.on .label,
+.step.done .label { color: var(--text); }
+
+.step-arrow { color: var(--text-faint); font-size: 12px; }
+
+/* ── Progress bar ────────────────────────────────────── */
+.meter {
+  margin-top: 14px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.06);
+  overflow: hidden;
+}
+.bar {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--v) 0%, var(--v-bright) 100%);
+  transition: width .3s ease;
+  box-shadow: 0 0 12px rgba(124,92,255,.6);
+}
+
+.meta {
+  margin-top: 10px;
+  min-height: 18px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Share section ───────────────────────────────────── */
+.share { margin-top: 22px; }
+.share-grid {
+  display: grid;
+  grid-template-columns: 1.45fr .7fr;
+  gap: 20px;
+}
+.share-grid > div {
+  min-width: 0;
+}
+
+.qr-wrap { display: flex; flex-direction: column; gap: 10px; }
+.qr {
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--glass-border);
+  background: rgba(255,255,255,.03);
+}
+
+.copy-row { margin-top: 8px; display: flex; gap: 8px; align-items: center; }
+
+/* ── Input ───────────────────────────────────────────── */
+.input {
+  flex: 1; min-width: 0;
+  background: rgba(0,0,0,.25);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: 10px 13px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.input:focus {
+  border-color: var(--v-border);
+  box-shadow: 0 0 0 4px rgba(124,92,255,.10);
+}
+
+/* ── Buttons ─────────────────────────────────────────── */
+.btn {
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s, box-shadow .15s, transform .1s;
+  /* Default: ghost violet */
+  background: var(--v-surface);
+  border: 1px solid var(--v-border);
+  color: var(--v-bright);
+  box-shadow: none;
+}
+.btn:hover {
+  background: rgba(124,92,255,.16);
+  box-shadow: 0 0 0 3px rgba(124,92,255,.12);
+  color: #fff;
+}
+.btn:active { transform: translateY(1px); }
+
+/* Primary filled variant */
+.btn-primary {
+  background: linear-gradient(135deg, var(--v) 0%, #5b3fe0 100%);
+  border-color: rgba(124,92,255,.6);
+  color: #fff;
+  box-shadow: 0 4px 20px rgba(124,92,255,.30);
+}
+.btn-primary:hover {
+  background: linear-gradient(135deg, #8d6fff 0%, var(--v) 100%);
+  box-shadow: 0 6px 28px rgba(124,92,255,.40);
+  color: #fff;
+}
+
+.link-btn { text-decoration: none; display: inline-block; }
+
+/* ── Code block ──────────────────────────────────────── */
+.code {
+  margin: 10px 0 0;
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--glass-border);
+  background: rgba(0,0,0,.35);
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.7;
+  color: rgba(238,240,248,.75);
+}
+
+/* ── Error box ───────────────────────────────────────── */
+.error {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(248,113,113,.25);
+  background: var(--bad-surface);
+  color: #fca5a5;
+  font-size: 13px;
+}
+
+/* ── Security badge row ──────────────────────────────── */
+.badge-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+.badge {
+  display: flex; gap: 6px; align-items: center;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border);
+  background: rgba(255,255,255,.03);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.badge-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--good);
+  box-shadow: 0 0 0 2px var(--good-glow);
+}
+
+.hidden { display: none; }
+
+/* ── Responsive ──────────────────────────────────────── */
+@media (max-width: 860px) {
+  .shell { padding-top: 32px; }
+  .share-grid { grid-template-columns: 1fr; }
+  .qr { width: 180px; height: 180px; }
+  h1 { font-size: 26px; }
+}
