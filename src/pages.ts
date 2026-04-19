@@ -25,7 +25,7 @@ export function renderUploadPage(session: Session | null) {
               <div class="kicker">Session</div>
               <div class="mono dim" style="font-size:12px;margin-top:3px">${session?.id ?? "—"}</div>
             </div>
-            <a class="link" href="/recipes?ut=${session?.uploadToken ?? ''}&dt=${session?.downloadToken ?? ''}" id="recipes-link">CLI recipes</a>
+            <a class="link" href="/recipes?id=${session?.id ?? ""}" id="recipes-link">CLI recipes</a>
           </div>
 
           <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-label="Drop file to upload">
@@ -37,10 +37,10 @@ export function renderUploadPage(session: Session | null) {
                   <line x1="12" y1="3" x2="12" y2="15"/>
                 </svg>
               </div>
-              <div class="drop-title">Drop your file here</div>
+              <div class="drop-title">Drop your files here</div>
               <div class="drop-sub">or click to browse · encrypted before upload</div>
             </div>
-            <input id="file" class="file" type="file" />
+            <input id="file" class="file" type="file" multiple />
           </div>
 
           <div class="badge-row">
@@ -76,46 +76,68 @@ export function renderUploadPage(session: Session | null) {
             </div>
           </div>
 
-          <div style="display:flex; gap:12px; align-items:center; margin-top:14px;">
-            <div class="meter" style="flex:1; margin-top:0;"><div id="bar" class="bar"></div></div>
-            <button id="cancel" class="btn hidden" type="button" style="padding: 6px 12px; font-size:11px;">Cancel</button>
-          </div>
           <div id="meta" class="meta mono"></div>
 
-          <div id="share" class="share hidden">
-            <div class="share-grid">
-              <div>
-                <div class="kicker">Share link</div>
-                <div class="copy-row">
-                  <input id="link" class="input mono" readonly />
-                  <button id="copy" class="btn" type="button">Copy</button>
+          <div id="share" class="share">
+            <div class="kicker">Files</div>
+            <div id="share-empty" class="dim" style="font-size:13px;margin-top:10px">Select files above to generate share links.</div>
+            <div id="shares" class="shares"></div>
+            <template id="share-item-template">
+              <section class="share-item">
+                <div class="share-row">
+                  <div class="share-left">
+                    <div class="mono share-filename"></div>
+                    <div class="mono dim share-state"></div>
+                    <div class="mono dim share-downloads"></div>
+                    <div class="share-badges hidden" data-badge="encrypted">
+                      <span class="share-badge">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <rect x="3" y="11" width="18" height="11" rx="2"></rect>
+                          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                        </svg>
+                        Encrypted
+                      </span>
+                    </div>
+                    <div class="meter meter-small"><div class="bar share-bar"></div></div>
+                  </div>
+                  <div class="share-actions">
+                    <button class="btn btn-small" type="button" data-copy data-copy-kind="curl">curl</button>
+                    <button class="btn btn-small" type="button" data-copy data-copy-kind="wget">wget</button>
+                    <button class="btn btn-small" type="button" data-action="open-share">Download</button>
+                    <button class="btn btn-small" type="button" data-toggle="qr">QR</button>
+                    <button class="btn btn-small btn-danger" type="button" data-action="delete">Delete</button>
+                  </div>
                 </div>
-                <div class="kicker space-top">Receive (curl)</div>
-                <div class="copy-row">
-                  <input id="cmd-curl-dl" class="input mono" readonly />
-                  <button class="btn cmd-copy" type="button">Copy</button>
+                <div class="share-link-row">
+                  <div class="kicker">Share link</div>
+                  <div class="copy-row">
+                    <input class="input mono share-link" readonly />
+                    <button class="btn btn-small" type="button" data-copy>Copy</button>
+                  </div>
                 </div>
-                <div class="kicker space-top">Receive (wget)</div>
-                <div class="copy-row">
-                  <input id="cmd-wget-dl" class="input mono" readonly />
-                  <button class="btn cmd-copy" type="button">Copy</button>
+                <div class="share-details hidden">
+                  <div class="qr-wrap">
+                    <canvas width="200" height="200" class="qr share-qr"></canvas>
+                  </div>
                 </div>
-                <div class="kicker space-top">Send (curl)</div>
-                <div class="copy-row">
-                  <input id="cmd-curl-ul" class="input mono" readonly />
-                  <button class="btn cmd-copy" type="button">Copy</button>
-                </div>
-              </div>
-              <div class="qr-wrap">
-                <div class="kicker">Scan to receive</div>
-                <canvas id="qr" width="200" height="200" class="qr"></canvas>
-              </div>
-            </div>
+              </section>
+            </template>
           </div>
 
           <div id="error" class="error hidden"></div>
         </section>
       </main>
+
+      <div id="recipes-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="CLI recipes">
+        <div class="modal-backdrop" data-action="close-modal"></div>
+        <div class="modal-panel">
+          <div class="row" style="margin-bottom:14px">
+            <div class="kicker">CLI Recipes</div>
+            <button id="recipes-close" class="btn btn-small" type="button" data-action="close-modal">Close</button>
+          </div>
+          <div id="recipes-body"></div>
+        </div>
+      </div>
 
       <script>window.__STREAMDROP__=${config}</script>
       <script src="/static/vendor/qr-creator.min.js"></script>
@@ -198,16 +220,18 @@ export function renderDownloadPage(session: Session) {
   })
 }
 
-export function renderRecipesPage(opts: { uploadToken?: string; downloadToken?: string } = {}) {
-  const { uploadToken, downloadToken } = opts
-  const dlPath = downloadToken ? `/d/${downloadToken}` : `/d/<downloadToken>`
-  const upPath = uploadToken ? `/upload/${uploadToken}` : `/upload/<uploadToken>`
+export function renderRecipesPage(opts: { id?: string; uploadToken?: string; downloadToken?: string } = {}) {
+  const { id } = opts
+  const createUrl = `HOST_PH/xfr`
+  const humanUrl = id ? `HOST_PH/xfr/${id}` : `HOST_PH/xfr/<id>`
+  const webUrl = id ? `HOST_PH/recv/${id}` : `HOST_PH/recv/<id>`
 
-  const curlDl = `curl -L "HOST_PH${dlPath}" -o streamdrop.enc`.replaceAll('"', "&quot;")
-  const wgetDl = `wget -O streamdrop.enc "HOST_PH${dlPath}"`.replaceAll('"', "&quot;")
-  const curlUl = `curl -T streamdrop.enc "HOST_PH${upPath}"`.replaceAll('"', "&quot;")
-  const tarUl = `tar czf - ./folder | curl -T - "HOST_PH${upPath}"`.replaceAll('"', "&quot;")
-  const tarDl = `curl "HOST_PH${dlPath}" | tar xzf -`.replaceAll('"', "&quot;")
+  const reqCurl = `curl -s -J -O -L -D - "${createUrl}" | grep -i human`.replaceAll('"', "&quot;")
+  const reqWget = `wget --content-disposition -S -o - "${createUrl}" | grep -i human`.replaceAll('"', "&quot;")
+  const sendCurl = `curl -T <myfile> -s -L -D - "${createUrl}/" | grep -i human`
+  const sendWget = `wget --post-file <myfile> -S -o - "${createUrl}" | grep -i human`
+  const recvCurl = `curl -s -J -O -L "<transfer_url>"`
+  const recvWget = `wget --content-disposition "<transfer_url>"`
 
   return htmlPage({
     title: "StreamDrop — CLI Recipes",
@@ -218,7 +242,7 @@ export function renderRecipesPage(opts: { uploadToken?: string; downloadToken?: 
             <div class="logo">SD</div>
             <div>
               <h1>CLI Recipes</h1>
-              <p>Terminal tools transfer ciphertext only. Browsers hold the key.</p>
+              <p>Use StreamDrop to send and receive files from your terminal.</p>
             </div>
           </div>
         </header>
@@ -226,41 +250,64 @@ export function renderRecipesPage(opts: { uploadToken?: string; downloadToken?: 
         <section class="card">
           <div class="row" style="margin-bottom:20px">
             <a class="link" href="/">← Back</a>
-            ${downloadToken ? `<span class="kicker">Session-specific tokens shown</span>` : `<span class="kicker">Using placeholder tokens</span>`}
+            ${id ? `<span class="kicker">Session link shown</span>` : `<span class="kicker">Using placeholder link</span>`}
           </div>
 
-          <div class="kicker">Download ciphertext</div>
+          <div class="kicker">Request a file (receiver-first)</div>
           <div class="copy-row" style="margin-bottom:8px">
-            <input class="input mono cmd-ph" value="${curlDl}" readonly />
+            <input class="input mono cmd-ph" value="${reqCurl}" readonly />
             <button class="btn cmd-copy" type="button">Copy</button>
           </div>
           <div class="copy-row">
-            <input class="input mono cmd-ph" value="${wgetDl}" readonly />
+            <input class="input mono cmd-ph" value="${reqWget}" readonly />
             <button class="btn cmd-copy" type="button">Copy</button>
           </div>
 
-          <div class="kicker space-top">Upload ciphertext</div>
-          <div class="copy-row">
-            <input class="input mono cmd-ph" value="${curlUl}" readonly />
-            <button class="btn cmd-copy" type="button">Copy</button>
-          </div>
-
-          <div class="kicker space-top">Pipe operations</div>
+          <div class="kicker">Sending files</div>
+          <div class="kicker space-top">Sending a file with cURL</div>
           <div class="copy-row" style="margin-bottom:8px">
-            <input class="input mono cmd-ph" value="${tarUl}" readonly />
-            <button class="btn cmd-copy" type="button">Copy</button>
-          </div>
-          <div class="copy-row">
-            <input class="input mono cmd-ph" value="${tarDl}" readonly />
+            <input class="input mono cmd-ph" value="${sendCurl.replaceAll('"', "&quot;")}" readonly />
             <button class="btn cmd-copy" type="button">Copy</button>
           </div>
 
-          <div class="kicker space-top" style="margin-top:20px">Important</div>
+          <div class="kicker space-top">Sending a file with Wget</div>
+          <div class="copy-row">
+            <input class="input mono cmd-ph" value="${sendWget.replaceAll('"', "&quot;")}" readonly />
+            <button class="btn cmd-copy" type="button">Copy</button>
+          </div>
+
+          <div class="dim" style="font-size:13px;margin-top:12px;line-height:1.6">
+            cURL and Wget won't stop by themselves — to stop hosting your file, press CTRL+C.
+          </div>
+
+          <div class="kicker space-top" style="margin-top:22px">Receiving files</div>
+          ${id ? `
+          <div class="kicker space-top">Direct download URL</div>
+          <div class="copy-row" style="margin-bottom:8px">
+            <input class="input mono cmd-ph" value="${humanUrl.replaceAll('"', "&quot;")}" readonly />
+            <button class="btn cmd-copy" type="button">Copy</button>
+          </div>
+          <div class="kicker space-top">Web URL</div>
+          <div class="copy-row" style="margin-bottom:8px">
+            <input class="input mono cmd-ph" value="${webUrl.replaceAll('"', "&quot;")}" readonly />
+            <button class="btn cmd-copy" type="button">Copy</button>
+          </div>
+          ` : ``}
+          <div class="kicker space-top">Receiving a file with cURL</div>
+          <div class="copy-row" style="margin-bottom:8px">
+            <input class="input mono cmd-ph" value="${recvCurl.replaceAll('"', "&quot;")}" readonly />
+            <button class="btn cmd-copy" type="button">Copy</button>
+          </div>
+
+          <div class="kicker space-top">Receiving a file with Wget</div>
+          <div class="copy-row">
+            <input class="input mono cmd-ph" value="${recvWget.replaceAll('"', "&quot;")}" readonly />
+            <button class="btn cmd-copy" type="button">Copy</button>
+          </div>
+
+          <div class="kicker space-top" style="margin-top:22px">Note</div>
           <div class="dim" style="font-size:13px;margin-top:8px;line-height:1.6">
-            The decryption key is only in the browser link fragment
-            <code style="font-family:var(--mono);color:var(--v-bright);font-size:12px">/<id>#<key></code>
-            and is never sent to the server. CLI clients receive encrypted bytes only
-            — open the share link in a browser to decrypt.
+            This CLI mode is not end-to-end encrypted. The server can see file contents in transit.
           </div>
         </section>
       </main>
@@ -304,6 +351,114 @@ export function renderNotFoundPage() {
           <a class="btn btn-primary link-btn" href="/" style="margin-top:24px;display:inline-block">Start a new transfer</a>
         </section>
       </main>
+    `,
+  })
+}
+
+export function renderXfrReceivePage(id: string) {
+  const url = `/xfr/${id}`
+  const sendUrl = `/send/${id}`
+  return htmlPage({
+    title: "StreamDrop — Receive (Plain)",
+    body: `
+      <main class="shell">
+        <header class="hero">
+          <div class="brand">
+            <div class="logo">SD</div>
+            <div><h1>Receive</h1><p>Plain transfer (no end-to-end encryption).</p></div>
+          </div>
+        </header>
+        <section class="card" style="text-align:center">
+          <div class="dim" style="font-size:13px;line-height:1.6">
+            Open this page first, then share the send link with the sender. When you're ready, click Download to wait for the upload stream.
+          </div>
+
+          <div style="max-width:620px;margin:18px auto 0;text-align:left">
+            <div class="kicker">Send link</div>
+            <div class="copy-row">
+              <input class="input mono" readonly value="HOST_PH${sendUrl}" />
+              <button class="btn btn-small" type="button" data-copy>Copy</button>
+            </div>
+
+            <div class="kicker space-top">Direct download URL</div>
+            <div class="copy-row">
+              <input class="input mono" readonly value="HOST_PH${url}" />
+              <button class="btn btn-small" type="button" data-copy>Copy</button>
+            </div>
+          </div>
+
+          <a class="btn btn-primary link-btn" href="${url}" style="margin-top:18px;display:inline-block">Download</a>
+        </section>
+      </main>
+      <script>
+        document.querySelectorAll('[data-copy]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const input = btn.previousElementSibling;
+            const val = input && input.tagName === 'INPUT' ? input.value : '';
+            if (!val) return;
+            try {
+              await navigator.clipboard.writeText(val.replace(/HOST_PH/g, location.origin));
+              const old = btn.textContent;
+              btn.textContent = "Copied";
+              setTimeout(() => btn.textContent = old, 900);
+            } catch {}
+          });
+        });
+        document.querySelectorAll('input.input.mono').forEach(el => { el.value = el.value.replace(/HOST_PH/g, location.origin) });
+      </script>
+    `,
+  })
+}
+
+export function renderXfrSendPage(id: string) {
+  const postUrl = `/xfr/${id}`
+  return htmlPage({
+    title: "StreamDrop — Send (Plain)",
+    body: `
+      <main class="shell">
+        <header class="hero">
+          <div class="brand">
+            <div class="logo">SD</div>
+            <div><h1>Send</h1><p>Plain transfer (no end-to-end encryption).</p></div>
+          </div>
+        </header>
+        <section class="card">
+          <div class="kicker">Select a file</div>
+          <div class="copy-row" style="margin-top:10px">
+            <input id="xfr-file" class="input" type="file" />
+            <button id="xfr-send" class="btn btn-primary" type="button">Send</button>
+          </div>
+          <div id="xfr-status" class="dim" style="font-size:13px;margin-top:12px;line-height:1.6"></div>
+          <div class="dim" style="font-size:13px;margin-top:10px;line-height:1.6">
+            Keep this tab open until the receiver finishes downloading.
+          </div>
+        </section>
+      </main>
+      <script type="module">
+        const elFile = document.getElementById("xfr-file");
+        const elSend = document.getElementById("xfr-send");
+        const elStatus = document.getElementById("xfr-status");
+        const postUrl = "HOST_PH${postUrl}";
+
+        function setStatus(t) { elStatus.textContent = t || ""; }
+
+        elSend.addEventListener("click", async () => {
+          const file = elFile.files && elFile.files[0];
+          if (!file) return setStatus("Select a file first.");
+          setStatus("Uploading...");
+          elSend.disabled = true;
+          try {
+            const url = postUrl.replace(/HOST_PH/g, location.origin) + "?name=" + encodeURIComponent(file.name);
+            const res = await fetch(url, { method: "PUT", headers: { "content-type": "application/octet-stream" }, body: file });
+            if (!res.ok) throw new Error(await res.text());
+            setStatus("Uploaded. Receiver can download now.");
+          } catch (e) {
+            setStatus(String(e?.message || e || "error"));
+          } finally {
+            elSend.disabled = false;
+          }
+        });
+      </script>
     `,
   })
 }

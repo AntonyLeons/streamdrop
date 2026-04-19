@@ -6,12 +6,13 @@
   "scripts": {
     "dev": "bun --watch src/server.ts",
     "start": "bun src/server.ts",
-    "test": "bun test",
+    "test": "bun test src",
     "test:e2e": "playwright test",
     "check": "bunx tsc -p tsconfig.json"
   },
   "dependencies": {
     "hono": "^4.9.0",
+    "qrcode": "^1.5.4",
     "qr-creator": "^1.0.0"
   },
   "devDependencies": {

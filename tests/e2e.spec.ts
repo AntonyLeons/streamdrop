@@ -18,6 +18,15 @@ async function uploadFile(page: Page, name: string, content: string | Buffer) {
   })
 }
 
+async function uploadFiles(page: Page, files: Array<{ name: string; content: string | Buffer }>) {
+  const payload = files.map((f) => ({
+    name: f.name,
+    mimeType: "application/octet-stream",
+    buffer: typeof f.content === "string" ? Buffer.from(f.content) : f.content,
+  }))
+  await page.locator("input#file").setInputFiles(payload)
+}
+
 // ─── Upload page ─────────────────────────────────────────────────────────────
 
 test("upload page loads with correct UI", async ({ page }) => {
@@ -27,9 +36,11 @@ test("upload page loads with correct UI", async ({ page }) => {
   await expect(page.locator(".dropzone")).toBeVisible()
   await expect(page.locator("[data-step='key']")).toBeVisible()
   await expect(page.locator("[data-step='encrypt']")).toBeVisible()
-  await expect(page.locator("[data-step='upload']")).toBeVisible()
+  await expect(page.locator("[data-step='stream']")).toBeVisible()
   await expect(page.locator("[data-step='ready']")).toBeVisible()
-  await expect(page.locator("#share")).toBeHidden()
+  await expect(page.locator("#share")).toBeVisible()
+  await expect(page.locator("#share-empty")).toBeVisible()
+  await expect(page.locator("text=CLI endpoints")).toHaveCount(0)
 })
 
 test("upload page embeds session config", async ({ page }) => {
@@ -48,25 +59,25 @@ test("selecting a file shows share link and QR section", async ({ page }) => {
   await page.goto("/")
   await uploadFile(page, "hello.txt", "Hello StreamDrop E2E!")
 
-  // Share section should appear
-  await expect(page.locator("#share")).toBeVisible({ timeout: 20_000 })
+  await expect(page.locator("#share-empty")).toBeHidden({ timeout: 20_000 })
 
   // Share link should contain the session id and a key fragment
   const cfg = await getPageCfg(page)
-  const link = await page.locator("#link").inputValue()
+  const link = await page.locator(".share-item .share-link").first().inputValue()
   expect(link).toContain(`/${cfg.id}#`)
-  expect(link).toMatch(/^https?:\/\/.+\/[A-Za-z0-9_-]+#[A-Za-z0-9_-]+$/)
+  expect(link).toMatch(/^https?:\/\/.+\/[A-Za-z0-9_-]+#[A-Za-z0-9_-]+(,.*)?$/)
 })
 
 test("copy button updates text briefly", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"])
   await page.goto("/")
   await uploadFile(page, "copy-test.txt", "copy test")
-  await expect(page.locator("#share")).toBeVisible({ timeout: 20_000 })
+  await expect(page.locator("#share-empty")).toBeHidden({ timeout: 20_000 })
 
-  await page.locator("#copy").click()
-  await expect(page.locator("#copy")).toHaveText("Copied")
-  await expect(page.locator("#copy")).toHaveText("Copy", { timeout: 3_000 })
+  const btn = page.locator(".share-item").first().locator("button[data-copy]").first()
+  await btn.click()
+  await expect(btn).toHaveText("Copied")
+  await expect(btn).toHaveText("curl", { timeout: 3_000 })
 })
 
 test("single file click opens picker only once (no double dialog)", async ({ page }) => {
@@ -86,23 +97,40 @@ test("single file click opens picker only once (no double dialog)", async ({ pag
   })
 
   await uploadFile(page, "once.txt", "one key only")
-  await expect(page.locator("#share")).toBeVisible({ timeout: 20_000 })
+  await expect(page.locator("#share-empty")).toBeHidden({ timeout: 20_000 })
 
   expect(keyCalls).toBe(1)
 })
 
+test("selecting multiple files shows multiple share links", async ({ page }) => {
+  await page.goto("/")
+  await uploadFiles(page, [
+    { name: "a.txt", content: "a" },
+    { name: "b.txt", content: "b" },
+  ])
+
+  await expect(page.locator("#share-empty")).toBeHidden({ timeout: 20_000 })
+  await expect(page.locator(".share-item")).toHaveCount(2, { timeout: 20_000 })
+
+  const links = await page.locator(".share-item .share-link").evaluateAll((els) =>
+    els.map((el) => (el instanceof HTMLInputElement ? el.value : "")),
+  )
+  expect(links.length).toBe(2)
+  expect(links[0]).toMatch(/^https?:\/\/.+\/[A-Za-z0-9_-]+#[A-Za-z0-9_-]+/)
+  expect(links[1]).toMatch(/^https?:\/\/.+\/[A-Za-z0-9_-]+#[A-Za-z0-9_-]+/)
+})
+
 // ─── Progress ─────────────────────────────────────────────────────────────────
 
-test("progress bar advances during upload", async ({ page }) => {
+test("progress advances during encryption", async ({ page }) => {
   await page.goto("/")
   const largeFile = Buffer.alloc(512 * 1024, 0x55) // 512 KB
   await uploadFile(page, "large.bin", largeFile)
-  // Bar should reach 100% after upload
-  await expect(page.locator("#share")).toBeVisible({ timeout: 30_000 })
-  const width = await page.locator("#bar").evaluate((el) => {
+  await expect(page.locator(".share-item [data-badge='encrypted']").first()).toBeVisible({ timeout: 60_000 })
+  const width = await page.locator(".share-item .share-bar").first().evaluate((el) => {
     return parseInt((el as HTMLElement).style.width || "0")
   })
-  expect(width).toBe(100)
+  expect(width).toBe(0)
 })
 
 // ─── Recipes page ─────────────────────────────────────────────────────────────
@@ -114,8 +142,8 @@ test("recipes page has a back button", async ({ page }) => {
 
 test("recipes page without tokens shows placeholders", async ({ page }) => {
   await page.goto("/recipes")
-  const code = await page.locator(".code").first().textContent()
-  expect(code).toContain("downloadToken")
+  const v = await page.locator("input.cmd-ph").first().inputValue()
+  expect(v).toContain("/xfr")
 })
 
 test("CLI recipes link from upload page passes real tokens", async ({ page }) => {
@@ -123,40 +151,44 @@ test("CLI recipes link from upload page passes real tokens", async ({ page }) =>
   const cfg = await getPageCfg(page)
   const href = await page.locator("#recipes-link").getAttribute("href")
 
-  expect(href).toContain(`ut=${cfg.uploadToken}`)
-  expect(href).toContain(`dt=${cfg.downloadToken}`)
+  expect(href).toContain(`id=${cfg.id}`)
 })
 
 test("recipes page with tokens shows actual token values and dynamic host", async ({ page }) => {
   await page.goto("/")
   const cfg = await getPageCfg(page)
 
-  // Navigate directly to the recipes URL with actual tokens
-  await page.goto(`/recipes?ut=${cfg.uploadToken}&dt=${cfg.downloadToken}`)
+  await page.goto(`/recipes?id=${cfg.id}`)
 
-  // Should contain the actual token (not a placeholder)
-  const allCode = await page.locator(".code").allTextContents()
-  const combined = allCode.join("\n")
-  expect(combined).toContain(cfg.downloadToken)
-  expect(combined).toContain(cfg.uploadToken)
+  const allValues = await page.locator("input.cmd-ph").evaluateAll((els) =>
+    els.map((el) => (el instanceof HTMLInputElement ? el.value : "")),
+  )
+  const combined = allValues.join("\n")
+  expect(combined).toContain(`/xfr/${cfg.id}`)
 
   // Host placeholders should be replaced with location.origin at runtime
   expect(combined).toContain("http://localhost:4000")
-  expect(combined).not.toContain("host-ph")
+  expect(combined).not.toContain("HOST_PH")
 })
 
 test("clicking CLI recipes link from upload page shows real tokens", async ({ page }) => {
   await page.goto("/")
   const cfg = await getPageCfg(page)
 
-  await page.locator("#recipes-link").click()
-  await page.waitForLoadState()
+  await uploadFile(page, "cli.txt", "hi")
+  await expect(page.locator("#share-empty")).toBeHidden({ timeout: 20_000 })
 
-  const allCode = await page.locator(".code").allTextContents()
-  const combined = allCode.join("\n")
-  expect(combined).toContain(cfg.downloadToken)
-  expect(combined).toContain(cfg.uploadToken)
+  await page.locator("#recipes-link").click()
+  await expect(page.locator("#recipes-modal")).toBeVisible()
+
+  const allValues = await page.locator("#recipes-modal input").evaluateAll((els) =>
+    els.map((el) => (el instanceof HTMLInputElement ? el.value : "")),
+  )
+  const combined = allValues.join("\n")
   expect(combined).toContain("http://localhost:4000")
+  expect(combined).toContain(`/xfr/${cfg.id}`)
+
+  await expect(page).toHaveURL("http://localhost:4000/")
 })
 
 // ─── Download page ────────────────────────────────────────────────────────────

@@ -40,6 +40,61 @@ test("receiver-first relay pipes bytes from upload to download", async () => {
   }
 })
 
+test("raw receiver-first relay pipes bytes and returns .bin filename", async () => {
+  const app = createApp()
+  const server = Bun.serve({ port: 0, fetch: app.fetch })
+  const base = `http://localhost:${server.port}`
+
+  try {
+    const html = await fetch(`${base}/`).then((r) => r.text())
+    const cfg = extractCfg(html)
+
+    const downloadResP = fetch(`${base}/raw/d/${cfg.downloadToken}`)
+    await sleep(20)
+
+    const payload = new TextEncoder().encode("hello-raw")
+    const uploadRes = await fetch(`${base}/raw/upload/${cfg.uploadToken}`, {
+      method: "PUT",
+      headers: { "content-type": "application/octet-stream" },
+      body: payload,
+    })
+    expect(uploadRes.status).toBe(200)
+
+    const downloadRes = await downloadResP
+    expect(downloadRes.status).toBe(200)
+    expect(downloadRes.headers.get("content-disposition")).toContain('filename="streamdrop.bin"')
+    const got = new Uint8Array(await downloadRes.arrayBuffer())
+    expect(Buffer.from(got)).toEqual(Buffer.from(payload))
+  } finally {
+    server.stop(true)
+  }
+})
+
+test("xfr endpoints expose human links and redirect upload to a trailing-slash URL", async () => {
+  const app = createApp()
+  const server = Bun.serve({ port: 0, fetch: app.fetch })
+  const base = `http://localhost:${server.port}`
+
+  try {
+    const txt = await fetch(`${base}/xfr`).then((r) => r.text())
+    expect(txt).toContain("human-transfer-url:")
+    expect(txt).toContain("human-send-url:")
+    expect(txt).toContain("human-recv-url:")
+
+    const res = await fetch(`${base}/xfr`, {
+      method: "PUT",
+      headers: { "content-type": "application/octet-stream" },
+      body: new Uint8Array([1, 2, 3]),
+      redirect: "manual",
+    })
+    expect(res.status).toBe(307)
+    const loc = res.headers.get("location") || ""
+    expect(loc).toMatch(new RegExp(`^${base}/xfr/[A-Za-z0-9_-]+$`))
+  } finally {
+    server.stop(true)
+  }
+})
+
 test("GET /d/:token returns 429 when receiver limit is reached", async () => {
   const app = createApp()
   const sessionRes = await app.request("/")

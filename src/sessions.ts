@@ -6,6 +6,9 @@ export type Session = {
   id: string
   uploadToken: string
   downloadToken: string
+  fileName?: string
+  downloadCount: number
+  liveSinks: Set<(data: string) => void>
   createdAt: number
   deleteTimer?: Timer
   status: SessionStatus
@@ -38,6 +41,8 @@ export function createSession(now = Date.now()): Session {
     senderAttached: false,
     receivers: new Set(),
     receiverWaiters: new Set(),
+    downloadCount: 0,
+    liveSinks: new Set(),
   }
 
   sessionsById.set(id, session)
@@ -74,6 +79,46 @@ export function notifyReceiverAvailable(session: Session) {
 export function waitForReceiver(session: Session) {
   if (session.receivers.size > 0) return Promise.resolve()
   return new Promise<void>((resolve, reject) => session.receiverWaiters.add({ resolve, reject }))
+}
+
+export function waitForReceiverWithTimeout(session: Session, timeoutMs: number, signal?: AbortSignal) {
+  if (session.receivers.size > 0) return Promise.resolve(true)
+
+  return new Promise<boolean>((resolve) => {
+    const waiter: Waiter = {
+      resolve: () => {
+        cleanup()
+        resolve(true)
+      },
+      reject: () => {
+        cleanup()
+        resolve(false)
+      },
+    }
+
+    const onAbort = () => {
+      cleanup()
+      resolve(false)
+    }
+
+    const cleanup = () => {
+      session.receiverWaiters.delete(waiter)
+      if (t) clearTimeout(t)
+      if (signal) signal.removeEventListener("abort", onAbort)
+    }
+
+    session.receiverWaiters.add(waiter)
+
+    let t: Timer | undefined
+    if (timeoutMs > 0) {
+      t = setTimeout(() => {
+        cleanup()
+        resolve(false)
+      }, timeoutMs)
+    }
+
+    if (signal) signal.addEventListener("abort", onAbort, { once: true })
+  })
 }
 
 export function removeReceiver(session: Session, writer: WritableStreamDefaultWriter<Uint8Array>) {

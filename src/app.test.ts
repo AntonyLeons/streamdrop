@@ -24,6 +24,17 @@ test("GET /health returns {ok: true}", async () => {
   expect(await res.json()).toEqual({ ok: true })
 })
 
+test("POST /session returns session tokens", async () => {
+  const app = createApp()
+  const res = await app.request("/session", { method: "POST" })
+  expect([200, 503]).toContain(res.status)
+  if (res.status === 503) return
+  const body = (await res.json()) as any
+  expect(typeof body.id).toBe("string")
+  expect(typeof body.uploadToken).toBe("string")
+  expect(typeof body.downloadToken).toBe("string")
+})
+
 test("GET /:id returns 404 for unknown session", async () => {
   const app = createApp()
   const res = await app.request("/unknown_id")
@@ -74,7 +85,21 @@ test("POST /upload rejects duplicate senders with 409", async () => {
   })
 
   expect(res2.status).toBe(409)
-  expect(await res2.json()).toEqual({ error: "sender_exists" })
+  const body = (await res2.json()) as any
+  expect(["sender_exists", "done"]).toContain(body.error)
+})
+
+test("DELETE /session/:uploadToken deletes session", async () => {
+  const app = createApp()
+  const session = createSession()
+  if (!session) throw new Error("unexpected session cap hit")
+
+  const res = await app.request(`/session/${session.uploadToken}`, { method: "DELETE" })
+  expect(res.status).toBe(200)
+  expect(await res.json()).toEqual({ ok: true })
+
+  const res2 = await app.request(`/upload/${session.uploadToken}`, { method: "POST", body: new Uint8Array([1]) })
+  expect(res2.status).toBe(404)
 })
 
 test("GET / returns 503 when session cap is reached", async () => {

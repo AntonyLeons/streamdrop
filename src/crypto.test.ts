@@ -7,7 +7,7 @@ function polyfillBase64() {
 
 polyfillBase64()
 
-const cryptoMod = await import(new URL("../public/crypto.js", import.meta.url).toString())
+const cryptoMod = await import(new URL("../public/static/crypto.js", import.meta.url).toString())
 
 test("encrypt->decrypt roundtrip (multi-chunk)", async () => {
   const plain = randomBytes(220_000)

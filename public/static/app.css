@@ -283,6 +283,59 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
 
 /* ── Share section ───────────────────────────────────── */
 .share { margin-top: 22px; }
+.shares { display: flex; flex-direction: column; gap: 10px; }
+.share-item {
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--glass-border);
+  background: rgba(0,0,0,.18);
+}
+.share-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  gap: 12px;
+}
+.share-left { flex: 1 1 280px; min-width: 0; }
+.share-filename {
+  font-size: 12px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.share-state { font-size: 11px; margin-top: 2px; }
+.share-downloads { font-size: 11px; margin-top: 2px; }
+.share-badges { margin-top: 8px; }
+.share-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(52,211,153,.28);
+  background: rgba(52,211,153,.08);
+  color: var(--good);
+  font-size: 11px;
+  font-weight: 700;
+}
+.meter-small {
+  margin-top: 8px;
+  height: 3px;
+}
+.share-bar {
+  transition: width .15s ease;
+}
+.share-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  align-self: start;
+}
+.share-link-row { margin-top: 10px; }
+.share-details { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.06); }
 .share-grid {
   display: grid;
   grid-template-columns: 1.45fr .7fr;
@@ -334,6 +387,20 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
   border: 1px solid var(--v-border);
   color: var(--v-bright);
   box-shadow: none;
+}
+.btn-small {
+  padding: 7px 10px;
+  font-size: 11px;
+}
+.btn-danger {
+  background: rgba(248,113,113,.10);
+  border-color: rgba(248,113,113,.35);
+  color: #fca5a5;
+}
+.btn-danger:hover {
+  background: rgba(248,113,113,.18);
+  box-shadow: 0 0 0 3px rgba(248,113,113,.12);
+  color: #fff;
 }
 .btn:hover {
   background: rgba(124,92,255,.16);
@@ -408,10 +475,51 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
 
 .hidden { display: none; }
 
+/* ── Modal ───────────────────────────────────────────── */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+}
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,.62);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.modal-panel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(920px, calc(100vw - 32px));
+  max-height: calc(100vh - 56px);
+  overflow: auto;
+  background: rgba(10,12,22,.96);
+  border: 1px solid var(--glass-border);
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: 0 32px 90px rgba(0,0,0,.65);
+}
+.recipe-block {
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--glass-border);
+  background: rgba(255,255,255,.03);
+}
+.recipe-block + .recipe-block { margin-top: 12px; }
+
 /* ── Responsive ──────────────────────────────────────── */
 @media (max-width: 860px) {
   .shell { padding-top: 32px; }
   .share-grid { grid-template-columns: 1fr; }
   .qr { width: 180px; height: 180px; }
   h1 { font-size: 26px; }
+}
+
+@media (max-width: 520px) {
+  .share-row { grid-template-columns: 1fr; }
+  .share-actions { width: 100%; justify-content: flex-start; }
+  .share-filename { white-space: normal; }
 }
