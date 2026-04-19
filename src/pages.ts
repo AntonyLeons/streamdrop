@@ -80,6 +80,21 @@ export function renderUploadPage(session: Session | null) {
 
           <div id="share" class="share">
             <div class="kicker">Files</div>
+            <div class="row" style="margin-top:10px; align-items:center">
+              <div class="dim" style="font-size:13px; display:flex; gap:8px; align-items:center">
+                CLI (curl/wget)
+                <span class="tooltip">
+                  <button class="tooltip-icon" type="button" aria-describedby="cli-warning">i</button>
+                  <span id="cli-warning" class="tooltip-bubble" role="tooltip">
+                    Warning: enabling CLI exposes an encrypted .enc download link for curl/wget (terminal cannot decrypt). Use the share link in a browser to decrypt. For plain (non-E2E) CLI transfer, use the CLI recipes page.
+                  </span>
+                </span>
+              </div>
+              <label class="switch" aria-label="Enable CLI (curl/wget)">
+                <input id="cli-toggle" class="switch-input" type="checkbox" />
+                <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+              </label>
+            </div>
             <div id="share-empty" class="dim" style="font-size:13px;margin-top:10px">Select files above to generate share links.</div>
             <div id="shares" class="shares"></div>
             <template id="share-item-template">

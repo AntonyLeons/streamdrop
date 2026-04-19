@@ -15,6 +15,7 @@ import {
   deleteSession,
   waitForReceiver,
   waitForReceiverWithTimeout,
+  enableCliDownload,
 } from "./sessions"
 import { streamSSE } from "hono/streaming"
 import {
@@ -107,6 +108,14 @@ export function createApp() {
     )
   })
 
+  app.post("/cli/:uploadToken", async (c) => {
+    const uploadToken = c.req.param("uploadToken")
+    const session = getSessionByUploadToken(uploadToken)
+    if (!session) return c.json({ error: "not_found" }, 404, { "cache-control": "no-store" })
+    const token = enableCliDownload(session)
+    return c.json({ token }, 200, { "cache-control": "no-store" })
+  })
+
   app.delete("/session/:uploadToken", (c) => {
     const uploadToken = c.req.param("uploadToken")
     const session = getSessionByUploadToken(uploadToken)
@@ -136,6 +145,7 @@ export function createApp() {
       session.deleteTimer = undefined
     }
 
+    c.header("cache-control", "no-store")
     return streamSSE(c, async (stream) => {
       let active = true
       const sink = (data: string) => {
@@ -604,6 +614,41 @@ export function createApp() {
       writer.abort().catch(() => {})
     }
 
+    c.req.raw.signal.addEventListener("abort", onAbort, { once: true })
+
+    const headers = new Headers()
+    headers.set("content-type", "application/octet-stream")
+    headers.set("cache-control", "no-store")
+    headers.set("accept-ranges", "none")
+    setAttachmentContentDisposition(headers, "streamdrop.enc")
+
+    return new Response(readable, { status: 200, headers })
+  })
+
+  app.get("/cli/d/:downloadToken", async (c) => {
+    const downloadToken = c.req.param("downloadToken")
+    const session = getSessionByDownloadToken(downloadToken)
+    if (!session) return c.json({ error: "not_found" }, 404, { "cache-control": "no-store" })
+    const t = c.req.query("t") || ""
+    if (!session.cliDownloadToken || t !== session.cliDownloadToken) {
+      return c.json({ error: "forbidden" }, 403, { "cache-control": "no-store" })
+    }
+    if (session.status === "done") return c.json({ error: "done" }, 410, { "cache-control": "no-store" })
+    if (session.receivers.size >= getMaxReceivers())
+      return c.json({ error: "too_many_receivers" }, 429, { "cache-control": "no-store" })
+
+    session.downloadCount++
+    notifyLive(session)
+
+    const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>()
+    const writer = writable.getWriter()
+    session.receivers.add(writer)
+    notifyReceiverAvailable(session)
+
+    const onAbort = () => {
+      removeReceiver(session, writer)
+      writer.abort().catch(() => {})
+    }
     c.req.raw.signal.addEventListener("abort", onAbort, { once: true })
 
     const headers = new Headers()

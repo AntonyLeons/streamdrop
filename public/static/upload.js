@@ -14,10 +14,17 @@ const elError = document.getElementById("error")
 const elRecipesLink = document.getElementById("recipes-link")
 const elRecipesModal = document.getElementById("recipes-modal")
 const elRecipesBody = document.getElementById("recipes-body")
+const elCliToggle = document.getElementById("cli-toggle")
 
 setStep("key")
 
 const liveBySessionId = new Map()
+let cliEnabled = false
+
+document.documentElement.classList.add("cli-off")
+try {
+  if (localStorage.getItem("sd_cli") === "1") enableCli(true)
+} catch {}
 
 if (elRecipesLink) {
   elRecipesLink.addEventListener("click", (e) => {
@@ -26,9 +33,76 @@ if (elRecipesLink) {
   })
 }
 
+if (elCliToggle) {
+  elCliToggle.addEventListener("change", () => {
+    enableCli(!!elCliToggle.checked)
+    try {
+      localStorage.setItem("sd_cli", elCliToggle.checked ? "1" : "0")
+    } catch {}
+  })
+}
+
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && elRecipesModal && !elRecipesModal.classList.contains("hidden")) closeRecipesModal()
 })
+
+function enableCli(on) {
+  cliEnabled = !!on
+  document.documentElement.classList.toggle("cli-off", !on)
+  if (elCliToggle) elCliToggle.checked = !!on
+  for (const item of document.querySelectorAll(".share-item")) updateCliCopyValues(item)
+}
+
+function updateCliCopyValues(root) {
+  const btnCurl = root.querySelector('button[data-copy-kind="curl"]')
+  const btnWget = root.querySelector('button[data-copy-kind="wget"]')
+  if (!btnCurl && !btnWget) return
+
+  if (!cliEnabled) {
+    if (btnCurl) delete btnCurl.dataset.copyValue
+    if (btnWget) delete btnWget.dataset.copyValue
+    return
+  }
+
+  const downloadToken = root.dataset.downloadToken || ""
+  if (!downloadToken) return
+  ensureCliToken(root)
+}
+
+async function ensureCliToken(root) {
+  if (!cliEnabled) return
+  if (root.dataset.cliToken) {
+    setCliCopyValues(root, root.dataset.cliToken)
+    return
+  }
+
+  const uploadToken = root.dataset.uploadToken || ""
+  if (!uploadToken) return
+
+  let token = ""
+  try {
+    const res = await fetch(`/cli/${uploadToken}`, { method: "POST", headers: { accept: "application/json" } })
+    if (res.ok) {
+      const body = await res.json()
+      if (body && typeof body.token === "string") token = body.token
+    }
+  } catch {}
+
+  if (!token) return
+  root.dataset.cliToken = token
+  if (!cliEnabled) return
+  setCliCopyValues(root, token)
+}
+
+function setCliCopyValues(root, token) {
+  const btnCurl = root.querySelector('button[data-copy-kind="curl"]')
+  const btnWget = root.querySelector('button[data-copy-kind="wget"]')
+  const downloadToken = root.dataset.downloadToken || ""
+  if (!downloadToken) return
+  const downloadUrl = `${location.origin}/cli/d/${downloadToken}?t=${encodeURIComponent(token)}`
+  if (btnCurl) btnCurl.dataset.copyValue = `curl -L "${downloadUrl}" -o streamdrop.enc`
+  if (btnWget) btnWget.dataset.copyValue = `wget -O streamdrop.enc "${downloadUrl}"`
+}
 
 elDrop.addEventListener("keydown", (e) => {
   if (e.key === "Enter" || e.key === " ") elFile.click()
@@ -170,16 +244,14 @@ async function startTransfer(file) {
   const keyB64 = base64urlEncode(raw)
   const shareUrl = `${location.origin}/${session.id}#${keyB64},${encodeURIComponent(file.name)}`
 
-  const downloadUrl = `${location.origin}/d/${session.downloadToken}`
-
   const item = createShareItem({
     file,
     shareUrl,
-    downloadUrl,
   })
   item.root.dataset.sessionId = session.id
   item.root.dataset.uploadToken = session.uploadToken
   item.root.dataset.downloadToken = session.downloadToken
+  updateCliCopyValues(item.root)
   ensureLive(session.id, item)
   if (elShareEmpty) elShareEmpty.classList.add("hidden")
   elShares.appendChild(item.root)
@@ -324,7 +396,7 @@ function getActiveTransferCount() {
   return active
 }
 
-function createShareItem({ file, shareUrl, downloadUrl }) {
+function createShareItem({ file, shareUrl }) {
   const frag = elShareTemplate.content.cloneNode(true)
   const root = frag.querySelector(".share-item")
   const elFilename = root.querySelector(".share-filename")
@@ -332,9 +404,8 @@ function createShareItem({ file, shareUrl, downloadUrl }) {
   const elDownloads = root.querySelector(".share-downloads")
   const elEncrypted = root.querySelector('[data-badge="encrypted"]')
   const elBar = root.querySelector(".share-bar")
+  const elMeter = elBar ? elBar.closest(".meter") : null
   const elLink = root.querySelector(".share-link")
-  const btnCurl = root.querySelector('button[data-copy-kind="curl"]')
-  const btnWget = root.querySelector('button[data-copy-kind="wget"]')
 
   root.dataset.shareUrl = shareUrl
   root.dataset.qrRendered = "0"
@@ -344,9 +415,6 @@ function createShareItem({ file, shareUrl, downloadUrl }) {
   elState.textContent = "Waiting"
   if (elDownloads) elDownloads.textContent = "0 downloads"
   elLink.value = shareUrl
-
-  if (btnCurl) btnCurl.dataset.copyValue = `curl -L "${downloadUrl}" -o streamdrop.enc`
-  if (btnWget) btnWget.dataset.copyValue = `wget -O streamdrop.enc "${downloadUrl}"`
 
   return {
     root,
@@ -359,7 +427,10 @@ function createShareItem({ file, shareUrl, downloadUrl }) {
     },
     setBar: (pct) => {
       if (!elBar) return
-      elBar.style.width = `${Math.round(Math.max(0, Math.min(1, pct)) * 100)}%`
+      const clamped = Math.max(0, Math.min(1, pct))
+      if (elMeter) elMeter.classList.remove("hidden")
+      elBar.style.width = `${Math.round(clamped * 100)}%`
+      if (clamped >= 1 && elMeter) setTimeout(() => elMeter.classList.add("hidden"), 400)
     },
     setEncrypted: (v) => {
       if (!elEncrypted) return
@@ -372,8 +443,12 @@ function createShareItem({ file, shareUrl, downloadUrl }) {
 function ensureLive(sessionId, item) {
   if (!sessionId) return
   if (liveBySessionId.has(sessionId)) return
-  const es = new EventSource(`/live/${sessionId}`)
-  es.onmessage = (e) => {
+  let closed = false
+  let es
+  let retryMs = 400
+  let reconnectTimer
+
+  const onMessage = (e) => {
     if (!e?.data || e.data === "ping") return
     let msg
     try {
@@ -385,7 +460,39 @@ function ensureLive(sessionId, item) {
       item.setDownloads(msg.downloads)
     }
   }
-  liveBySessionId.set(sessionId, es)
+
+  const reconnect = () => {
+    if (closed) return
+    if (reconnectTimer) clearTimeout(reconnectTimer)
+    reconnectTimer = setTimeout(connect, retryMs)
+    retryMs = Math.min(5000, Math.floor(retryMs * 1.6))
+  }
+
+  const connect = () => {
+    if (closed) return
+    try {
+      if (es) es.close()
+    } catch {}
+
+    es = new EventSource(`/live/${sessionId}`)
+    es.onmessage = onMessage
+    es.onopen = () => {
+      retryMs = 400
+    }
+    es.onerror = () => {
+      if (closed) return
+      reconnect()
+    }
+  }
+
+  connect()
+  liveBySessionId.set(sessionId, {
+    close: () => {
+      closed = true
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      if (es) es.close()
+    },
+  })
 }
 
 function wrapStreamWithProgress({ stream, total, onProgress, signal }) {
@@ -482,141 +589,66 @@ function openRecipesModal() {
   if (!elRecipesModal || !elRecipesBody) return
   elRecipesBody.textContent = ""
 
-  const items = Array.from(document.querySelectorAll(".share-item"))
-  if (items.length === 0) {
-    elRecipesBody.innerHTML = `
-      <div class="recipe-block">
-        <div class="kicker">Use StreamDrop to send and receive files from your terminal</div>
-
-        <div class="kicker space-top">Sending a file with cURL</div>
-        <div class="copy-row" style="margin-bottom:8px">
-          <input class="input mono" readonly value='curl -T &lt;myfile&gt; -s -L -D - "${location.origin}/xfr/" | grep -i human' />
-          <button class="btn btn-small" type="button" data-copy>Copy</button>
-        </div>
-
-        <div class="kicker space-top">Sending a file with Wget</div>
-        <div class="copy-row">
-          <input class="input mono" readonly value='wget --post-file &lt;myfile&gt; -S -o - "${location.origin}/xfr" | grep -i human' />
-          <button class="btn btn-small" type="button" data-copy>Copy</button>
-        </div>
-
-        <div class="dim" style="font-size:13px;margin-top:8px;line-height:1.6">
-          The send command prints a transfer URL. Use that URL to download.
-        </div>
-        <div class="kicker space-top">Receiving a file with cURL</div>
-        <div class="copy-row" style="margin-bottom:8px">
-          <input class="input mono" readonly value='curl -s -J -O -L "&lt;transfer_url&gt;"' />
-          <button class="btn btn-small" type="button" data-copy>Copy</button>
-        </div>
-
-        <div class="kicker space-top">Receiving a file with Wget</div>
-        <div class="copy-row">
-          <input class="input mono" readonly value='wget --content-disposition "&lt;transfer_url&gt;"' />
-          <button class="btn btn-small" type="button" data-copy>Copy</button>
-        </div>
-
-        <div class="kicker space-top" style="margin-top:18px">Request a file (receiver-first)</div>
-        <div class="copy-row" style="margin-bottom:8px">
-          <input class="input mono" readonly value='curl -s -L "${location.origin}/xfr" | tee xfr.txt' />
-          <button class="btn btn-small" type="button" data-copy>Copy</button>
-        </div>
-        <div class="copy-row">
-          <input class="input mono" readonly value='wget -qO- "${location.origin}/xfr" | tee xfr.txt' />
-          <button class="btn btn-small" type="button" data-copy>Copy</button>
-        </div>
-
-        <div class="kicker space-top" style="margin-top:18px">Note</div>
-        <div class="dim" style="font-size:13px;margin-top:8px;line-height:1.6">
-          This CLI mode is not end-to-end encrypted. The server can see file contents in transit.
-        </div>
+  const host = location.origin
+  elRecipesBody.innerHTML = `
+    <div class="recipe-block">
+      <div class="kicker">Receiver-first</div>
+      <div class="dim" style="font-size:13px;margin-top:8px;line-height:1.6">
+        Receiver-first: share the send link below with the sender, then click Download (or run the curl/wget receive command). The download waits until the sender starts uploading.
       </div>
-    `
-  } else {
-    for (const item of items) {
-      const fileName = item.dataset.fileName || "file"
-      const sessionId = item.dataset.sessionId || "<id>"
-      const host = location.origin
-      const humanUrl = `${host}/xfr/${sessionId}`
-      const webUrl = `${host}/recv/${sessionId}`
-      const sendUrl = `${host}/send/${sessionId}`
 
-      const block = document.createElement("section")
-      block.className = "recipe-block"
-      block.innerHTML = `
-        <div class="row" style="margin-bottom:10px">
-          <div class="mono" style="font-size:12px">${escapeHtml(fileName)}</div>
-          <a class="link" href="/recipes?id=${encodeURIComponent(sessionId)}" target="_blank" rel="noreferrer">Open page</a>
-        </div>
+      <div class="kicker space-top">Send link</div>
+      <div class="copy-row" style="margin-bottom:8px">
+        <input class="input mono" readonly value='${host}/send/&lt;id&gt;' />
+        <button class="btn btn-small" type="button" data-copy>Copy</button>
+      </div>
 
-        <div class="kicker">Use StreamDrop to send and receive files from your terminal</div>
+      <div class="kicker space-top">Direct download URL</div>
+      <div class="copy-row" style="margin-bottom:8px">
+        <input class="input mono" readonly value='${host}/xfr/&lt;id&gt;' />
+        <button class="btn btn-small" type="button" data-copy>Copy</button>
+      </div>
 
-        <div class="dim" style="font-size:13px;margin-top:8px;line-height:1.6">
-          Receiver-first: share the send link below with the sender, then click Download (or run the curl/wget receive command). The download waits until the sender starts uploading.
-        </div>
+      <div class="kicker space-top">Request page</div>
+      <div class="copy-row">
+        <input class="input mono" readonly value='${host}/recv/&lt;id&gt;' />
+        <button class="btn btn-small" type="button" data-copy>Copy</button>
+      </div>
 
-        <div class="kicker space-top">Sending a file with cURL</div>
-        <div class="copy-row" style="margin-bottom:8px">
-          <input class="input mono" readonly value='curl -T &lt;myfile&gt; -s -L -D - "${host}/xfr/" | grep -i human' />
-          <button class="btn btn-small" type="button" data-copy>Copy</button>
-        </div>
+      <div class="kicker space-top" style="margin-top:18px">Sending a file with cURL</div>
+      <div class="copy-row" style="margin-bottom:8px">
+        <input class="input mono" readonly value='curl -T &lt;myfile&gt; -s -L -D - "${host}/xfr/" | grep -i human' />
+        <button class="btn btn-small" type="button" data-copy>Copy</button>
+      </div>
 
-        <div class="kicker space-top">Sending a file with Wget</div>
-        <div class="copy-row">
-          <input class="input mono" readonly value='wget --post-file &lt;myfile&gt; -S -o - "${host}/xfr" | grep -i human' />
-          <button class="btn btn-small" type="button" data-copy>Copy</button>
-        </div>
+      <div class="kicker space-top">Sending a file with Wget</div>
+      <div class="copy-row">
+        <input class="input mono" readonly value='wget --post-file &lt;myfile&gt; -S -o - "${host}/xfr" | grep -i human' />
+        <button class="btn btn-small" type="button" data-copy>Copy</button>
+      </div>
 
-        <div class="dim" style="font-size:13px;margin-top:12px;line-height:1.6">
-          cURL and Wget won't stop by themselves — to stop hosting your file, press CTRL+C.
-        </div>
+      <div class="dim" style="font-size:13px;margin-top:12px;line-height:1.6">
+        The send command prints a transfer URL. Use that URL to download.
+      </div>
 
-        <div class="kicker space-top">Receiving a file with cURL</div>
-        <div class="copy-row" style="margin-bottom:8px">
-          <input class="input mono" readonly value='curl -s -J -O -L "${humanUrl}"' />
-          <button class="btn btn-small" type="button" data-copy>Copy</button>
-        </div>
+      <div class="kicker space-top">Receiving a file with cURL</div>
+      <div class="copy-row" style="margin-bottom:8px">
+        <input class="input mono" readonly value='curl -s -J -O -L "&lt;transfer_url&gt;"' />
+        <button class="btn btn-small" type="button" data-copy>Copy</button>
+      </div>
 
-        <div class="kicker space-top">Receiving a file with Wget</div>
-        <div class="copy-row">
-          <input class="input mono" readonly value='wget --content-disposition "${humanUrl}"' />
-          <button class="btn btn-small" type="button" data-copy>Copy</button>
-        </div>
+      <div class="kicker space-top">Receiving a file with Wget</div>
+      <div class="copy-row">
+        <input class="input mono" readonly value='wget --content-disposition "&lt;transfer_url&gt;"' />
+        <button class="btn btn-small" type="button" data-copy>Copy</button>
+      </div>
 
-        <div class="kicker space-top" style="margin-top:18px">Links</div>
-        <div class="kicker space-top">Send link</div>
-        <div class="copy-row" style="margin-bottom:8px">
-          <input class="input mono" readonly value='${sendUrl}' />
-          <button class="btn btn-small" type="button" data-copy>Copy</button>
-        </div>
-        <div class="kicker space-top">Direct download URL</div>
-        <div class="copy-row" style="margin-bottom:8px">
-          <input class="input mono" readonly value='${humanUrl}' />
-          <button class="btn btn-small" type="button" data-copy>Copy</button>
-        </div>
-        <div class="kicker space-top">Request page</div>
-        <div class="copy-row">
-          <input class="input mono" readonly value='${webUrl}' />
-          <button class="btn btn-small" type="button" data-copy>Copy</button>
-        </div>
-
-        <div class="kicker space-top" style="margin-top:18px">Request a file (receiver-first)</div>
-        <div class="copy-row" style="margin-bottom:8px">
-          <input class="input mono" readonly value='curl -s -L "${host}/xfr" | tee xfr.txt' />
-          <button class="btn btn-small" type="button" data-copy>Copy</button>
-        </div>
-        <div class="copy-row">
-          <input class="input mono" readonly value='wget -qO- "${host}/xfr" | tee xfr.txt' />
-          <button class="btn btn-small" type="button" data-copy>Copy</button>
-        </div>
-
-        <div class="kicker space-top" style="margin-top:18px">Note</div>
-        <div class="dim" style="font-size:13px;margin-top:8px;line-height:1.6">
-          This CLI mode is not end-to-end encrypted. The server can see file contents in transit.
-        </div>
-      `
-      elRecipesBody.appendChild(block)
-    }
-  }
+      <div class="kicker space-top" style="margin-top:18px">Note</div>
+      <div class="dim" style="font-size:13px;margin-top:8px;line-height:1.6">
+        This CLI mode is not end-to-end encrypted. The server can see file contents in transit.
+      </div>
+    </div>
+  `
 
   elRecipesModal.classList.remove("hidden")
 }

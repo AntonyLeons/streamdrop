@@ -4,6 +4,7 @@ const cfg = window.__STREAMDROP__
 
 const elStart = document.getElementById("start")
 const elBar = document.getElementById("bar")
+const elMeter = elBar ? elBar.parentElement : null
 const elMeta = document.getElementById("meta")
 const elHint = document.getElementById("hint")
 const elError = document.getElementById("error")
@@ -21,27 +22,14 @@ if (nameParts.length > 0) {
 setStep("wait")
 setMeta(`Waiting for ${suggestedName}. Click start when ready.`)
 
+let started = false
+
 elStart.addEventListener("click", async () => {
   clearError()
 
-  if (!keyFrag) {
-    showError("Missing key fragment. Use a link like /<id>#<key>.")
-    return
-  }
-
-  let raw
-  try {
-    raw = base64urlDecode(keyFrag)
-  } catch {
-    showError("bad_key")
-    return
-  }
-  if (raw.byteLength !== 32) {
-    showError("bad_key_length")
-    return
-  }
-
-  run({ raw }).catch((e) => showError(String(e?.message ?? e ?? "error")))
+  const raw = getKeyBytes()
+  if (!raw) return
+  startOnce(raw)
 })
 
 async function run({ raw }) {
@@ -66,6 +54,7 @@ async function run({ raw }) {
 
       elHint.textContent = attempt > 1 ? `Reconnecting… (${attempt})` : "Connecting…"
       setStep("download")
+      if (elMeter) elMeter.classList.remove("hidden")
       setBar(0)
 
       let res
@@ -132,6 +121,7 @@ async function run({ raw }) {
         elHint.textContent = "Complete"
         elStart.disabled = false
         elStart.textContent = "Download again"
+        if (elMeter) elMeter.classList.add("hidden")
         return
       } catch (e) {
         if (abortController.signal.aborted) return
@@ -144,6 +134,7 @@ async function run({ raw }) {
       }
     }
   } finally {
+    started = false
     elCancel.classList.add("hidden")
     elCancel.removeEventListener("click", onCancel)
     if (abortController.signal.aborted) {
@@ -152,6 +143,32 @@ async function run({ raw }) {
       elStart.textContent = "Start download"
     }
   }
+}
+
+function getKeyBytes() {
+  if (!keyFrag) {
+    showError("Missing key fragment. Use a link like /<id>#<key>.")
+    return null
+  }
+
+  let raw
+  try {
+    raw = base64urlDecode(keyFrag)
+  } catch {
+    showError("bad_key")
+    return null
+  }
+  if (raw.byteLength !== 32) {
+    showError("bad_key_length")
+    return null
+  }
+  return raw
+}
+
+function startOnce(raw) {
+  if (started) return
+  started = true
+  run({ raw }).catch((e) => showError(String(e?.message ?? e ?? "error")))
 }
 
 function setBar(pct) {
@@ -179,6 +196,7 @@ function showError(msg) {
   elError.textContent = msg
   elError.classList.remove("hidden")
   elHint.textContent = "Error"
+  started = false
   elStart.disabled = false
   elStart.textContent = "Start download"
 }
@@ -280,3 +298,9 @@ async function streamToOPFS(stream, signal) {
 
 window.addEventListener("unhandledrejection", (e) => showError(String(e.reason?.message ?? e.reason ?? "error")))
 window.addEventListener("error", (e) => showError(String(e.error?.message ?? e.message ?? "error")))
+
+const autoKey = getKeyBytes()
+if (autoKey) {
+  setMeta(`Starting ${suggestedName}…`)
+  startOnce(autoKey)
+}

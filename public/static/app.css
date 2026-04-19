@@ -256,6 +256,97 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
 
 .step-arrow { color: var(--text-faint); font-size: 12px; }
 
+.switch {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+.switch-input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+.switch-track {
+  width: 40px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.10);
+  border: 1px solid var(--glass-border);
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  transition: background .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.switch-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.82);
+  box-shadow: 0 2px 10px rgba(0,0,0,.35);
+  transform: translateX(0);
+  transition: transform .15s ease, background .15s ease;
+}
+.switch-input:checked + .switch-track {
+  background: var(--v-surface);
+  border-color: var(--v-border);
+  box-shadow: 0 0 0 3px rgba(124,92,255,.10);
+}
+.switch-input:checked + .switch-track .switch-thumb {
+  transform: translateX(18px);
+  background: rgba(255,255,255,.95);
+}
+.switch-input:focus-visible + .switch-track {
+  outline: 2px solid var(--v-bright);
+  outline-offset: 2px;
+}
+
+.tooltip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.tooltip-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border);
+  background: rgba(255,255,255,.03);
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.tooltip-bubble {
+  position: absolute;
+  right: 0;
+  top: 26px;
+  width: min(360px, 80vw);
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--glass-border);
+  background: rgba(0,0,0,.82);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity .12s ease, transform .12s ease;
+  z-index: 40;
+}
+.tooltip:hover .tooltip-bubble,
+.tooltip:focus-within .tooltip-bubble {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
 /* ── Progress bar ────────────────────────────────────── */
 .meter {
   margin-top: 14px;
@@ -333,6 +424,10 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
   justify-content: flex-end;
   flex-wrap: wrap;
   align-self: start;
+}
+.cli-off .share-actions button[data-copy-kind="curl"],
+.cli-off .share-actions button[data-copy-kind="wget"] {
+  display: none;
 }
 .share-link-row { margin-top: 10px; }
 .share-details { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.06); }
