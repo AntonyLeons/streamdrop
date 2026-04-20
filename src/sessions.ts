@@ -2,6 +2,14 @@ export type SessionStatus = "waiting" | "active" | "done"
 
 export type Waiter = { resolve: () => void; reject: (err: Error) => void }
 
+export type Channel = {
+  id: string
+  controller: ReadableStreamDefaultController<Uint8Array>
+  claimed: boolean
+  sending: boolean
+  createdAt: number
+}
+
 export type Session = {
   id: string
   uploadToken: string
@@ -17,8 +25,9 @@ export type Session = {
   lastTouchedAt: number
   deleteTimer?: Timer
   status: SessionStatus
-  senderAttached: boolean
+  activeSenders: number
   receivers: Set<WritableStreamDefaultWriter<Uint8Array>>
+  channels: Map<string, Channel>
   receiverWaiters: Set<Waiter>
 }
 
@@ -55,8 +64,9 @@ export function createSession(now = Date.now()): Session | null {
     createdAt: now,
     lastTouchedAt: now,
     status: "waiting",
-    senderAttached: false,
+    activeSenders: 0,
     receivers: new Set(),
+    channels: new Map(),
     receiverWaiters: new Set(),
     downloadCount: 0,
     liveSinks: new Set(),
@@ -101,12 +111,12 @@ export function notifyReceiverAvailable(session: Session) {
 }
 
 export function waitForReceiver(session: Session) {
-  if (session.receivers.size > 0) return Promise.resolve()
+  if (session.receivers.size > 0 || session.channels.size > 0) return Promise.resolve()
   return new Promise<void>((resolve, reject) => session.receiverWaiters.add({ resolve, reject }))
 }
 
 export function waitForReceiverWithTimeout(session: Session, timeoutMs: number, signal?: AbortSignal) {
-  if (session.receivers.size > 0) return Promise.resolve(true)
+  if (session.receivers.size > 0 || session.channels.size > 0) return Promise.resolve(true)
 
   return new Promise<boolean>((resolve) => {
     const waiter: Waiter = {
@@ -157,8 +167,9 @@ export function startSessionReaper() {
     for (const session of sessionsById.values()) {
       if (now - session.lastTouchedAt <= ttlMs) continue
       if (session.status === "active") continue
-      if (session.senderAttached) continue
+      if (session.activeSenders > 0) continue
       if (session.receivers.size > 0) continue
+      if (session.channels.size > 0) continue
       if (session.liveSinks.size > 0) continue
       for (const w of session.uploadWaiters) w.reject(new Error("session_expired"))
       for (const w of session.receiverWaiters) w.reject(new Error("session_expired"))

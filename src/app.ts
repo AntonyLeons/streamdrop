@@ -123,6 +123,12 @@ export function createApp() {
     if (!session) return c.json({ error: "not_found" }, 404, { "cache-control": "no-store" })
 
     for (const writer of session.receivers) writer.abort().catch(() => {})
+    for (const ch of session.channels.values()) {
+      try {
+        ch.controller.error(new Error("session_deleted"))
+      } catch {}
+    }
+    session.channels.clear()
     for (const w of session.receiverWaiters) w.reject(new Error("session_deleted"))
     cleanupSession(session)
     deleteSession(session)
@@ -162,6 +168,12 @@ export function createApp() {
         session.liveSinks.delete(sink)
         session.deleteTimer = setTimeout(() => {
           for (const writer of session.receivers) writer.abort().catch(() => {})
+          for (const ch of session.channels.values()) {
+            try {
+              ch.controller.error(new Error("session_expired"))
+            } catch {}
+          }
+          session.channels.clear()
           for (const w of session.receiverWaiters) w.reject(new Error("session_expired"))
           cleanupSession(session)
           deleteSession(session)
@@ -184,10 +196,25 @@ export function createApp() {
     const session = getSessionById(id)
     if (!session) return c.json({ error: "not_found" }, 404, { "cache-control": "no-store" })
     if (session.status === "done") return c.json({ error: "done" }, 410, { "cache-control": "no-store" })
-    if (session.receivers.size > 0) return c.json({ ok: true }, 200, { "cache-control": "no-store" })
+    if (session.receivers.size > 0 || session.channels.size > 0)
+      return c.json({ ok: true }, 200, { "cache-control": "no-store" })
 
     const ok = await waitForReceiverWithTimeout(session, 25_000, c.req.raw.signal)
     return c.json({ ok }, 200, { "cache-control": "no-store" })
+  })
+
+  app.post("/claim/:uploadToken", (c) => {
+    const uploadToken = c.req.param("uploadToken")
+    const session = getSessionByUploadToken(uploadToken)
+    if (!session) return c.json({ error: "not_found" }, 404, { "cache-control": "no-store" })
+
+    for (const ch of session.channels.values()) {
+      if (ch.claimed) continue
+      ch.claimed = true
+      return c.json({ channelId: ch.id }, 200, { "cache-control": "no-store" })
+    }
+
+    return new Response(null, { status: 204, headers: { "cache-control": "no-store" } })
   })
 
   app.get("/xfr", async (c) => {
@@ -287,7 +314,7 @@ export function createApp() {
     const session = getSessionById(id)
     if (!session) return c.json({ error: "not_found" }, 404)
     if (session.status === "done") return c.json({ error: "done" }, 409)
-    if (session.senderAttached) return c.json({ error: "sender_exists" }, 409)
+    if (session.activeSenders > 0) return c.json({ error: "sender_exists" }, 409)
 
     const body = c.req.raw.body
     if (!body) return c.json({ error: "missing_body" }, 400)
@@ -295,7 +322,7 @@ export function createApp() {
     const fileName = c.req.param("fileName")
     if (fileName) session.fileName = safeFileName(fileName) || undefined
 
-    session.senderAttached = true
+    session.activeSenders++
     session.status = "active"
 
     const origin = new URL(c.req.url).origin
@@ -331,6 +358,7 @@ export function createApp() {
         await waitForFirstDownloadDone(session, c.req.raw.signal)
       } finally {
         writer.close().catch(() => {})
+        session.activeSenders = Math.max(0, session.activeSenders - 1)
       }
     })().catch(() => {})
 
@@ -342,7 +370,7 @@ export function createApp() {
     const session = getSessionById(id)
     if (!session) return c.json({ error: "not_found" }, 404)
     if (session.status === "done") return c.json({ error: "done" }, 409)
-    if (session.senderAttached) return c.json({ error: "sender_exists" }, 409)
+    if (session.activeSenders > 0) return c.json({ error: "sender_exists" }, 409)
 
     const body = c.req.raw.body
     if (!body) return c.json({ error: "missing_body" }, 400)
@@ -350,7 +378,7 @@ export function createApp() {
     const name = c.req.query("name") || c.req.header("x-file-name") || undefined
     if (name) session.fileName = safeFileName(name) || undefined
 
-    session.senderAttached = true
+    session.activeSenders++
     session.status = "active"
 
     const origin = new URL(c.req.url).origin
@@ -385,6 +413,7 @@ export function createApp() {
         await waitForFirstDownloadDone(session, c.req.raw.signal)
       } finally {
         writer.close().catch(() => {})
+        session.activeSenders = Math.max(0, session.activeSenders - 1)
       }
     })().catch(() => {})
 
@@ -430,7 +459,7 @@ export function createApp() {
     }
     c.req.raw.signal.addEventListener("abort", onAbort, { once: true })
 
-    if (!session.senderAttached && !session.fileName) {
+    if (session.activeSenders === 0 && !session.fileName) {
       await waitForSenderWithTimeout(session, 25_000, c.req.raw.signal)
     }
 
@@ -485,7 +514,7 @@ export function createApp() {
     }
     c.req.raw.signal.addEventListener("abort", onAbort, { once: true })
 
-    if (!session.senderAttached && !session.fileName) {
+    if (session.activeSenders === 0 && !session.fileName) {
       await waitForSenderWithTimeout(session, 25_000, c.req.raw.signal)
     }
 
@@ -523,6 +552,12 @@ export function createApp() {
     if (!session) return c.json({ error: "not_found" }, 404, { "cache-control": "no-store" })
 
     for (const writer of session.receivers) writer.abort().catch(() => {})
+    for (const ch of session.channels.values()) {
+      try {
+        ch.controller.error(new Error("session_deleted"))
+      } catch {}
+    }
+    session.channels.clear()
     for (const w of session.receiverWaiters) w.reject(new Error("session_deleted"))
     cleanupSession(session)
     deleteSession(session)
@@ -536,42 +571,48 @@ export function createApp() {
     return c.html(renderDownloadPage(session, c.get("cspNonce")), 200, { "cache-control": "no-store" })
   })
 
-  app.on(["PUT", "POST"], "/upload/:uploadToken", async (c) => {
+  app.on(["PUT", "POST"], "/upload/:uploadToken/:channelId", async (c) => {
     const uploadToken = c.req.param("uploadToken")
     const session = getSessionByUploadToken(uploadToken)
     if (!session) return c.json({ error: "not_found" }, 404)
-    if (session.status === "done") return c.json({ error: "done" }, 409)
-    if (session.senderAttached) return c.json({ error: "sender_exists" }, 409)
+    const channelId = c.req.param("channelId")
+    const ch = session.channels.get(channelId)
+    if (!ch) return c.json({ error: "channel_not_found" }, 404, { "cache-control": "no-store" })
+    if (ch.sending) return c.json({ error: "sender_exists" }, 409, { "cache-control": "no-store" })
 
     const body = c.req.raw.body
     if (!body) return c.json({ error: "missing_body" }, 400)
 
-    session.senderAttached = true
+    ch.sending = true
+    session.activeSenders++
     session.status = "active"
 
     try {
-      await fanout(session, body)
+      await pipeToController(ch.controller, body, c.req.raw.signal)
     } catch (e) {
-      const isReceiverLost = e instanceof Error && /receivers_lost/i.test(e.message)
       const isAbort =
         (e instanceof DOMException && e.name === "AbortError") ||
         (e instanceof Error && /abort|cancel|closed/i.test(e.message))
+      const isReceiverLost = e instanceof Error && /receivers_lost|pipe_failed/i.test(e.message)
       if (isReceiverLost) return c.json({ error: "receivers_lost" }, 409, { "cache-control": "no-store" })
       if (!isAbort) throw e
     } finally {
-      session.senderAttached = false
-      session.status = session.liveSinks.size > 0 ? "waiting" : "done"
+      session.activeSenders = Math.max(0, session.activeSenders - 1)
+      session.status = session.activeSenders > 0 ? "active" : "waiting"
+      ch.sending = false
     }
 
     return c.json({ ok: true }, 200, { "cache-control": "no-store" })
   })
 
-  app.on(["PUT", "POST"], "/raw/upload/:uploadToken", async (c) => {
+  app.on(["PUT", "POST"], "/raw/upload/:uploadToken/:channelId", async (c) => {
     const uploadToken = c.req.param("uploadToken")
     const session = getSessionByUploadToken(uploadToken)
     if (!session) return c.json({ error: "not_found" }, 404)
-    if (session.status === "done") return c.json({ error: "done" }, 409)
-    if (session.senderAttached) return c.json({ error: "sender_exists" }, 409)
+    const channelId = c.req.param("channelId")
+    const ch = session.channels.get(channelId)
+    if (!ch) return c.json({ error: "channel_not_found" }, 404, { "cache-control": "no-store" })
+    if (ch.sending) return c.json({ error: "sender_exists" }, 409, { "cache-control": "no-store" })
 
     const body = c.req.raw.body
     if (!body) return c.json({ error: "missing_body" }, 400)
@@ -579,21 +620,23 @@ export function createApp() {
     const name = c.req.query("name") || c.req.header("x-file-name") || undefined
     if (name) session.fileName = safeFileName(name) || undefined
 
-    session.senderAttached = true
+    ch.sending = true
+    session.activeSenders++
     session.status = "active"
 
     try {
-      await fanout(session, body)
+      await pipeToController(ch.controller, body, c.req.raw.signal)
     } catch (e) {
-      const isReceiverLost = e instanceof Error && /receivers_lost/i.test(e.message)
       const isAbort =
         (e instanceof DOMException && e.name === "AbortError") ||
         (e instanceof Error && /abort|cancel|closed/i.test(e.message))
+      const isReceiverLost = e instanceof Error && /receivers_lost|pipe_failed/i.test(e.message)
       if (isReceiverLost) return c.json({ error: "receivers_lost" }, 409, { "cache-control": "no-store" })
       if (!isAbort) throw e
     } finally {
-      session.senderAttached = false
-      session.status = session.liveSinks.size > 0 ? "waiting" : "done"
+      session.activeSenders = Math.max(0, session.activeSenders - 1)
+      session.status = session.activeSenders > 0 ? "active" : "waiting"
+      ch.sending = false
     }
 
     return c.json({ ok: true }, 200, { "cache-control": "no-store" })
@@ -603,26 +646,34 @@ export function createApp() {
     const downloadToken = c.req.param("downloadToken")
     const session = getSessionByDownloadToken(downloadToken)
     if (!session) return c.json({ error: "not_found" }, 404, { "cache-control": "no-store" })
-    if (session.status === "done") return c.json({ error: "done" }, 410, { "cache-control": "no-store" })
-    if (session.receivers.size >= getMaxReceivers())
+    if (session.channels.size >= getMaxReceivers())
       return c.json({ error: "too_many_receivers" }, 429, { "cache-control": "no-store" })
 
-    const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>()
-    const writer = writable.getWriter()
-    session.receivers.add(writer)
+    const channelId = randomChannelId()
+    let ctrl: ReadableStreamDefaultController<Uint8Array> | null = null
+    const readable = new ReadableStream<Uint8Array>({
+      start(c) {
+        ctrl = c
+      },
+    })
+    if (!ctrl) return c.json({ error: "internal" }, 500, { "cache-control": "no-store" })
+    session.channels.set(channelId, { id: channelId, controller: ctrl, claimed: false, sending: false, createdAt: Date.now() })
     notifyReceiverAvailable(session)
 
     let counted = false
     const count = () => {
       if (counted) return
       counted = true
+      session.channels.delete(channelId)
       session.downloadCount++
       notifyLive(session)
     }
 
     const onAbort = () => {
-      removeReceiver(session, writer)
-      writer.abort().catch(() => {})
+      session.channels.delete(channelId)
+      try {
+        ctrl?.error(new Error("aborted"))
+      } catch {}
       count()
     }
 
@@ -633,6 +684,7 @@ export function createApp() {
     headers.set("cache-control", "no-store")
     headers.set("accept-ranges", "none")
     setAttachmentContentDisposition(headers, "streamdrop.enc")
+    headers.set("x-streamdrop-channel", channelId)
 
     return new Response(wrapReadableWithDone(readable, count), { status: 200, headers })
   })
@@ -641,26 +693,34 @@ export function createApp() {
     const downloadToken = c.req.param("downloadToken")
     const session = getSessionByDownloadToken(downloadToken)
     if (!session) return c.json({ error: "not_found" }, 404, { "cache-control": "no-store" })
-    if (session.status === "done") return c.json({ error: "done" }, 410, { "cache-control": "no-store" })
-    if (session.receivers.size >= getMaxReceivers())
+    if (session.channels.size >= getMaxReceivers())
       return c.json({ error: "too_many_receivers" }, 429, { "cache-control": "no-store" })
 
-    const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>()
-    const writer = writable.getWriter()
-    session.receivers.add(writer)
+    const channelId = randomChannelId()
+    let ctrl: ReadableStreamDefaultController<Uint8Array> | null = null
+    const readable = new ReadableStream<Uint8Array>({
+      start(c) {
+        ctrl = c
+      },
+    })
+    if (!ctrl) return c.json({ error: "internal" }, 500, { "cache-control": "no-store" })
+    session.channels.set(channelId, { id: channelId, controller: ctrl, claimed: false, sending: false, createdAt: Date.now() })
     notifyReceiverAvailable(session)
 
     let counted = false
     const count = () => {
       if (counted) return
       counted = true
+      session.channels.delete(channelId)
       session.downloadCount++
       notifyLive(session)
     }
 
     const onAbort = () => {
-      removeReceiver(session, writer)
-      writer.abort().catch(() => {})
+      session.channels.delete(channelId)
+      try {
+        ctrl?.error(new Error("aborted"))
+      } catch {}
       count()
     }
 
@@ -671,6 +731,7 @@ export function createApp() {
     headers.set("cache-control", "no-store")
     headers.set("accept-ranges", "none")
     setAttachmentContentDisposition(headers, safeFileName(session.fileName) || "streamdrop.bin")
+    headers.set("x-streamdrop-channel", channelId)
 
     return new Response(wrapReadableWithDone(readable, count), { status: 200, headers })
   })
@@ -849,14 +910,50 @@ function cleanupSession(session: Session) {
 }
 
 async function waitForSenderWithTimeout(session: Session, timeoutMs: number, signal?: AbortSignal) {
-  if (session.senderAttached) return true
+  if (session.activeSenders > 0) return true
   const start = Date.now()
-  while (!session.senderAttached) {
+  while (session.activeSenders === 0) {
     if (signal?.aborted) return false
     if (timeoutMs > 0 && Date.now() - start > timeoutMs) return false
     await new Promise((r) => setTimeout(r, 150))
   }
   return true
+}
+
+function randomChannelId() {
+  return base64url(crypto.getRandomValues(new Uint8Array(12))).slice(0, 16)
+}
+
+async function pipeToController(
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  body: ReadableStream<Uint8Array>,
+  signal?: AbortSignal,
+) {
+  const reader = body.getReader()
+  try {
+    while (true) {
+      if (signal?.aborted) throw new DOMException("Aborted", "AbortError")
+      const { value, done } = await reader.read()
+      if (done) break
+      if (!value || value.byteLength === 0) continue
+      for (let i = 0; i < 200; i++) {
+        if (signal?.aborted) throw new DOMException("Aborted", "AbortError")
+        const desired = controller.desiredSize
+        if (desired === null || desired > 0) break
+        await new Promise((r) => setTimeout(r, 0))
+      }
+      try {
+        controller.enqueue(value)
+      } catch {
+        throw new Error("receivers_lost")
+      }
+    }
+    controller.close()
+  } catch (e) {
+    throw e instanceof Error ? new Error("pipe_failed") : e
+  } finally {
+    reader.cancel().catch(() => {})
+  }
 }
 
 async function fanout(session: Session, sender: ReadableStream<Uint8Array>) {

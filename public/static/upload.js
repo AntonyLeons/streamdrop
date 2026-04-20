@@ -129,38 +129,46 @@ async function startRawHosting(sessionId, rawSession, file, signal) {
     if (signal.aborted) return
     if (!cliEnabled) continue
 
-    try {
-      const item = itemBySessionId.get(sessionId)
-      if (item) {
-        item.setState("Streaming")
-        item.setBar(0)
-      }
+    while (true) {
+      const channelId = await claimChannel(rawSession.uploadToken, signal)
+      if (!channelId) break
 
-      const uploadStream = wrapStreamWithProgress({
-        stream: file.stream(),
-        total: file.size,
-        signal,
-        onProgress: (done, total) => {
-          if (!item) return
-          const pct = total ? Math.min(1, done / total) : 0
-          item.setBar(pct)
-          if (done > 0) setStep("stream", true)
-        },
-      })
+      try {
+        const item = itemBySessionId.get(sessionId)
+        if (item) {
+          item.setState("Streaming")
+          item.setBar(0)
+        }
 
-      const res = await fetch(`/raw/upload/${rawSession.uploadToken}?name=${encodeURIComponent(file.name)}`, {
-        method: "PUT",
-        headers: { "content-type": "application/octet-stream" },
-        body: uploadStream,
-        duplex: "half",
-        signal,
-      })
-      if (item && res.ok) {
-        item.setBar(1)
-        item.setState("Ready")
+        const uploadStream = wrapStreamWithProgress({
+          stream: file.stream(),
+          total: file.size,
+          signal,
+          onProgress: (done, total) => {
+            if (!item) return
+            const pct = total ? Math.min(1, done / total) : 0
+            item.setBar(pct)
+            if (done > 0) setStep("stream", true)
+          },
+        })
+
+        const res = await fetch(
+          `/raw/upload/${rawSession.uploadToken}/${encodeURIComponent(channelId)}?name=${encodeURIComponent(file.name)}`,
+          {
+            method: "PUT",
+            headers: { "content-type": "application/octet-stream" },
+            body: uploadStream,
+            duplex: "half",
+            signal,
+          },
+        )
+        if (item && res.ok) {
+          item.setBar(1)
+          item.setState("Ready")
+        }
+      } catch {
+        await sleep(250)
       }
-    } catch {
-      await sleep(250)
     }
   }
 }
@@ -362,80 +370,106 @@ async function startTransfer(file) {
     item.setEncrypted(true)
     item.setBar(0)
     setStep("wait", true)
+    item.setState("Ready")
+    item.setBar(1)
+    transferStats.set(session.id, { done: 1, total: 1, name: file.name })
+    setStep("ready", true)
+    setMeta("Ready. Share the links below.")
+
+    let activeUploads = 0
+    const inFlight = new Set()
+
+    const startChannelUpload = async (channelId) => {
+      activeUploads++
+      item.setState(activeUploads > 1 ? `Uploading (${activeUploads})` : "Uploading")
+      try {
+        let res
+        try {
+          const uploadStream = wrapStreamWithProgress({
+            stream: cipherBlob.stream(),
+            total: cipherBlob.size,
+            signal: abortController.signal,
+            onProgress: (done, total) => {
+              if (activeUploads !== 1) return
+              const pct = total ? Math.min(1, done / total) : 0
+              item.setBar(pct)
+              if (done > 0) setStep("stream", true)
+            },
+          })
+
+          res = await fetch(`/upload/${session.uploadToken}/${encodeURIComponent(channelId)}`, {
+            method: "PUT",
+            headers: { "content-type": "application/octet-stream" },
+            body: uploadStream,
+            duplex: "half",
+            signal: abortController.signal,
+          })
+        } catch (e) {
+          if (abortController.signal.aborted) return
+          throw new Error(e?.message ?? "upload_failed")
+        }
+
+        if (!res.ok) {
+          let err = ""
+          try {
+            const ct = res.headers.get("content-type") || ""
+            if (ct.includes("application/json")) {
+              const body = await res.json()
+              if (body && typeof body.error === "string") err = body.error
+            } else {
+              err = await safeText(res)
+            }
+          } catch {}
+
+          if (err === "receivers_lost" || err === "aborted" || err === "channel_not_found") return
+          throw new Error(err || `upload_failed_${res.status}`)
+        }
+      } finally {
+        activeUploads--
+        if (!abortController.signal.aborted) {
+          item.setState(activeUploads > 0 ? `Uploading (${activeUploads})` : "Ready")
+          if (activeUploads === 0) item.setBar(1)
+        }
+      }
+    }
 
     while (true) {
-      transferStats.set(session.id, { done: 0, total: cipherBlob.size, name: file.name })
-      item.setState("Waiting for receiver")
+      item.setState(activeUploads > 0 ? `Uploading (${activeUploads})` : "Waiting for receiver")
       await waitForReceiverOnline(session.id, abortController.signal)
       if (abortController.signal.aborted) return
 
-      item.setState("Uploading")
-      item.setBar(0)
-
-      let res
-      try {
-        const uploadStream = wrapStreamWithProgress({
-          stream: cipherBlob.stream(),
-          total: cipherBlob.size,
-          signal: abortController.signal,
-          onProgress: (done, total) => {
-            const pct = total ? Math.min(1, done / total) : 0
-            item.setBar(pct)
-            if (done > 0) setStep("stream", true)
-            transferStats.set(session.id, { done, total, name: file.name })
-          },
-        })
-
-        res = await fetch(`/upload/${session.uploadToken}`, {
-          method: "PUT",
-          headers: { "content-type": "application/octet-stream" },
-          body: uploadStream,
-          duplex: "half",
-          signal: abortController.signal,
-        })
-      } catch (e) {
-        if (abortController.signal.aborted) return
-        item.setState("Error")
-        throw new Error(e?.message ?? "upload_failed")
+      while (true) {
+        const channelId = await claimChannel(session.uploadToken, abortController.signal)
+        if (!channelId) break
+        const p = startChannelUpload(channelId)
+        inFlight.add(p)
+        p.finally(() => inFlight.delete(p))
       }
 
-      if (!res.ok) {
-        let err = ""
-        try {
-          const ct = res.headers.get("content-type") || ""
-          if (ct.includes("application/json")) {
-            const body = await res.json()
-            if (body && typeof body.error === "string") err = body.error
-          } else {
-            err = await safeText(res)
-          }
-        } catch {}
-
-        if (err === "receivers_lost" || err === "aborted") {
-          setStep("wait", true)
-          item.setState("Waiting for receiver")
-          await sleep(250)
-          continue
-        }
-
-        item.setState("Error")
-        throw new Error(err || `upload_failed_${res.status}`)
-      }
-
-      item.setState("Ready")
-      item.setBar(1)
-      transferStats.set(session.id, { done: 1, total: 1, name: file.name })
-
-      if (getActiveTransferCount() === 0 && transferStats.size > 0) {
-        setStep("ready", true)
-        setMeta("Ready. Share the links below.")
-      }
-
-      setStep("wait", true)
+      await sleep(250)
     }
   } finally {
     abortControllersBySessionId.delete(session.id)
   }
+}
+
+async function claimChannel(uploadToken, signal) {
+  let res
+  try {
+    res = await fetch(`/claim/${uploadToken}`, { method: "POST", headers: { accept: "application/json" }, signal })
+  } catch {
+    if (signal?.aborted) return null
+    await sleep(250)
+    return null
+  }
+
+  if (res.status === 204) return null
+  if (!res.ok) return null
+  try {
+    const body = await res.json()
+    if (body && typeof body.channelId === "string") return body.channelId
+  } catch {}
+  return null
 }
 
 function setMeta(text) {

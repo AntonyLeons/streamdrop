@@ -69,7 +69,7 @@ test("GET /:id returns download page for valid session", async () => {
 
 test("POST /upload rejects unknown session", async () => {
   const app = createApp()
-  const res = await app.request("/upload/bad_token", {
+  const res = await app.request("/upload/bad_token/bad_channel", {
     method: "POST",
     body: "test"
   })
@@ -82,7 +82,11 @@ test("POST /upload rejects duplicate senders with 409", async () => {
   const session = createSession()
   if (!session) throw new Error("unexpected session cap hit")
 
-  const res1 = app.request(`/upload/${session.uploadToken}`, {
+  const d = await app.request(`/d/${session.downloadToken}`)
+  const channelId = d.headers.get("x-streamdrop-channel") || ""
+  expect(channelId).toBeTruthy()
+
+  const res1 = app.request(`/upload/${session.uploadToken}/${channelId}`, {
     method: "POST",
     body: new ReadableStream({
       start(c) {
@@ -95,14 +99,14 @@ test("POST /upload rejects duplicate senders with 409", async () => {
 
   await Bun.sleep(10)
 
-  const res2 = await app.request(`/upload/${session.uploadToken}`, {
+  const res2 = await app.request(`/upload/${session.uploadToken}/${channelId}`, {
     method: "POST",
     body: new Uint8Array([4, 5, 6])
   })
 
   expect(res2.status).toBe(409)
   const body = (await res2.json()) as any
-  expect(["sender_exists", "done"]).toContain(body.error)
+  expect(body.error).toBe("sender_exists")
 })
 
 test("DELETE /session/:uploadToken deletes session", async () => {
@@ -114,7 +118,7 @@ test("DELETE /session/:uploadToken deletes session", async () => {
   expect(res.status).toBe(200)
   expect(await res.json()).toEqual({ ok: true })
 
-  const res2 = await app.request(`/upload/${session.uploadToken}`, { method: "POST", body: new Uint8Array([1]) })
+  const res2 = await app.request(`/claim/${session.uploadToken}`, { method: "POST" })
   expect(res2.status).toBe(404)
 })
 
