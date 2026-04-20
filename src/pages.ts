@@ -245,8 +245,8 @@ export function renderRecipesPage(
   const humanUrl = id ? `HOST_PH/xfr/${id}` : `HOST_PH/xfr/<id>`
   const webUrl = id ? `HOST_PH/recv/${id}` : `HOST_PH/recv/<id>`
 
-  const reqCurl = `curl -s -L "${createUrl}" | tee xfr.txt`.replaceAll('"', "&quot;")
-  const reqWget = `wget -qO- "${createUrl}" | tee xfr.txt`.replaceAll('"', "&quot;")
+  const reqCurl = escapeHtml(`curl -s -L "${createUrl}" | tee xfr.txt`)
+  const reqWget = escapeHtml(`wget -qO- "${createUrl}" | tee xfr.txt`)
   const sendCurl = `curl -T <myfile> -s -L -D - "${createUrl}/" | grep -i human`
   const sendWget = `wget --post-file <myfile> -S -o - "${createUrl}" | grep -i human`
   const recvCurl = `curl -s -J -O -L "<transfer_url>"`
@@ -285,13 +285,13 @@ export function renderRecipesPage(
           <div class="kicker">Sending files</div>
           <div class="kicker space-top">Sending a file with cURL</div>
           <div class="copy-row" style="margin-bottom:8px">
-            <input class="input mono cmd-ph" value="${sendCurl.replaceAll('"', "&quot;")}" readonly />
+            <input class="input mono cmd-ph" value="${escapeHtml(sendCurl)}" readonly />
             <button class="btn cmd-copy" type="button">Copy</button>
           </div>
 
           <div class="kicker space-top">Sending a file with Wget</div>
           <div class="copy-row">
-            <input class="input mono cmd-ph" value="${sendWget.replaceAll('"', "&quot;")}" readonly />
+            <input class="input mono cmd-ph" value="${escapeHtml(sendWget)}" readonly />
             <button class="btn cmd-copy" type="button">Copy</button>
           </div>
 
@@ -303,24 +303,24 @@ export function renderRecipesPage(
           ${id ? `
           <div class="kicker space-top">Direct download URL</div>
           <div class="copy-row" style="margin-bottom:8px">
-            <input class="input mono cmd-ph" value="${humanUrl.replaceAll('"', "&quot;")}" readonly />
+            <input class="input mono cmd-ph" value="${escapeHtml(humanUrl)}" readonly />
             <button class="btn cmd-copy" type="button">Copy</button>
           </div>
           <div class="kicker space-top">Web URL</div>
           <div class="copy-row" style="margin-bottom:8px">
-            <input class="input mono cmd-ph" value="${webUrl.replaceAll('"', "&quot;")}" readonly />
+            <input class="input mono cmd-ph" value="${escapeHtml(webUrl)}" readonly />
             <button class="btn cmd-copy" type="button">Copy</button>
           </div>
           ` : ``}
           <div class="kicker space-top">Receiving a file with cURL</div>
           <div class="copy-row" style="margin-bottom:8px">
-            <input class="input mono cmd-ph" value="${recvCurl.replaceAll('"', "&quot;")}" readonly />
+            <input class="input mono cmd-ph" value="${escapeHtml(recvCurl)}" readonly />
             <button class="btn cmd-copy" type="button">Copy</button>
           </div>
 
           <div class="kicker space-top">Receiving a file with Wget</div>
           <div class="copy-row">
-            <input class="input mono cmd-ph" value="${recvWget.replaceAll('"', "&quot;")}" readonly />
+            <input class="input mono cmd-ph" value="${escapeHtml(recvWget)}" readonly />
             <button class="btn cmd-copy" type="button">Copy</button>
           </div>
 
@@ -525,5 +525,10 @@ function htmlPage(opts: { title: string; body: string }) {
 }
 
 function escapeHtml(s: string) {
-  return s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;")
+  return s
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;")
 }

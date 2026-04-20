@@ -23,6 +23,16 @@ test("GET / and /recipes return HTML successfully", async () => {
   expect(htmlRecipes).toMatch(/<script nonce="[^"]+">/)
 })
 
+test("GET /recipes escapes id in attribute context", async () => {
+  const app = createApp()
+  const payload = `&quot; autofocus onfocus=alert(1) x="`
+  const res = await app.request(`/recipes?id=${encodeURIComponent(payload)}`)
+  expect(res.status).toBe(200)
+  const html = await res.text()
+  expect(html).toContain("HOST_PH/xfr/&amp;quot;")
+  expect(html).not.toContain(`value="HOST_PH/xfr/" autofocus`)
+})
+
 test("GET /health returns {ok: true}", async () => {
   const app = createApp()
   const res = await app.request("/health")
