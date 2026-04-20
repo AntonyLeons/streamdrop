@@ -28,6 +28,8 @@
   /* Functional */
   --good: #34d399;
   --good-glow: rgba(52,211,153,.18);
+  --warn: #fbbf24;
+  --warn-glow: rgba(251,191,36,.18);
   --bad: #f87171;
   --bad-surface: rgba(248,113,113,.08);
 
@@ -429,6 +431,20 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
 .cli-off .share-actions button[data-copy-kind="curl"],
 .cli-off .share-actions button[data-copy-kind="wget"] {
   display: none;
+}
+
+.share-actions button[data-copy-kind="curl"],
+.share-actions button[data-copy-kind="wget"] {
+  background: rgba(251,191,36,.10);
+  border-color: rgba(251,191,36,.35);
+  color: var(--warn);
+}
+
+.share-actions button[data-copy-kind="curl"]:hover,
+.share-actions button[data-copy-kind="wget"]:hover {
+  background: rgba(251,191,36,.18);
+  box-shadow: 0 0 0 3px rgba(251,191,36,.12);
+  color: #fff;
 }
 .share-link-row { margin-top: 10px; }
 .share-details { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.06); }

@@ -120,7 +120,10 @@ async function startRawHosting(sessionId, rawSession, file, signal) {
             if (!item) return
             const pct = total ? Math.min(1, done / total) : 0
             item.setBar(pct)
-            if (done > 0) setStep("stream", true)
+            if (done > 0) {
+              setStep("stream", true)
+              markStepDone("stream")
+            }
           },
         })
 
@@ -137,6 +140,8 @@ async function startRawHosting(sessionId, rawSession, file, signal) {
         if (item && res.ok) {
           item.setBar(1)
           item.setState("Ready")
+          setStep("ready", true)
+          markStepDone("ready")
         }
       } catch {
         await sleep(250)
@@ -328,7 +333,6 @@ async function startTransfer(file) {
     item.setState("Ready")
     item.setBar(1)
     transferStats.set(session.id, { done: 1, total: 1, name: file.name })
-    setStep("ready", true)
     setMeta("Ready. Share the links below.")
 
     let activeUploads = 0
@@ -348,7 +352,10 @@ async function startTransfer(file) {
               if (activeUploads !== 1) return
               const pct = total ? Math.min(1, done / total) : 0
               item.setBar(pct)
-              if (done > 0) setStep("stream", true)
+              if (done > 0) {
+                setStep("stream", true)
+                markStepDone("stream")
+              }
             },
           })
 
@@ -379,6 +386,9 @@ async function startTransfer(file) {
           if (err === "receivers_lost" || err === "aborted" || err === "channel_not_found") return
           throw new Error(err || `upload_failed_${res.status}`)
         }
+
+        setStep("ready", true)
+        markStepDone("ready")
       } finally {
         activeUploads--
         if (!abortController.signal.aborted) {
