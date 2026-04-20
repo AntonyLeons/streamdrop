@@ -21,7 +21,9 @@ setStep("key")
 const liveBySessionId = new Map()
 let cliEnabled = false
 const cliRawBySessionId = new Map()
+const cliRawLiveBySessionId = new Map()
 const fileBySessionId = new Map()
+const itemBySessionId = new Map()
 const rawHostingBySessionId = new Set()
 
 document.documentElement.classList.add("cli-off")
@@ -53,6 +55,10 @@ function enableCli(on) {
   cliEnabled = !!on
   document.documentElement.classList.toggle("cli-off", !on)
   if (elCliToggle) elCliToggle.checked = !!on
+  if (!cliEnabled) {
+    for (const es of cliRawLiveBySessionId.values()) es.close()
+    cliRawLiveBySessionId.clear()
+  }
   for (const item of document.querySelectorAll(".share-item")) updateCliCopyValues(item)
 }
 
@@ -77,6 +83,7 @@ async function ensureRawCliSession(root) {
   const file = fileBySessionId.get(sessionId)
   const info = await getOrCreateCliRawSession(sessionId, file?.name || "")
   if (!info) return
+  ensureRawCliLive(info.id)
 
   const btnCurl = root.querySelector('button[data-copy-kind="curl"]')
   const btnWget = root.querySelector('button[data-copy-kind="wget"]')
@@ -101,6 +108,13 @@ async function getOrCreateCliRawSession(sessionId, fileName) {
   return data
 }
 
+function ensureRawCliLive(rawSessionId) {
+  if (!cliEnabled) return
+  if (cliRawLiveBySessionId.has(rawSessionId)) return
+  const es = new EventSource(`/live/${rawSessionId}`)
+  cliRawLiveBySessionId.set(rawSessionId, es)
+}
+
 async function startRawHosting(sessionId, rawSession, file, signal) {
   if (rawHostingBySessionId.has(sessionId)) return
   rawHostingBySessionId.add(sessionId)
@@ -116,13 +130,35 @@ async function startRawHosting(sessionId, rawSession, file, signal) {
     if (!cliEnabled) continue
 
     try {
-      await fetch(`/raw/upload/${rawSession.uploadToken}?name=${encodeURIComponent(file.name)}`, {
+      const item = itemBySessionId.get(sessionId)
+      if (item) {
+        item.setState("Streaming")
+        item.setBar(0)
+      }
+
+      const uploadStream = wrapStreamWithProgress({
+        stream: file.stream(),
+        total: file.size,
+        signal,
+        onProgress: (done, total) => {
+          if (!item) return
+          const pct = total ? Math.min(1, done / total) : 0
+          item.setBar(pct)
+          if (done > 0) setStep("stream", true)
+        },
+      })
+
+      const res = await fetch(`/raw/upload/${rawSession.uploadToken}?name=${encodeURIComponent(file.name)}`, {
         method: "PUT",
         headers: { "content-type": "application/octet-stream" },
-        body: file.stream(),
+        body: uploadStream,
         duplex: "half",
         signal,
       })
+      if (item && res.ok) {
+        item.setBar(1)
+        item.setState("Ready")
+      }
     } catch {
       await sleep(250)
     }
@@ -186,7 +222,13 @@ document.addEventListener("click", async (e) => {
     if (raw && raw.uploadToken) fetch(`/session/${raw.uploadToken}`, { method: "DELETE" }).catch(() => {})
     cliRawBySessionId.delete(sessionId)
     fileBySessionId.delete(sessionId)
+    itemBySessionId.delete(sessionId)
     rawHostingBySessionId.delete(sessionId)
+    if (raw && raw.id) {
+      const es = cliRawLiveBySessionId.get(raw.id)
+      if (es) es.close()
+      cliRawLiveBySessionId.delete(raw.id)
+    }
     const live = liveBySessionId.get(sessionId)
     if (live) {
       live.close()
@@ -282,10 +324,11 @@ async function startTransfer(file) {
   item.root.dataset.uploadToken = session.uploadToken
   item.root.dataset.downloadToken = session.downloadToken
   fileBySessionId.set(session.id, file)
+  itemBySessionId.set(session.id, item)
   updateCliCopyValues(item.root)
   ensureLive(session.id, item)
   if (elShareEmpty) elShareEmpty.classList.add("hidden")
-  elShares.appendChild(item.root)
+  elShares.prepend(item.root)
 
   const abortController = new AbortController()
   abortControllersBySessionId.set(session.id, abortController)
