@@ -20,6 +20,9 @@ setStep("key")
 
 const liveBySessionId = new Map()
 let cliEnabled = false
+const cliRawBySessionId = new Map()
+const fileBySessionId = new Map()
+const rawHostingBySessionId = new Set()
 
 document.documentElement.classList.add("cli-off")
 try {
@@ -64,44 +67,66 @@ function updateCliCopyValues(root) {
     return
   }
 
-  const downloadToken = root.dataset.downloadToken || ""
-  if (!downloadToken) return
-  ensureCliToken(root)
+  ensureRawCliSession(root).catch(() => {})
 }
 
-async function ensureCliToken(root) {
+async function ensureRawCliSession(root) {
   if (!cliEnabled) return
-  if (root.dataset.cliToken) {
-    setCliCopyValues(root, root.dataset.cliToken)
-    return
-  }
+  const sessionId = root.dataset.sessionId || ""
+  if (!sessionId) return
+  const file = fileBySessionId.get(sessionId)
+  const info = await getOrCreateCliRawSession(sessionId, file?.name || "")
+  if (!info) return
 
-  const uploadToken = root.dataset.uploadToken || ""
-  if (!uploadToken) return
-
-  let token = ""
-  try {
-    const res = await fetch(`/cli/${uploadToken}`, { method: "POST", headers: { accept: "application/json" } })
-    if (res.ok) {
-      const body = await res.json()
-      if (body && typeof body.token === "string") token = body.token
-    }
-  } catch {}
-
-  if (!token) return
-  root.dataset.cliToken = token
-  if (!cliEnabled) return
-  setCliCopyValues(root, token)
-}
-
-function setCliCopyValues(root, token) {
   const btnCurl = root.querySelector('button[data-copy-kind="curl"]')
   const btnWget = root.querySelector('button[data-copy-kind="wget"]')
-  const downloadToken = root.dataset.downloadToken || ""
-  if (!downloadToken) return
-  const downloadUrl = `${location.origin}/cli/d/${downloadToken}?t=${encodeURIComponent(token)}`
-  if (btnCurl) btnCurl.dataset.copyValue = `curl -L "${downloadUrl}" -o streamdrop.enc`
-  if (btnWget) btnWget.dataset.copyValue = `wget -O streamdrop.enc "${downloadUrl}"`
+  const url = `${location.origin}/raw/d/${info.downloadToken}`
+  if (btnCurl) btnCurl.dataset.copyValue = `curl -s -J -O -L "${url}"`
+  if (btnWget) btnWget.dataset.copyValue = `wget --content-disposition "${url}"`
+
+  const abort = abortControllersBySessionId.get(sessionId)
+  if (file && abort) startRawHosting(sessionId, info, file, abort.signal)
+}
+
+async function getOrCreateCliRawSession(sessionId, fileName) {
+  const existing = cliRawBySessionId.get(sessionId)
+  if (existing) return existing
+
+  const qs = fileName ? `?name=${encodeURIComponent(fileName)}` : ""
+  const res = await fetch(`/session${qs}`, { method: "POST", headers: { accept: "application/json" } })
+  if (!res.ok) return null
+  const data = await res.json()
+  if (!data || !data.id || !data.uploadToken || !data.downloadToken) return null
+  cliRawBySessionId.set(sessionId, data)
+  return data
+}
+
+async function startRawHosting(sessionId, rawSession, file, signal) {
+  if (rawHostingBySessionId.has(sessionId)) return
+  rawHostingBySessionId.add(sessionId)
+
+  while (!signal.aborted) {
+    if (!cliEnabled) {
+      await sleep(250)
+      continue
+    }
+
+    await waitForReceiverOnline(rawSession.id, signal)
+    if (signal.aborted) return
+    if (!cliEnabled) continue
+
+    try {
+      await fetch(`/raw/upload/${rawSession.uploadToken}?name=${encodeURIComponent(file.name)}`, {
+        method: "PUT",
+        headers: { "content-type": "application/octet-stream" },
+        body: file.stream(),
+        duplex: "half",
+        signal,
+      })
+    } catch {
+      await sleep(250)
+    }
+  }
 }
 
 elDrop.addEventListener("keydown", (e) => {
@@ -150,6 +175,7 @@ document.addEventListener("click", async (e) => {
     if (!root) return
     const sessionId = root.dataset.sessionId || ""
     const uploadToken = root.dataset.uploadToken || ""
+    const raw = cliRawBySessionId.get(sessionId)
     const c = abortControllersBySessionId.get(sessionId)
     if (c) c.abort()
     abortControllersBySessionId.delete(sessionId)
@@ -157,6 +183,10 @@ document.addEventListener("click", async (e) => {
     if (cleanup) cleanup().catch(() => {})
     cleanupBySessionId.delete(sessionId)
     if (uploadToken) fetch(`/session/${uploadToken}`, { method: "DELETE" }).catch(() => {})
+    if (raw && raw.uploadToken) fetch(`/session/${raw.uploadToken}`, { method: "DELETE" }).catch(() => {})
+    cliRawBySessionId.delete(sessionId)
+    fileBySessionId.delete(sessionId)
+    rawHostingBySessionId.delete(sessionId)
     const live = liveBySessionId.get(sessionId)
     if (live) {
       live.close()
@@ -251,6 +281,7 @@ async function startTransfer(file) {
   item.root.dataset.sessionId = session.id
   item.root.dataset.uploadToken = session.uploadToken
   item.root.dataset.downloadToken = session.downloadToken
+  fileBySessionId.set(session.id, file)
   updateCliCopyValues(item.root)
   ensureLive(session.id, item)
   if (elShareEmpty) elShareEmpty.classList.add("hidden")

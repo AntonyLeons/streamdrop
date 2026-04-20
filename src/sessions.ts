@@ -6,7 +6,6 @@ export type Session = {
   id: string
   uploadToken: string
   downloadToken: string
-  cliDownloadToken?: string
   fileName?: string
   downloadCount: number
   liveSinks: Set<(data: string) => void>
@@ -53,7 +52,6 @@ export function createSession(now = Date.now()): Session | null {
     id,
     uploadToken,
     downloadToken,
-    cliDownloadToken: undefined,
     createdAt: now,
     lastTouchedAt: now,
     status: "waiting",
@@ -71,11 +69,6 @@ export function createSession(now = Date.now()): Session | null {
   sessionsByUploadToken.set(uploadToken, session)
   sessionsByDownloadToken.set(downloadToken, session)
   return session
-}
-
-export function enableCliDownload(session: Session) {
-  if (!session.cliDownloadToken) session.cliDownloadToken = randomToken()
-  return session.cliDownloadToken
 }
 
 export function getSessionById(id: string) {

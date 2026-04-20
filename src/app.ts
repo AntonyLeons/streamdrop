@@ -15,7 +15,6 @@ import {
   deleteSession,
   waitForReceiver,
   waitForReceiverWithTimeout,
-  enableCliDownload,
 } from "./sessions"
 import { streamSSE } from "hono/streaming"
 import {
@@ -101,19 +100,13 @@ export function createApp() {
   app.post("/session", (c) => {
     const session = createSession()
     if (!session) return c.json({ error: "at_capacity" }, 503, { "cache-control": "no-store" })
+    const name = c.req.query("name") || undefined
+    if (name) session.fileName = safeFileName(name) || undefined
     return c.json(
       { id: session.id, uploadToken: session.uploadToken, downloadToken: session.downloadToken },
       200,
       { "cache-control": "no-store" },
     )
-  })
-
-  app.post("/cli/:uploadToken", async (c) => {
-    const uploadToken = c.req.param("uploadToken")
-    const session = getSessionByUploadToken(uploadToken)
-    if (!session) return c.json({ error: "not_found" }, 404, { "cache-control": "no-store" })
-    const token = enableCliDownload(session)
-    return c.json({ token }, 200, { "cache-control": "no-store" })
   })
 
   app.delete("/session/:uploadToken", (c) => {
@@ -573,6 +566,9 @@ export function createApp() {
     const body = c.req.raw.body
     if (!body) return c.json({ error: "missing_body" }, 400)
 
+    const name = c.req.query("name") || c.req.header("x-file-name") || undefined
+    if (name) session.fileName = safeFileName(name) || undefined
+
     session.senderAttached = true
     session.status = "active"
 
@@ -631,47 +627,6 @@ export function createApp() {
     return new Response(wrapReadableWithDone(readable, count), { status: 200, headers })
   })
 
-  app.get("/cli/d/:downloadToken", async (c) => {
-    const downloadToken = c.req.param("downloadToken")
-    const session = getSessionByDownloadToken(downloadToken)
-    if (!session) return c.json({ error: "not_found" }, 404, { "cache-control": "no-store" })
-    const t = c.req.query("t") || ""
-    if (!session.cliDownloadToken || t !== session.cliDownloadToken) {
-      return c.json({ error: "forbidden" }, 403, { "cache-control": "no-store" })
-    }
-    if (session.status === "done") return c.json({ error: "done" }, 410, { "cache-control": "no-store" })
-    if (session.receivers.size >= getMaxReceivers())
-      return c.json({ error: "too_many_receivers" }, 429, { "cache-control": "no-store" })
-
-    const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>()
-    const writer = writable.getWriter()
-    session.receivers.add(writer)
-    notifyReceiverAvailable(session)
-
-    let counted = false
-    const count = () => {
-      if (counted) return
-      counted = true
-      session.downloadCount++
-      notifyLive(session)
-    }
-
-    const onAbort = () => {
-      removeReceiver(session, writer)
-      writer.abort().catch(() => {})
-      count()
-    }
-    c.req.raw.signal.addEventListener("abort", onAbort, { once: true })
-
-    const headers = new Headers()
-    headers.set("content-type", "application/octet-stream")
-    headers.set("cache-control", "no-store")
-    headers.set("accept-ranges", "none")
-    setAttachmentContentDisposition(headers, "streamdrop.enc")
-
-    return new Response(wrapReadableWithDone(readable, count), { status: 200, headers })
-  })
-
   app.get("/raw/d/:downloadToken", async (c) => {
     const downloadToken = c.req.param("downloadToken")
     const session = getSessionByDownloadToken(downloadToken)
@@ -705,7 +660,7 @@ export function createApp() {
     headers.set("content-type", "application/octet-stream")
     headers.set("cache-control", "no-store")
     headers.set("accept-ranges", "none")
-    setAttachmentContentDisposition(headers, "streamdrop.bin")
+    setAttachmentContentDisposition(headers, safeFileName(session.fileName) || "streamdrop.bin")
 
     return new Response(wrapReadableWithDone(readable, count), { status: 200, headers })
   })

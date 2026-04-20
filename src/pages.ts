@@ -86,7 +86,7 @@ export function renderUploadPage(session: Session | null) {
                 <span class="tooltip">
                   <button class="tooltip-icon" type="button" aria-describedby="cli-warning">i</button>
                   <span id="cli-warning" class="tooltip-bubble" role="tooltip">
-                    Warning: enabling CLI exposes an encrypted .enc download link for curl/wget (terminal cannot decrypt). Use the share link in a browser to decrypt. For plain (non-E2E) CLI transfer, use the CLI recipes page.
+                    ⚠️: curl/wget downloads are not E2EE
                   </span>
                 </span>
               </div>

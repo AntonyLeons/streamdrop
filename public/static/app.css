@@ -326,7 +326,8 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
   position: absolute;
   right: 0;
   top: 26px;
-  width: min(360px, 80vw);
+  width: max-content;
+  max-width: min(320px, 80vw);
   padding: 10px 12px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--glass-border);
@@ -334,6 +335,7 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
   color: var(--text);
   font-size: 12px;
   line-height: 1.45;
+  text-align: center;
   opacity: 0;
   pointer-events: none;
   transform: translateY(-4px);
