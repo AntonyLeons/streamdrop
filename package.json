@@ -8,7 +8,9 @@
     "start": "bun src/server.ts",
     "test": "bun test src",
     "test:e2e": "playwright test",
-    "check": "bunx tsc -p tsconfig.json"
+    "check": "bunx tsc -p tsconfig.json",
+    "cli:build": "bun build cli/index.ts --compile --outfile dist/streamdrop",
+    "cli:dev": "bun cli/index.ts"
   },
   "dependencies": {
     "hono": "^4.9.0",
