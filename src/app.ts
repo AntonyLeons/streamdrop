@@ -129,6 +129,14 @@ export function createApp() {
       } catch {}
     }
     session.channels.clear()
+    for (const ch of session.xfrChannels.values()) {
+      try {
+        ch.controller.error(new Error("session_deleted"))
+      } catch {}
+    }
+    session.xfrChannels.clear()
+    for (const w of session.xfrWaiters) w.reject(new Error("session_deleted"))
+    session.xfrWaiters.clear()
     for (const w of session.receiverWaiters) w.reject(new Error("session_deleted"))
     cleanupSession(session)
     deleteSession(session)
@@ -174,6 +182,14 @@ export function createApp() {
             } catch {}
           }
           session.channels.clear()
+          for (const ch of session.xfrChannels.values()) {
+            try {
+              ch.controller.error(new Error("session_expired"))
+            } catch {}
+          }
+          session.xfrChannels.clear()
+          for (const w of session.xfrWaiters) w.reject(new Error("session_expired"))
+          session.xfrWaiters.clear()
           for (const w of session.receiverWaiters) w.reject(new Error("session_expired"))
           cleanupSession(session)
           deleteSession(session)
@@ -256,168 +272,32 @@ export function createApp() {
   })
 
   app.on(["PUT", "POST"], "/xfr", (c) => {
-    const session = createSession()
-    if (!session) return c.json({ error: "at_capacity" }, 503, { "cache-control": "no-store" })
-    const origin = new URL(c.req.url).origin
-    const loc = `${origin}/xfr/${session.id}/`
-    const transferUrl = `${origin}/xfr/${session.id}`
-    const recvUrl = `${origin}/recv/${session.id}`
-
-    const headers = new Headers()
-    headers.set("cache-control", "no-store")
-    headers.set("location", loc)
-    headers.set("content-type", "text/plain; charset=utf-8")
-    setHumanHeaders(headers, { transferUrl, recvUrl })
-    return new Response(null, { status: 307, headers })
+    return c.json({ error: "receiver_required" }, 409, { "cache-control": "no-store" })
   })
 
   app.on(["PUT", "POST"], "/xfr/", (c) => {
-    const session = createSession()
-    if (!session) return c.json({ error: "at_capacity" }, 503, { "cache-control": "no-store" })
-    const origin = new URL(c.req.url).origin
-    const loc = `${origin}/xfr/${session.id}/`
-    const transferUrl = `${origin}/xfr/${session.id}`
-    const recvUrl = `${origin}/recv/${session.id}`
-
-    const headers = new Headers()
-    headers.set("cache-control", "no-store")
-    headers.set("location", loc)
-    headers.set("content-type", "text/plain; charset=utf-8")
-    setHumanHeaders(headers, { transferUrl, recvUrl })
-    return new Response(null, { status: 307, headers })
+    return c.json({ error: "receiver_required" }, 409, { "cache-control": "no-store" })
   })
 
   app.on(["PUT", "POST"], "/xfr/:fileName", (c) => {
-    const fileName = c.req.param("fileName")
-    const session = createSession()
-    if (!session) return c.json({ error: "at_capacity" }, 503, { "cache-control": "no-store" })
-    if (fileName) session.fileName = safeFileName(fileName) || undefined
-    const origin = new URL(c.req.url).origin
-    const loc = session.fileName
-      ? `${origin}/xfr/${session.id}/${encodeURIComponent(session.fileName)}`
-      : `${origin}/xfr/${session.id}/`
-
-    const headers = new Headers()
-    headers.set("cache-control", "no-store")
-    headers.set("location", loc)
-    headers.set("content-type", "text/plain; charset=utf-8")
-    const transferUrl = session.fileName
-      ? `${origin}/xfr/${session.id}/${encodeURIComponent(session.fileName)}`
-      : `${origin}/xfr/${session.id}`
-    const recvUrl = `${origin}/recv/${session.id}`
-    setHumanHeaders(headers, { transferUrl, recvUrl })
-    return new Response(null, { status: 307, headers })
+    return c.json({ error: "receiver_required" }, 409, { "cache-control": "no-store" })
   })
 
-  app.on(["PUT", "POST"], "/xfr/:id/:fileName", async (c) => {
+  app.post("/xfr/claim/:id", async (c) => {
     const id = c.req.param("id")
     const session = getSessionById(id)
-    if (!session) return c.json({ error: "not_found" }, 404)
-    if (session.status === "done") return c.json({ error: "done" }, 409)
-    if (session.activeSenders > 0) return c.json({ error: "sender_exists" }, 409)
+    if (!session) return c.json({ error: "not_found" }, 404, { "cache-control": "no-store" })
 
-    const body = c.req.raw.body
-    if (!body) return c.json({ error: "missing_body" }, 400)
-
-    const fileName = c.req.param("fileName")
-    if (fileName) session.fileName = safeFileName(fileName) || undefined
-
-    session.activeSenders++
-    session.status = "active"
-
-    const origin = new URL(c.req.url).origin
-    const transferUrl = session.fileName
-      ? `${origin}/xfr/${session.id}/${encodeURIComponent(session.fileName)}`
-      : `${origin}/xfr/${session.id}`
-    const recvUrl = `${origin}/recv/${session.id}`
-
-    const tmpPath = join(tmpdir(), `streamdrop-xfr-${session.id}-${Date.now()}`)
-    session.tempFilePath = tmpPath
-
-    try {
-      await writeBodyToTempFile(tmpPath, body, c.req.raw.signal)
-      session.uploaded = true
-      notifyUploadDone(session)
-    } catch (e) {
-      cleanupSession(session)
-      throw e
-    }
-
-    const headers = new Headers()
-    headers.set("cache-control", "no-store")
-    headers.set("content-type", "text/plain; charset=utf-8")
-    setHumanHeaders(headers, { transferUrl, recvUrl })
-
-    const { readable, writable } = new TransformStream<string, string>()
-    const writer = writable.getWriter()
-    const bodyText = await humanBodyTextAsync({ transferUrl, recvUrl })
-    await writer.write(bodyText).catch(() => {})
-
-    ;(async () => {
-      try {
-        await waitForFirstDownloadDone(session, c.req.raw.signal)
-      } finally {
-        writer.close().catch(() => {})
-        session.activeSenders = Math.max(0, session.activeSenders - 1)
+    while (true) {
+      for (const ch of session.xfrChannels.values()) {
+        if (ch.claimed) continue
+        ch.claimed = true
+        return c.json({ channelId: ch.id }, 200, { "cache-control": "no-store" })
       }
-    })().catch(() => {})
 
-    return new Response(readable, { status: 200, headers })
-  })
-
-  app.on(["PUT", "POST"], "/xfr/:id", async (c) => {
-    const id = c.req.param("id")
-    const session = getSessionById(id)
-    if (!session) return c.json({ error: "not_found" }, 404)
-    if (session.status === "done") return c.json({ error: "done" }, 409)
-    if (session.activeSenders > 0) return c.json({ error: "sender_exists" }, 409)
-
-    const body = c.req.raw.body
-    if (!body) return c.json({ error: "missing_body" }, 400)
-
-    const name = c.req.query("name") || c.req.header("x-file-name") || undefined
-    if (name) session.fileName = safeFileName(name) || undefined
-
-    session.activeSenders++
-    session.status = "active"
-
-    const origin = new URL(c.req.url).origin
-    const transferUrl = session.fileName
-      ? `${origin}/xfr/${session.id}/${encodeURIComponent(session.fileName)}`
-      : `${origin}/xfr/${session.id}`
-    const recvUrl = `${origin}/recv/${session.id}`
-
-    const tmpPath = join(tmpdir(), `streamdrop-xfr-${session.id}-${Date.now()}`)
-    session.tempFilePath = tmpPath
-
-    try {
-      await writeBodyToTempFile(tmpPath, body, c.req.raw.signal)
-      session.uploaded = true
-      notifyUploadDone(session)
-    } catch (e) {
-      cleanupSession(session)
-      throw e
+      const ok = await waitForXfrReceiver(session, c.req.raw.signal)
+      if (!ok) return c.json({ error: "aborted" }, 408, { "cache-control": "no-store" })
     }
-
-    const headers = new Headers()
-    headers.set("cache-control", "no-store")
-    headers.set("content-type", "text/plain; charset=utf-8")
-    setHumanHeaders(headers, { transferUrl, recvUrl })
-    const { readable, writable } = new TransformStream<string, string>()
-    const writer = writable.getWriter()
-    const bodyText = await humanBodyTextAsync({ transferUrl, recvUrl })
-    await writer.write(bodyText).catch(() => {})
-
-    ;(async () => {
-      try {
-        await waitForFirstDownloadDone(session, c.req.raw.signal)
-      } finally {
-        writer.close().catch(() => {})
-        session.activeSenders = Math.max(0, session.activeSenders - 1)
-      }
-    })().catch(() => {})
-
-    return new Response(readable, { status: 200, headers })
   })
 
   app.get("/xfr/:id/:fileName", async (c) => {
@@ -425,55 +305,56 @@ export function createApp() {
     const session = getSessionById(id)
     if (!session) return c.json({ error: "not_found" }, 404)
     if (session.status === "done") return c.json({ error: "done" }, 410)
-    if (session.receivers.size >= getMaxReceivers()) return c.json({ error: "too_many_receivers" }, 429)
+    if (session.xfrChannels.size >= getMaxReceivers()) return c.json({ error: "too_many_receivers" }, 429)
 
     const fileName = c.req.param("fileName")
     if (fileName && !session.fileName) session.fileName = safeFileName(fileName) || undefined
+    const filename = safeFileName(session.fileName) || "file"
+    const channelId = randomChannelId()
 
-    if (!session.uploaded) {
-      const ok = await waitForUploadWithTimeout(session, 0, c.req.raw.signal)
-      if (!ok) return jsonResponse({ error: "aborted" }, 499)
-    }
+    let ctrl: ReadableStreamDefaultController<Uint8Array> | null = null
+    const readable = new ReadableStream<Uint8Array>({
+      start(c2) {
+        ctrl = c2
+      },
+    })
+    if (!ctrl) return c.json({ error: "internal" }, 500, { "cache-control": "no-store" })
+    session.xfrChannels.set(channelId, {
+      id: channelId,
+      controller: ctrl,
+      claimed: false,
+      sending: false,
+      createdAt: Date.now(),
+    })
+    notifyXfrReceiverAvailable(session)
 
-    if (session.uploaded && session.tempFilePath) {
+    let counted = false
+    const count = () => {
+      if (counted) return
+      counted = true
+      session.xfrChannels.delete(channelId)
       session.downloadCount++
       notifyLive(session)
-      const filename = safeFileName(session.fileName) || "file"
-
-      const headers = new Headers()
-      headers.set("content-type", "application/octet-stream")
-      headers.set("cache-control", "no-store")
-      headers.set("accept-ranges", "none")
-      setAttachmentContentDisposition(headers, filename)
-      return new Response(createFileStreamWithDone(session), { status: 200, headers })
     }
 
-    const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>()
-    const writer = writable.getWriter()
-    session.receivers.add(writer)
-    notifyReceiverAvailable(session)
-
-    const onAbort = () => {
-      removeReceiver(session, writer)
-      writer.abort().catch(() => {})
-    }
-    c.req.raw.signal.addEventListener("abort", onAbort, { once: true })
-
-    if (session.activeSenders === 0 && !session.fileName) {
-      await waitForSenderWithTimeout(session, 25_000, c.req.raw.signal)
-    }
-
-    session.downloadCount++
-    notifyLive(session)
-
-    const filename = safeFileName(session.fileName) || "file"
+    c.req.raw.signal.addEventListener(
+      "abort",
+      () => {
+        session.xfrChannels.delete(channelId)
+        try {
+          ctrl?.error(new Error("aborted"))
+        } catch {}
+        count()
+      },
+      { once: true },
+    )
 
     const headers = new Headers()
     headers.set("content-type", "application/octet-stream")
     headers.set("cache-control", "no-store")
     headers.set("accept-ranges", "none")
     setAttachmentContentDisposition(headers, filename)
-    return new Response(readable, { status: 200, headers })
+    return new Response(wrapReadableWithDone(readable, count), { status: 200, headers })
   })
 
   app.get("/xfr/:id", async (c) => {
@@ -481,55 +362,101 @@ export function createApp() {
     const session = getSessionById(id)
     if (!session) return c.json({ error: "not_found" }, 404)
     if (session.status === "done") return c.json({ error: "done" }, 410)
-    if (session.receivers.size >= getMaxReceivers()) return c.json({ error: "too_many_receivers" }, 429)
+    if (session.xfrChannels.size >= getMaxReceivers()) return c.json({ error: "too_many_receivers" }, 429)
 
-    if (session.fileName) return c.redirect(`/xfr/${session.id}/${encodeURIComponent(session.fileName)}`)
+    const filename = safeFileName(session.fileName) || "file"
+    const channelId = randomChannelId()
 
-    if (!session.uploaded) {
-      const ok = await waitForUploadWithTimeout(session, 0, c.req.raw.signal)
-      if (!ok) return jsonResponse({ error: "aborted" }, 499)
-    }
+    let ctrl: ReadableStreamDefaultController<Uint8Array> | null = null
+    const readable = new ReadableStream<Uint8Array>({
+      start(c2) {
+        ctrl = c2
+      },
+    })
+    if (!ctrl) return c.json({ error: "internal" }, 500, { "cache-control": "no-store" })
+    session.xfrChannels.set(channelId, {
+      id: channelId,
+      controller: ctrl,
+      claimed: false,
+      sending: false,
+      createdAt: Date.now(),
+    })
+    notifyXfrReceiverAvailable(session)
 
-    if (session.uploaded && session.tempFilePath) {
+    let counted = false
+    const count = () => {
+      if (counted) return
+      counted = true
+      session.xfrChannels.delete(channelId)
       session.downloadCount++
       notifyLive(session)
-      const filename = safeFileName(session.fileName) || "file"
-
-      const headers = new Headers()
-      headers.set("content-type", "application/octet-stream")
-      headers.set("cache-control", "no-store")
-      headers.set("accept-ranges", "none")
-      setAttachmentContentDisposition(headers, filename)
-      return new Response(createFileStreamWithDone(session), { status: 200, headers })
     }
 
-    const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>()
-    const writer = writable.getWriter()
-    session.receivers.add(writer)
-    notifyReceiverAvailable(session)
-
-    const onAbort = () => {
-      removeReceiver(session, writer)
-      writer.abort().catch(() => {})
-    }
-    c.req.raw.signal.addEventListener("abort", onAbort, { once: true })
-
-    if (session.activeSenders === 0 && !session.fileName) {
-      await waitForSenderWithTimeout(session, 25_000, c.req.raw.signal)
-    }
-
-    session.downloadCount++
-    notifyLive(session)
-
-    const origin = new URL(c.req.url).origin
-    const filename = safeFileName(session.fileName) || "file"
+    c.req.raw.signal.addEventListener(
+      "abort",
+      () => {
+        session.xfrChannels.delete(channelId)
+        try {
+          ctrl?.error(new Error("aborted"))
+        } catch {}
+        count()
+      },
+      { once: true },
+    )
 
     const headers = new Headers()
     headers.set("content-type", "application/octet-stream")
     headers.set("cache-control", "no-store")
     headers.set("accept-ranges", "none")
     setAttachmentContentDisposition(headers, filename)
-    return new Response(readable, { status: 200, headers })
+    return new Response(wrapReadableWithDone(readable, count), { status: 200, headers })
+  })
+
+  app.on(["PUT", "POST"], "/xfr/upload/:id/:channelId", async (c) => {
+    const id = c.req.param("id")
+    const session = getSessionById(id)
+    if (!session) return c.json({ error: "not_found" }, 404, { "cache-control": "no-store" })
+    const channelId = c.req.param("channelId")
+    const ch = session.xfrChannels.get(channelId)
+    if (!ch) return c.json({ error: "channel_not_found" }, 404, { "cache-control": "no-store" })
+    if (ch.sending) return c.json({ error: "sender_exists" }, 409, { "cache-control": "no-store" })
+
+    const body = c.req.raw.body
+    if (!body) return c.json({ error: "missing_body" }, 400, { "cache-control": "no-store" })
+
+    const name = c.req.query("name") || c.req.header("x-file-name") || undefined
+    if (name && !session.fileName) session.fileName = safeFileName(name) || undefined
+
+    ch.sending = true
+    session.activeSenders++
+    session.status = "active"
+
+    try {
+      await pipeToController(ch.controller, body, c.req.raw.signal)
+    } catch (e) {
+      const isAbort =
+        (e instanceof DOMException && e.name === "AbortError") ||
+        (e instanceof Error && /abort|cancel|closed/i.test(e.message))
+      const isReceiverLost = e instanceof Error && /receivers_lost|pipe_failed/i.test(e.message)
+      if (isReceiverLost) return c.json({ error: "receivers_lost" }, 409, { "cache-control": "no-store" })
+      if (!isAbort) throw e
+    } finally {
+      session.activeSenders = Math.max(0, session.activeSenders - 1)
+      session.status = session.activeSenders > 0 ? "active" : "waiting"
+      ch.sending = false
+    }
+
+    const origin = new URL(c.req.url).origin
+    const transferUrl = session.fileName
+      ? `${origin}/xfr/${session.id}/${encodeURIComponent(session.fileName)}`
+      : `${origin}/xfr/${session.id}`
+    const recvUrl = `${origin}/recv/${session.id}`
+    const headers = new Headers()
+    headers.set("cache-control", "no-store")
+    headers.set("content-type", "text/plain; charset=utf-8")
+    setHumanHeaders(headers, { transferUrl, recvUrl })
+    const bodyText = await humanBodyTextAsync({ transferUrl, recvUrl })
+    return new Response(bodyText, { status: 200, headers })
   })
 
   app.get("/recv/:id", async (c) => {
@@ -558,6 +485,14 @@ export function createApp() {
       } catch {}
     }
     session.channels.clear()
+    for (const ch of session.xfrChannels.values()) {
+      try {
+        ch.controller.error(new Error("session_deleted"))
+      } catch {}
+    }
+    session.xfrChannels.clear()
+    for (const w of session.xfrWaiters) w.reject(new Error("session_deleted"))
+    session.xfrWaiters.clear()
     for (const w of session.receiverWaiters) w.reject(new Error("session_deleted"))
     cleanupSession(session)
     deleteSession(session)
@@ -793,6 +728,41 @@ function base64url(bytes: Uint8Array) {
 function notifyLive(session: Session) {
   const payload = JSON.stringify({ type: "stats", downloads: session.downloadCount })
   for (const sink of session.liveSinks) sink(payload)
+}
+
+function notifyXfrReceiverAvailable(session: Session) {
+  for (const w of session.xfrWaiters) w.resolve()
+  session.xfrWaiters.clear()
+}
+
+function waitForXfrReceiver(session: Session, signal?: AbortSignal) {
+  if (session.xfrChannels.size > 0) return Promise.resolve(true)
+
+  return new Promise<boolean>((resolve) => {
+    const waiter = {
+      resolve: () => {
+        cleanup()
+        resolve(true)
+      },
+      reject: () => {
+        cleanup()
+        resolve(false)
+      },
+    }
+
+    const onAbort = () => {
+      cleanup()
+      resolve(false)
+    }
+
+    const cleanup = () => {
+      session.xfrWaiters.delete(waiter)
+      if (signal) signal.removeEventListener("abort", onAbort)
+    }
+
+    session.xfrWaiters.add(waiter)
+    if (signal) signal.addEventListener("abort", onAbort, { once: true })
+  })
 }
 
 function setHumanHeaders(headers: Headers, urls: { transferUrl: string; recvUrl: string }) {

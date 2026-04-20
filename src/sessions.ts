@@ -28,6 +28,8 @@ export type Session = {
   activeSenders: number
   receivers: Set<WritableStreamDefaultWriter<Uint8Array>>
   channels: Map<string, Channel>
+  xfrChannels: Map<string, Channel>
+  xfrWaiters: Set<Waiter>
   receiverWaiters: Set<Waiter>
 }
 
@@ -67,6 +69,8 @@ export function createSession(now = Date.now()): Session | null {
     activeSenders: 0,
     receivers: new Set(),
     channels: new Map(),
+    xfrChannels: new Map(),
+    xfrWaiters: new Set(),
     receiverWaiters: new Set(),
     downloadCount: 0,
     liveSinks: new Set(),
@@ -170,9 +174,11 @@ export function startSessionReaper() {
       if (session.activeSenders > 0) continue
       if (session.receivers.size > 0) continue
       if (session.channels.size > 0) continue
+      if (session.xfrChannels.size > 0) continue
       if (session.liveSinks.size > 0) continue
       for (const w of session.uploadWaiters) w.reject(new Error("session_expired"))
       for (const w of session.receiverWaiters) w.reject(new Error("session_expired"))
+      for (const w of session.xfrWaiters) w.reject(new Error("session_expired"))
       for (const w of session.downloadDoneWaiters) w.reject(new Error("session_expired"))
       deleteSession(session)
     }

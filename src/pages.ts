@@ -244,11 +244,14 @@ export function renderRecipesPage(
   const createUrl = `HOST_PH/xfr`
   const humanUrl = id ? `HOST_PH/xfr/${id}` : `HOST_PH/xfr/<id>`
   const webUrl = id ? `HOST_PH/recv/${id}` : `HOST_PH/recv/<id>`
+  const claimUrl = id ? `HOST_PH/xfr/claim/${id}` : `HOST_PH/xfr/claim/<id>`
+  const uploadUrl = id ? `HOST_PH/xfr/upload/${id}/<channelId>` : `HOST_PH/xfr/upload/<id>/<channelId>`
 
   const reqCurl = escapeHtml(`curl -s -L "${createUrl}" | tee xfr.txt`)
   const reqWget = escapeHtml(`wget -qO- "${createUrl}" | tee xfr.txt`)
-  const sendCurl = `curl -T <myfile> -s -L -D - "${createUrl}/" | grep -i human`
-  const sendWget = `wget --post-file <myfile> -S -o - "${createUrl}" | grep -i human`
+  const sendClaim = escapeHtml(`curl -s -X POST "${claimUrl}"`)
+  const sendCurl = escapeHtml(`curl -T <myfile> -s -L "${uploadUrl}?name=<myfile_name>"`)
+  const sendWget = escapeHtml(`wget --method=PUT --body-file=<myfile> -qO- "${uploadUrl}?name=<myfile_name>"`)
   const recvCurl = `curl -s -J -O -L "<transfer_url>"`
   const recvWget = `wget --content-disposition "<transfer_url>"`
 
@@ -283,6 +286,14 @@ export function renderRecipesPage(
           </div>
 
           <div class="kicker">Sending files</div>
+          <div class="kicker space-top">Claim a receiver channel</div>
+          <div class="copy-row" style="margin-bottom:8px">
+            <input class="input mono cmd-ph" value="${sendClaim}" readonly />
+            <button class="btn cmd-copy" type="button">Copy</button>
+          </div>
+          <div class="dim" style="font-size:13px;margin-top:6px;line-height:1.6">
+            The claim call returns a channelId. Use it in the upload URL below. Each receiver needs a new claim.
+          </div>
           <div class="kicker space-top">Sending a file with cURL</div>
           <div class="copy-row" style="margin-bottom:8px">
             <input class="input mono cmd-ph" value="${escapeHtml(sendCurl)}" readonly />
@@ -430,7 +441,8 @@ export function renderXfrReceivePage(id: string, nonce: string) {
 }
 
 export function renderXfrSendPage(id: string, nonce: string) {
-  const postUrl = `/xfr/${id}`
+  const claimUrl = `/xfr/claim/${id}`
+  const uploadUrl = `/xfr/upload/${id}`
   return htmlPage({
     title: "StreamDrop — Send (Plain)",
     body: `
@@ -457,20 +469,32 @@ export function renderXfrSendPage(id: string, nonce: string) {
         const elFile = document.getElementById("xfr-file");
         const elSend = document.getElementById("xfr-send");
         const elStatus = document.getElementById("xfr-status");
-        const postUrl = "HOST_PH${postUrl}";
+        const claimUrl = "HOST_PH${claimUrl}";
+        const uploadUrl = "HOST_PH${uploadUrl}";
 
         function setStatus(t) { elStatus.textContent = t || ""; }
+        function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
         elSend.addEventListener("click", async () => {
           const file = elFile.files && elFile.files[0];
           if (!file) return setStatus("Select a file first.");
-          setStatus("Uploading...");
           elSend.disabled = true;
           try {
-            const url = postUrl.replace(/HOST_PH/g, location.origin) + "?name=" + encodeURIComponent(file.name);
-            const res = await fetch(url, { method: "PUT", headers: { "content-type": "application/octet-stream" }, body: file });
-            if (!res.ok) throw new Error(await res.text());
-            setStatus("Uploaded. Receiver can download now.");
+            setStatus("Ready. Waiting for receiver…");
+            while (true) {
+              const claimRes = await fetch(claimUrl.replace(/HOST_PH/g, location.origin), { method: "POST", headers: { accept: "application/json" } });
+              if (!claimRes.ok) throw new Error(await claimRes.text());
+              const body = await claimRes.json();
+              const channelId = body && body.channelId;
+              if (!channelId) throw new Error("bad_claim_response");
+
+              setStatus("Uploading…");
+              const url = uploadUrl.replace(/HOST_PH/g, location.origin) + "/" + encodeURIComponent(channelId) + "?name=" + encodeURIComponent(file.name);
+              const res = await fetch(url, { method: "PUT", headers: { "content-type": "application/octet-stream" }, body: file });
+              if (!res.ok) throw new Error(await res.text());
+              setStatus("Uploaded. Waiting for next receiver…");
+              await sleep(200);
+            }
           } catch (e) {
             setStatus(String(e?.message || e || "error"));
           } finally {
