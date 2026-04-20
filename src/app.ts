@@ -28,12 +28,20 @@ import {
 } from "./pages"
 import { getQRCodeVendorJS } from "./vendor/qrcode"
 
+type AppEnv = {
+  Variables: {
+    cspNonce: string
+  }
+}
+
 export function createApp() {
-  const app = new Hono()
+  const app = new Hono<AppEnv>()
 
   app.use("*", async (c, next) => {
+    const nonce = randomNonce()
+    c.set("cspNonce", nonce)
     await next()
-    setSecurityHeaders(c.res.headers)
+    setSecurityHeaders(c.res.headers, nonce)
     return c.res
   })
 
@@ -94,7 +102,7 @@ export function createApp() {
   app.get("/", (c) => {
     const session = createSession()
     if (!session) return c.html(renderServiceUnavailablePage(), 503, { "cache-control": "no-store" })
-    return c.html(renderUploadPage(session), 200, { "cache-control": "no-store" })
+    return c.html(renderUploadPage(session, c.get("cspNonce")), 200, { "cache-control": "no-store" })
   })
 
   app.post("/session", (c) => {
@@ -125,7 +133,9 @@ export function createApp() {
     const id = c.req.query("id") || undefined
     const uploadToken = c.req.query("ut") || undefined
     const downloadToken = c.req.query("dt") || undefined
-    return c.html(renderRecipesPage({ id, uploadToken, downloadToken }), 200, { "cache-control": "no-store" })
+    return c.html(renderRecipesPage({ id, uploadToken, downloadToken }, c.get("cspNonce")), 200, {
+      "cache-control": "no-store",
+    })
   })
 
   app.get("/live/:id", (c) => {
@@ -497,14 +507,14 @@ export function createApp() {
     const id = c.req.param("id")
     const session = getSessionById(id)
     if (!session) return c.html(renderNotFoundPage(), 404, { "cache-control": "no-store" })
-    return c.html(renderXfrReceivePage(id), 200, { "cache-control": "no-store" })
+    return c.html(renderXfrReceivePage(id, c.get("cspNonce")), 200, { "cache-control": "no-store" })
   })
 
   app.get("/send/:id", async (c) => {
     const id = c.req.param("id")
     const session = getSessionById(id)
     if (!session) return c.html(renderNotFoundPage(), 404, { "cache-control": "no-store" })
-    return c.html(renderXfrSendPage(id), 200, { "cache-control": "no-store" })
+    return c.html(renderXfrSendPage(id, c.get("cspNonce")), 200, { "cache-control": "no-store" })
   })
 
   app.delete("/xfr/:id", (c) => {
@@ -523,7 +533,7 @@ export function createApp() {
     const id = c.req.param("id")
     const session = getSessionById(id)
     if (!session) return c.html(renderNotFoundPage(), 404, { "cache-control": "no-store" })
-    return c.html(renderDownloadPage(session), 200, { "cache-control": "no-store" })
+    return c.html(renderDownloadPage(session, c.get("cspNonce")), 200, { "cache-control": "no-store" })
   })
 
   app.on(["PUT", "POST"], "/upload/:uploadToken", async (c) => {
@@ -689,7 +699,7 @@ function encodeRFC5987ValueChars(str: string) {
     .replaceAll("*", "%2A")
 }
 
-function setSecurityHeaders(headers: Headers) {
+function setSecurityHeaders(headers: Headers, nonce: string) {
   headers.set("x-content-type-options", "nosniff")
   headers.set("referrer-policy", "strict-origin-when-cross-origin")
   headers.set("permissions-policy", "geolocation=(), microphone=(), camera=()")
@@ -705,10 +715,18 @@ function setSecurityHeaders(headers: Headers) {
       "img-src 'self' data:",
       "font-src 'self' https://fonts.gstatic.com data:",
       "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'",
-      "script-src 'self' 'unsafe-inline'",
+      `script-src 'self' 'nonce-${nonce}'`,
       "connect-src 'self'",
     ].join("; "),
   )
+}
+
+function randomNonce() {
+  return base64url(crypto.getRandomValues(new Uint8Array(16)))
+}
+
+function base64url(bytes: Uint8Array) {
+  return Buffer.from(bytes).toString("base64").replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "")
 }
 
 function notifyLive(session: Session) {

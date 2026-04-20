@@ -1,6 +1,6 @@
 import type { Session } from "./sessions"
 
-export function renderUploadPage(session: Session | null) {
+export function renderUploadPage(session: Session | null, nonce: string) {
   const config = session
     ? JSON.stringify({ id: session.id, uploadToken: session.uploadToken, downloadToken: session.downloadToken })
     : "{}"
@@ -155,14 +155,14 @@ export function renderUploadPage(session: Session | null) {
         </div>
       </div>
 
-      <script>window.__STREAMDROP__=${config}</script>
+      <script nonce="${nonce}">window.__STREAMDROP__=${config}</script>
       <script src="/static/vendor/qrcode.min.js"></script>
       <script type="module" src="/static/upload.js"></script>
     `,
   })
 }
 
-export function renderDownloadPage(session: Session) {
+export function renderDownloadPage(session: Session, nonce: string) {
   const config = JSON.stringify({ id: session.id, downloadToken: session.downloadToken })
 
   return htmlPage({
@@ -230,13 +230,16 @@ export function renderDownloadPage(session: Session) {
         </section>
       </main>
 
-      <script>window.__STREAMDROP__=${config}</script>
+      <script nonce="${nonce}">window.__STREAMDROP__=${config}</script>
       <script type="module" src="/static/download.js"></script>
     `,
   })
 }
 
-export function renderRecipesPage(opts: { id?: string; uploadToken?: string; downloadToken?: string } = {}) {
+export function renderRecipesPage(
+  opts: { id?: string; uploadToken?: string; downloadToken?: string } = {},
+  nonce: string,
+) {
   const { id } = opts
   const createUrl = `HOST_PH/xfr`
   const humanUrl = id ? `HOST_PH/xfr/${id}` : `HOST_PH/xfr/<id>`
@@ -327,7 +330,7 @@ export function renderRecipesPage(opts: { id?: string; uploadToken?: string; dow
           </div>
         </section>
       </main>
-      <script>
+      <script nonce="${nonce}">
         document.querySelectorAll('.cmd-ph').forEach(el => { el.value = el.value.replace(/HOST_PH/g, location.origin) });
         document.querySelectorAll('.cmd-copy').forEach(btn => {
           btn.addEventListener('click', async () => {
@@ -371,7 +374,7 @@ export function renderNotFoundPage() {
   })
 }
 
-export function renderXfrReceivePage(id: string) {
+export function renderXfrReceivePage(id: string, nonce: string) {
   const url = `/xfr/${id}`
   const sendUrl = `/send/${id}`
   return htmlPage({
@@ -406,7 +409,7 @@ export function renderXfrReceivePage(id: string) {
           <a class="btn btn-primary link-btn" href="${url}" style="margin-top:18px;display:inline-block">Download</a>
         </section>
       </main>
-      <script>
+      <script nonce="${nonce}">
         document.querySelectorAll('[data-copy]').forEach(btn => {
           btn.addEventListener('click', async () => {
             const input = btn.previousElementSibling;
@@ -426,7 +429,7 @@ export function renderXfrReceivePage(id: string) {
   })
 }
 
-export function renderXfrSendPage(id: string) {
+export function renderXfrSendPage(id: string, nonce: string) {
   const postUrl = `/xfr/${id}`
   return htmlPage({
     title: "StreamDrop — Send (Plain)",
@@ -450,7 +453,7 @@ export function renderXfrSendPage(id: string) {
           </div>
         </section>
       </main>
-      <script type="module">
+      <script nonce="${nonce}" type="module">
         const elFile = document.getElementById("xfr-file");
         const elSend = document.getElementById("xfr-send");
         const elStatus = document.getElementById("xfr-status");

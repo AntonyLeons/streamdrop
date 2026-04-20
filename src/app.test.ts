@@ -8,13 +8,19 @@ test("GET / and /recipes return HTML successfully", async () => {
   const resHome = await app.request("/")
   expect(resHome.status).toBe(200)
   expect(resHome.headers.get("content-type")).toContain("text/html")
+  const cspHome = resHome.headers.get("content-security-policy") || ""
+  expect(cspHome).toContain("script-src 'self' 'nonce-")
+  expect(cspHome).not.toContain("script-src 'self' 'unsafe-inline'")
   const htmlHome = await resHome.text()
   expect(htmlHome).toContain("StreamDrop")
+  expect(htmlHome).toMatch(/<script nonce="[^"]+">window\.__STREAMDROP__=/)
 
   const resRecipes = await app.request("/recipes")
   expect(resRecipes.status).toBe(200)
   expect(resRecipes.headers.get("content-type")).toContain("text/html")
-  expect(await resRecipes.text()).toContain("CLI")
+  const htmlRecipes = await resRecipes.text()
+  expect(htmlRecipes).toContain("CLI")
+  expect(htmlRecipes).toMatch(/<script nonce="[^"]+">/)
 })
 
 test("GET /health returns {ok: true}", async () => {
