@@ -12,6 +12,28 @@ Design + implementation planning docs:
 
 - Bun (runtime)
 
+## CLI
+
+Build a portable CLI binary:
+
+```bash
+bun install
+bun run cli:build
+./dist/streamdrop --help
+```
+
+Send a file:
+
+```bash
+./dist/streamdrop send ./myfile.zip --server https://your-host
+```
+
+Receive a file:
+
+```bash
+./dist/streamdrop receive "<share-url>" --server https://your-host
+```
+
 ### Run locally
 
 ```bash

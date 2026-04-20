@@ -1,0 +1,72 @@
+name: Release CLI
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runs_on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x64
+            runs_on: ubuntu-latest
+            ext: ""
+            pack: tar
+          - name: macos-x64
+            runs_on: macos-13
+            ext: ""
+            pack: tar
+          - name: macos-arm64
+            runs_on: macos-14
+            ext: ""
+            pack: tar
+          - name: windows-x64
+            runs_on: windows-latest
+            ext: ".exe"
+            pack: zip
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: bun install
+
+      - name: Build
+        run: bun build cli/index.ts --compile --outfile dist/streamdrop${{ matrix.ext }}
+
+      - name: Package (tar.gz)
+        if: matrix.pack == 'tar'
+        id: package_tar
+        shell: bash
+        run: |
+          cd dist
+          tar -czf "streamdrop-${{ matrix.name }}.tar.gz" "streamdrop${{ matrix.ext }}"
+          echo "file=dist/streamdrop-${{ matrix.name }}.tar.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Package (zip)
+        if: matrix.pack == 'zip'
+        id: package_zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Compress-Archive -Path "dist/streamdrop${{ matrix.ext }}" -DestinationPath "dist/streamdrop-${{ matrix.name }}.zip" -Force
+          "file=dist/streamdrop-${{ matrix.name }}.zip" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: ${{ steps.package_tar.outputs.file || steps.package_zip.outputs.file }}

@@ -25,6 +25,7 @@ export function renderUploadPage(session: Session | null, nonce: string) {
               <div class="kicker">Session</div>
               <div class="mono dim" style="font-size:12px;margin-top:3px">${session?.id ?? "—"}</div>
             </div>
+            <a class="link" href="#" id="cli-recipes-link">StreamDrop CLI</a>
           </div>
 
           <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-label="Drop file to upload">
@@ -141,6 +142,17 @@ export function renderUploadPage(session: Session | null, nonce: string) {
           <div id="error" class="error hidden"></div>
         </section>
       </main>
+
+      <div id="cli-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="StreamDrop CLI">
+        <div class="modal-backdrop" data-action="close-cli-modal"></div>
+        <div class="modal-panel">
+          <div class="row" style="margin-bottom:14px">
+            <div class="kicker">StreamDrop CLI</div>
+            <button id="cli-modal-close" class="btn btn-small" type="button" data-action="close-cli-modal">Close</button>
+          </div>
+          <div id="cli-modal-body"></div>
+        </div>
+      </div>
 
       <script nonce="${nonce}">window.__STREAMDROP__=${config}</script>
       <script src="/static/vendor/qrcode.min.js"></script>
