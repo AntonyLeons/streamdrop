@@ -398,7 +398,6 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
   white-space: nowrap;
 }
 .share-state { font-size: 11px; margin-top: 2px; }
-.share-downloads { font-size: 11px; margin-top: 2px; }
 .share-badges { margin-top: 8px; }
 .share-badge {
   display: inline-flex;

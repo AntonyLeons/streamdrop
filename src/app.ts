@@ -11,7 +11,6 @@ import {
   deleteSession,
   waitForReceiverWithTimeout,
 } from "./sessions"
-import { streamSSE } from "hono/streaming"
 import { renderDownloadPage, renderNotFoundPage, renderUploadPage, renderServiceUnavailablePage } from "./pages"
 import { getQRCodeVendorJS } from "./vendor/qrcode"
 
@@ -119,52 +118,6 @@ export function createApp() {
     for (const w of session.receiverWaiters) w.reject(new Error("session_deleted"))
     deleteSession(session)
     return c.json({ ok: true }, 200, { "cache-control": "no-store" })
-  })
-
-  app.get("/live/:id", (c) => {
-    const id = c.req.param("id")
-    const session = getSessionById(id)
-    if (!session) return c.json({ error: "not_found" }, 404)
-
-    if (session.deleteTimer) {
-      clearTimeout(session.deleteTimer)
-      session.deleteTimer = undefined
-    }
-
-    c.header("cache-control", "no-store")
-    return streamSSE(c, async (stream) => {
-      let active = true
-      const sink = (data: string) => {
-        stream.writeSSE({ data }).catch(() => {})
-      }
-      session.liveSinks.add(sink)
-      sink(JSON.stringify({ type: "stats", downloads: session.downloadCount }))
-
-      c.req.raw.signal.addEventListener("abort", () => {
-        active = false
-        session.liveSinks.delete(sink)
-        session.deleteTimer = setTimeout(() => {
-          for (const writer of session.receivers) writer.abort().catch(() => {})
-          for (const ch of session.channels.values()) {
-            try {
-              ch.controller.error(new Error("session_expired"))
-            } catch {}
-          }
-          session.channels.clear()
-          for (const w of session.receiverWaiters) w.reject(new Error("session_expired"))
-          deleteSession(session)
-        }, 30_000)
-      })
-
-      while (active) {
-        try {
-          await stream.writeSSE({ data: "ping" })
-          await stream.sleep(15_000)
-        } catch {
-          break
-        }
-      }
-    })
   })
 
   app.get("/wait-receiver/:id", async (c) => {
@@ -294,8 +247,6 @@ export function createApp() {
       if (counted) return
       counted = true
       session.channels.delete(channelId)
-      session.downloadCount++
-      notifyLive(session)
     }
 
     const onAbort = () => {
@@ -341,8 +292,6 @@ export function createApp() {
       if (counted) return
       counted = true
       session.channels.delete(channelId)
-      session.downloadCount++
-      notifyLive(session)
     }
 
     const onAbort = () => {
@@ -417,11 +366,6 @@ function randomNonce() {
 
 function base64url(bytes: Uint8Array) {
   return Buffer.from(bytes).toString("base64").replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "")
-}
-
-function notifyLive(session: Session) {
-  const payload = JSON.stringify({ type: "stats", downloads: session.downloadCount })
-  for (const sink of session.liveSinks) sink(payload)
 }
 
 function wrapReadableWithDone(readable: ReadableStream<Uint8Array>, done: () => void) {

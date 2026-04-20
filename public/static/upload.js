@@ -15,10 +15,8 @@ const elCliToggle = document.getElementById("cli-toggle")
 
 setStep("key")
 
-const liveBySessionId = new Map()
 let cliEnabled = false
 const cliRawBySessionId = new Map()
-const cliRawLiveBySessionId = new Map()
 const fileBySessionId = new Map()
 const itemBySessionId = new Map()
 const rawHostingBySessionId = new Set()
@@ -41,10 +39,6 @@ function enableCli(on) {
   cliEnabled = !!on
   document.documentElement.classList.toggle("cli-off", !on)
   if (elCliToggle) elCliToggle.checked = !!on
-  if (!cliEnabled) {
-    for (const es of cliRawLiveBySessionId.values()) es.close()
-    cliRawLiveBySessionId.clear()
-  }
   for (const item of document.querySelectorAll(".share-item")) updateCliCopyValues(item)
 }
 
@@ -69,7 +63,6 @@ async function ensureRawCliSession(root) {
   const file = fileBySessionId.get(sessionId)
   const info = await getOrCreateCliRawSession(sessionId, file?.name || "")
   if (!info) return
-  ensureRawCliLive(info.id)
 
   const btnCurl = root.querySelector('button[data-copy-kind="curl"]')
   const btnWget = root.querySelector('button[data-copy-kind="wget"]')
@@ -92,13 +85,6 @@ async function getOrCreateCliRawSession(sessionId, fileName) {
   if (!data || !data.id || !data.uploadToken || !data.downloadToken) return null
   cliRawBySessionId.set(sessionId, data)
   return data
-}
-
-function ensureRawCliLive(rawSessionId) {
-  if (!cliEnabled) return
-  if (cliRawLiveBySessionId.has(rawSessionId)) return
-  const es = new EventSource(`/live/${rawSessionId}`)
-  cliRawLiveBySessionId.set(rawSessionId, es)
 }
 
 async function startRawHosting(sessionId, rawSession, file, signal) {
@@ -212,16 +198,6 @@ document.addEventListener("click", async (e) => {
     fileBySessionId.delete(sessionId)
     itemBySessionId.delete(sessionId)
     rawHostingBySessionId.delete(sessionId)
-    if (raw && raw.id) {
-      const es = cliRawLiveBySessionId.get(raw.id)
-      if (es) es.close()
-      cliRawLiveBySessionId.delete(raw.id)
-    }
-    const live = liveBySessionId.get(sessionId)
-    if (live) {
-      live.close()
-      liveBySessionId.delete(sessionId)
-    }
     transferStats.delete(sessionId)
     root.remove()
     if (elShares.childElementCount === 0 && elShareEmpty) {
@@ -314,7 +290,6 @@ async function startTransfer(file) {
   fileBySessionId.set(session.id, file)
   itemBySessionId.set(session.id, item)
   updateCliCopyValues(item.root)
-  ensureLive(session.id, item)
   if (elShareEmpty) elShareEmpty.classList.add("hidden")
   elShares.prepend(item.root)
 
@@ -494,7 +469,6 @@ function createShareItem({ file, shareUrl }) {
   const root = frag.querySelector(".share-item")
   const elFilename = root.querySelector(".share-filename")
   const elState = root.querySelector(".share-state")
-  const elDownloads = root.querySelector(".share-downloads")
   const elEncrypted = root.querySelector('[data-badge="encrypted"]')
   const elBar = root.querySelector(".share-bar")
   const elMeter = elBar ? elBar.closest(".meter") : null
@@ -506,17 +480,12 @@ function createShareItem({ file, shareUrl }) {
 
   elFilename.textContent = `${file.name} · ${prettyBytes(file.size)}`
   elState.textContent = "Waiting"
-  if (elDownloads) elDownloads.textContent = "0 downloads"
   elLink.value = shareUrl
 
   return {
     root,
     setState: (s) => {
       elState.textContent = s
-    },
-    setDownloads: (n) => {
-      if (!elDownloads) return
-      elDownloads.textContent = `${n} download${n === 1 ? "" : "s"}`
     },
     setBar: (pct) => {
       if (!elBar) return
@@ -531,62 +500,6 @@ function createShareItem({ file, shareUrl }) {
       else elEncrypted.classList.add("hidden")
     },
   }
-}
-
-function ensureLive(sessionId, item) {
-  if (!sessionId) return
-  if (liveBySessionId.has(sessionId)) return
-  let closed = false
-  let es
-  let retryMs = 400
-  let reconnectTimer
-
-  const onMessage = (e) => {
-    if (!e?.data || e.data === "ping") return
-    let msg
-    try {
-      msg = JSON.parse(e.data)
-    } catch {
-      return
-    }
-    if (msg && msg.type === "stats" && typeof msg.downloads === "number") {
-      item.setDownloads(msg.downloads)
-      if (msg.downloads > 0) markStepDone("ready")
-    }
-  }
-
-  const reconnect = () => {
-    if (closed) return
-    if (reconnectTimer) clearTimeout(reconnectTimer)
-    reconnectTimer = setTimeout(connect, retryMs)
-    retryMs = Math.min(5000, Math.floor(retryMs * 1.6))
-  }
-
-  const connect = () => {
-    if (closed) return
-    try {
-      if (es) es.close()
-    } catch {}
-
-    es = new EventSource(`/live/${sessionId}`)
-    es.onmessage = onMessage
-    es.onopen = () => {
-      retryMs = 400
-    }
-    es.onerror = () => {
-      if (closed) return
-      reconnect()
-    }
-  }
-
-  connect()
-  liveBySessionId.set(sessionId, {
-    close: () => {
-      closed = true
-      if (reconnectTimer) clearTimeout(reconnectTimer)
-      if (es) es.close()
-    },
-  })
 }
 
 function wrapStreamWithProgress({ stream, total, onProgress, signal }) {

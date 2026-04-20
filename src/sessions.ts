@@ -15,11 +15,8 @@ export type Session = {
   uploadToken: string
   downloadToken: string
   fileName?: string
-  downloadCount: number
-  liveSinks: Set<(data: string) => void>
   createdAt: number
   lastTouchedAt: number
-  deleteTimer?: Timer
   status: SessionStatus
   activeSenders: number
   receivers: Set<WritableStreamDefaultWriter<Uint8Array>>
@@ -64,8 +61,6 @@ export function createSession(now = Date.now()): Session | null {
     receivers: new Set(),
     channels: new Map(),
     receiverWaiters: new Set(),
-    downloadCount: 0,
-    liveSinks: new Set(),
   }
 
   sessionsById.set(id, session)
@@ -154,7 +149,6 @@ export function startSessionReaper() {
       if (session.activeSenders > 0) continue
       if (session.receivers.size > 0) continue
       if (session.channels.size > 0) continue
-      if (session.liveSinks.size > 0) continue
       for (const w of session.receiverWaiters) w.reject(new Error("session_expired"))
       deleteSession(session)
     }

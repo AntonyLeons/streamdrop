@@ -103,7 +103,6 @@ export function renderUploadPage(session: Session | null, nonce: string) {
                   <div class="share-left">
                     <div class="mono share-filename"></div>
                     <div class="mono dim share-state"></div>
-                    <div class="mono dim share-downloads"></div>
                     <div class="share-badges hidden" data-badge="encrypted">
                       <span class="share-badge">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
