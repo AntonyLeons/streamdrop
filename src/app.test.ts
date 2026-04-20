@@ -2,7 +2,7 @@ import { expect, test } from "bun:test"
 import { createApp } from "./app"
 import { createSession } from "./sessions"
 
-test("GET / and /recipes return HTML successfully", async () => {
+test("GET / returns HTML successfully", async () => {
   const app = createApp()
 
   const resHome = await app.request("/")
@@ -14,23 +14,6 @@ test("GET / and /recipes return HTML successfully", async () => {
   const htmlHome = await resHome.text()
   expect(htmlHome).toContain("StreamDrop")
   expect(htmlHome).toMatch(/<script nonce="[^"]+">window\.__STREAMDROP__=/)
-
-  const resRecipes = await app.request("/recipes")
-  expect(resRecipes.status).toBe(200)
-  expect(resRecipes.headers.get("content-type")).toContain("text/html")
-  const htmlRecipes = await resRecipes.text()
-  expect(htmlRecipes).toContain("CLI")
-  expect(htmlRecipes).toMatch(/<script nonce="[^"]+">/)
-})
-
-test("GET /recipes escapes id in attribute context", async () => {
-  const app = createApp()
-  const payload = `&quot; autofocus onfocus=alert(1) x="`
-  const res = await app.request(`/recipes?id=${encodeURIComponent(payload)}`)
-  expect(res.status).toBe(200)
-  const html = await res.text()
-  expect(html).toContain("HOST_PH/xfr/&amp;quot;")
-  expect(html).not.toContain(`value="HOST_PH/xfr/" autofocus`)
 })
 
 test("GET /health returns {ok: true}", async () => {

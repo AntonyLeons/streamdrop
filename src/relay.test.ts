@@ -69,56 +69,6 @@ test("raw receiver-first relay pipes bytes and returns .bin filename", async () 
   }
 })
 
-test("xfr endpoints expose human links", async () => {
-  const app = createApp()
-  const server = Bun.serve({ port: 0, fetch: app.fetch })
-  const base = `http://localhost:${server.port}`
-
-  try {
-    const txt = await fetch(`${base}/xfr`).then((r) => r.text())
-    expect(txt).toContain("human-transfer-url:")
-    expect(txt).toContain("human-recv-url:")
-  } finally {
-    server.stop(true)
-  }
-})
-
-test("xfr receiver-first streams via per-receiver channels", async () => {
-  const app = createApp()
-  const server = Bun.serve({ port: 0, fetch: app.fetch })
-  const base = `http://localhost:${server.port}`
-
-  try {
-    const txt = await fetch(`${base}/xfr`).then((r) => r.text())
-    const transferUrl = txt.match(/human-transfer-url:\s*(\S+)/)?.[1] || ""
-    expect(transferUrl).toContain(`${base}/xfr/`)
-    const id = transferUrl.match(/\/xfr\/([A-Za-z0-9_-]+)/)?.[1] || ""
-    expect(id).toBeTruthy()
-
-    const downloadResP = fetch(transferUrl)
-
-    const claim = await fetch(`${base}/xfr/claim/${id}`, { method: "POST", headers: { accept: "application/json" } })
-    expect(claim.status).toBe(200)
-    const claimed = (await claim.json()) as any
-    expect(typeof claimed.channelId).toBe("string")
-
-    const payload = new TextEncoder().encode("hello-xfr")
-    const uploadRes = await fetch(`${base}/xfr/upload/${id}/${claimed.channelId}?name=hello.txt`, {
-      method: "PUT",
-      headers: { "content-type": "application/octet-stream" },
-      body: payload,
-    })
-    expect(uploadRes.status).toBe(200)
-
-    const downloadRes = await downloadResP
-    expect(downloadRes.status).toBe(200)
-    const got = new Uint8Array(await downloadRes.arrayBuffer())
-    expect(Buffer.from(got)).toEqual(Buffer.from(payload))
-  } finally {
-    server.stop(true)
-  }
-})
-
 test("GET /d/:token returns 429 when receiver limit is reached", async () => {
   const old = Bun.env.MAX_RECEIVERS
   Bun.env.MAX_RECEIVERS = "25"

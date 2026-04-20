@@ -17,10 +17,6 @@ export type Session = {
   fileName?: string
   downloadCount: number
   liveSinks: Set<(data: string) => void>
-  uploaded: boolean
-  tempFilePath?: string
-  uploadWaiters: Set<Waiter>
-  downloadDoneWaiters: Set<Waiter>
   createdAt: number
   lastTouchedAt: number
   deleteTimer?: Timer
@@ -28,8 +24,6 @@ export type Session = {
   activeSenders: number
   receivers: Set<WritableStreamDefaultWriter<Uint8Array>>
   channels: Map<string, Channel>
-  xfrChannels: Map<string, Channel>
-  xfrWaiters: Set<Waiter>
   receiverWaiters: Set<Waiter>
 }
 
@@ -69,14 +63,9 @@ export function createSession(now = Date.now()): Session | null {
     activeSenders: 0,
     receivers: new Set(),
     channels: new Map(),
-    xfrChannels: new Map(),
-    xfrWaiters: new Set(),
     receiverWaiters: new Set(),
     downloadCount: 0,
     liveSinks: new Set(),
-    uploaded: false,
-    uploadWaiters: new Set(),
-    downloadDoneWaiters: new Set(),
   }
 
   sessionsById.set(id, session)
@@ -112,11 +101,6 @@ export function deleteSession(session: Session) {
 export function notifyReceiverAvailable(session: Session) {
   for (const w of session.receiverWaiters) w.resolve()
   session.receiverWaiters.clear()
-}
-
-export function waitForReceiver(session: Session) {
-  if (session.receivers.size > 0 || session.channels.size > 0) return Promise.resolve()
-  return new Promise<void>((resolve, reject) => session.receiverWaiters.add({ resolve, reject }))
 }
 
 export function waitForReceiverWithTimeout(session: Session, timeoutMs: number, signal?: AbortSignal) {
@@ -159,10 +143,6 @@ export function waitForReceiverWithTimeout(session: Session, timeoutMs: number, 
   })
 }
 
-export function removeReceiver(session: Session, writer: WritableStreamDefaultWriter<Uint8Array>) {
-  session.receivers.delete(writer)
-}
-
 export function startSessionReaper() {
   const ttlMs = getEnvPositiveInt("SESSION_TTL_MS", DEFAULT_SESSION_TTL_MS)
   const intervalMs = getEnvPositiveInt("REAPER_INTERVAL_MS", DEFAULT_REAPER_INTERVAL_MS)
@@ -174,12 +154,8 @@ export function startSessionReaper() {
       if (session.activeSenders > 0) continue
       if (session.receivers.size > 0) continue
       if (session.channels.size > 0) continue
-      if (session.xfrChannels.size > 0) continue
       if (session.liveSinks.size > 0) continue
-      for (const w of session.uploadWaiters) w.reject(new Error("session_expired"))
       for (const w of session.receiverWaiters) w.reject(new Error("session_expired"))
-      for (const w of session.xfrWaiters) w.reject(new Error("session_expired"))
-      for (const w of session.downloadDoneWaiters) w.reject(new Error("session_expired"))
       deleteSession(session)
     }
   }

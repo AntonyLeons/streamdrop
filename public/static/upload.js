@@ -11,9 +11,6 @@ const elShares = document.getElementById("shares")
 const elShareTemplate = document.getElementById("share-item-template")
 const elShareEmpty = document.getElementById("share-empty")
 const elError = document.getElementById("error")
-const elRecipesLink = document.getElementById("recipes-link")
-const elRecipesModal = document.getElementById("recipes-modal")
-const elRecipesBody = document.getElementById("recipes-body")
 const elCliToggle = document.getElementById("cli-toggle")
 
 setStep("key")
@@ -31,13 +28,6 @@ try {
   if (localStorage.getItem("sd_cli") === "1") enableCli(true)
 } catch {}
 
-if (elRecipesLink) {
-  elRecipesLink.addEventListener("click", (e) => {
-    e.preventDefault()
-    openRecipesModal()
-  })
-}
-
 if (elCliToggle) {
   elCliToggle.addEventListener("change", () => {
     enableCli(!!elCliToggle.checked)
@@ -46,10 +36,6 @@ if (elCliToggle) {
     } catch {}
   })
 }
-
-window.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && elRecipesModal && !elRecipesModal.classList.contains("hidden")) closeRecipesModal()
-})
 
 function enableCli(on) {
   cliEnabled = !!on
@@ -198,12 +184,6 @@ elFile.addEventListener("change", () => {
 })
 
 document.addEventListener("click", async (e) => {
-  const closeModalBtn = e.target?.closest?.('[data-action="close-modal"]')
-  if (closeModalBtn) {
-    closeRecipesModal()
-    return
-  }
-
   const openBtn = e.target?.closest?.('button[data-action="open-share"]')
   if (openBtn) {
     const root = openBtn.closest(".share-item")
@@ -697,83 +677,6 @@ async function waitForReceiverOnline(sessionId, signal) {
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms))
-}
-
-function openRecipesModal() {
-  if (!elRecipesModal || !elRecipesBody) return
-  elRecipesBody.textContent = ""
-
-  const host = location.origin
-  elRecipesBody.innerHTML = `
-    <div class="recipe-block">
-      <div class="kicker">Receiver-first</div>
-      <div class="dim" style="font-size:13px;margin-top:8px;line-height:1.6">
-        Receiver-first: share the send link below with the sender, then click Download (or run the curl/wget receive command). The download waits until the sender starts uploading.
-      </div>
-
-      <div class="kicker space-top">Send link</div>
-      <div class="copy-row" style="margin-bottom:8px">
-        <input class="input mono" readonly value='${host}/send/&lt;id&gt;' />
-        <button class="btn btn-small" type="button" data-copy>Copy</button>
-      </div>
-
-      <div class="kicker space-top">Direct download URL</div>
-      <div class="copy-row" style="margin-bottom:8px">
-        <input class="input mono" readonly value='${host}/xfr/&lt;id&gt;' />
-        <button class="btn btn-small" type="button" data-copy>Copy</button>
-      </div>
-
-      <div class="kicker space-top">Request page</div>
-      <div class="copy-row">
-        <input class="input mono" readonly value='${host}/recv/&lt;id&gt;' />
-        <button class="btn btn-small" type="button" data-copy>Copy</button>
-      </div>
-
-      <div class="kicker space-top" style="margin-top:18px">Sending a file with cURL</div>
-      <div class="copy-row" style="margin-bottom:8px">
-        <input class="input mono" readonly value='curl -T &lt;myfile&gt; -s -L -D - "${host}/xfr/" | grep -i human' />
-        <button class="btn btn-small" type="button" data-copy>Copy</button>
-      </div>
-
-      <div class="kicker space-top">Sending a file with Wget</div>
-      <div class="copy-row">
-        <input class="input mono" readonly value='wget --post-file &lt;myfile&gt; -S -o - "${host}/xfr" | grep -i human' />
-        <button class="btn btn-small" type="button" data-copy>Copy</button>
-      </div>
-
-      <div class="dim" style="font-size:13px;margin-top:12px;line-height:1.6">
-        The send command prints a transfer URL. Use that URL to download.
-      </div>
-
-      <div class="kicker space-top">Receiving a file with cURL</div>
-      <div class="copy-row" style="margin-bottom:8px">
-        <input class="input mono" readonly value='curl -s -J -O -L "&lt;transfer_url&gt;"' />
-        <button class="btn btn-small" type="button" data-copy>Copy</button>
-      </div>
-
-      <div class="kicker space-top">Receiving a file with Wget</div>
-      <div class="copy-row">
-        <input class="input mono" readonly value='wget --content-disposition "&lt;transfer_url&gt;"' />
-        <button class="btn btn-small" type="button" data-copy>Copy</button>
-      </div>
-
-      <div class="kicker space-top" style="margin-top:18px">Note</div>
-      <div class="dim" style="font-size:13px;margin-top:8px;line-height:1.6">
-        This CLI mode is not end-to-end encrypted. The server can see file contents in transit.
-      </div>
-    </div>
-  `
-
-  elRecipesModal.classList.remove("hidden")
-}
-
-function closeRecipesModal() {
-  if (!elRecipesModal) return
-  elRecipesModal.classList.add("hidden")
-}
-
-function escapeHtml(s) {
-  return String(s).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;")
 }
 
 async function getOrCreateSession() {

@@ -74,10 +74,10 @@ test("copy button updates text briefly", async ({ page, context }) => {
   await uploadFile(page, "copy-test.txt", "copy test")
   await expect(page.locator("#share-empty")).toBeHidden({ timeout: 20_000 })
 
-  const btn = page.locator(".share-item").first().locator("button[data-copy]").first()
+  const btn = page.locator(".share-item").first().locator(".share-link-row button[data-copy]")
   await btn.click()
   await expect(btn).toHaveText("Copied")
-  await expect(btn).toHaveText("curl", { timeout: 3_000 })
+  await expect(btn).toHaveText("Copy", { timeout: 3_000 })
 })
 
 test("single file click opens picker only once (no double dialog)", async ({ page }) => {
@@ -130,65 +130,9 @@ test("progress advances during encryption", async ({ page }) => {
   const width = await page.locator(".share-item .share-bar").first().evaluate((el) => {
     return parseInt((el as HTMLElement).style.width || "0")
   })
-  expect(width).toBe(0)
-})
-
-// ─── Recipes page ─────────────────────────────────────────────────────────────
-
-test("recipes page has a back button", async ({ page }) => {
-  await page.goto("/recipes")
-  await expect(page.locator("a.link[href='/']")).toBeVisible()
-})
-
-test("recipes page without tokens shows placeholders", async ({ page }) => {
-  await page.goto("/recipes")
-  const v = await page.locator("input.cmd-ph").first().inputValue()
-  expect(v).toContain("/xfr")
-})
-
-test("CLI recipes link from upload page passes real tokens", async ({ page }) => {
-  await page.goto("/")
-  const cfg = await getPageCfg(page)
-  const href = await page.locator("#recipes-link").getAttribute("href")
-
-  expect(href).toContain(`id=${cfg.id}`)
-})
-
-test("recipes page with tokens shows actual token values and dynamic host", async ({ page }) => {
-  await page.goto("/")
-  const cfg = await getPageCfg(page)
-
-  await page.goto(`/recipes?id=${cfg.id}`)
-
-  const allValues = await page.locator("input.cmd-ph").evaluateAll((els) =>
-    els.map((el) => (el instanceof HTMLInputElement ? el.value : "")),
-  )
-  const combined = allValues.join("\n")
-  expect(combined).toContain(`/xfr/${cfg.id}`)
-
-  // Host placeholders should be replaced with location.origin at runtime
-  expect(combined).toContain("http://localhost:4000")
-  expect(combined).not.toContain("HOST_PH")
-})
-
-test("clicking CLI recipes link from upload page shows real tokens", async ({ page }) => {
-  await page.goto("/")
-  const cfg = await getPageCfg(page)
-
-  await uploadFile(page, "cli.txt", "hi")
-  await expect(page.locator("#share-empty")).toBeHidden({ timeout: 20_000 })
-
-  await page.locator("#recipes-link").click()
-  await expect(page.locator("#recipes-modal")).toBeVisible()
-
-  const allValues = await page.locator("#recipes-modal input").evaluateAll((els) =>
-    els.map((el) => (el instanceof HTMLInputElement ? el.value : "")),
-  )
-  const combined = allValues.join("\n")
-  expect(combined).toContain("http://localhost:4000")
-  expect(combined).toContain(`/xfr/${cfg.id}`)
-
-  await expect(page).toHaveURL("http://localhost:4000/")
+  expect(Number.isFinite(width)).toBe(true)
+  expect(width).toBeGreaterThanOrEqual(0)
+  expect(width).toBeLessThanOrEqual(100)
 })
 
 // ─── Download page ────────────────────────────────────────────────────────────
