@@ -23,7 +23,7 @@ export function renderUploadPage(session: Session | null, nonce: string) {
           <div class="row">
             <div>
               <div class="kicker">Session</div>
-              <div class="mono dim" style="font-size:12px;margin-top:3px">${session?.id ?? "—"}</div>
+              <div class="mono dim" style="font-size:12px;margin-top:3px">${escapeHtml(session?.id ?? "—")}</div>
             </div>
             <a class="link" href="#" id="cli-recipes-link">StreamDrop CLI</a>
           </div>
@@ -182,7 +182,7 @@ export function renderDownloadPage(session: Session, nonce: string) {
           <div class="row">
             <div>
               <div class="kicker">Session</div>
-              <div class="mono dim" style="font-size:12px;margin-top:3px">${session.id}</div>
+              <div class="mono dim" style="font-size:12px;margin-top:3px">${escapeHtml(session.id)}</div>
             </div>
             <a class="link" href="/">New transfer</a>
           </div>

@@ -92,6 +92,8 @@ export function createApp() {
   })
 
   app.post("/session", (c) => {
+    const originError = enforceSameOriginIfBrowser(c.req.raw)
+    if (originError) return c.json({ error: originError }, 403, { "cache-control": "no-store" })
     const session = createSession()
     if (!session) return c.json({ error: "at_capacity" }, 503, { "cache-control": "no-store" })
     const name = c.req.query("name") || undefined
@@ -354,10 +356,35 @@ function setSecurityHeaders(headers: Headers, nonce: string) {
       "img-src 'self' data:",
       "font-src 'self' https://fonts.gstatic.com data:",
       "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'",
+      "style-src-elem 'self' https://fonts.googleapis.com",
       `script-src 'self' 'nonce-${nonce}'`,
       "connect-src 'self'",
     ].join("; "),
   )
+}
+
+function enforceSameOriginIfBrowser(req: Request) {
+  const secFetchSite = req.headers.get("sec-fetch-site")
+  const origin = req.headers.get("origin")
+  if (!secFetchSite && !origin) return null
+  if (secFetchSite && secFetchSite !== "same-origin" && secFetchSite !== "none") return "bad_origin"
+  if (!origin) return null
+  const allowed = getAllowedOrigin(req)
+  return origin === allowed ? null : "bad_origin"
+}
+
+function getAllowedOrigin(req: Request) {
+  const envOrigin = Bun.env.PUBLIC_ORIGIN?.trim()
+  if (envOrigin) return envOrigin.replace(/\/+$/, "")
+
+  const xfProto = (req.headers.get("x-forwarded-proto") || "").split(",")[0]?.trim()
+  const xfHost = (req.headers.get("x-forwarded-host") || "").split(",")[0]?.trim()
+  if (xfProto && xfHost) return `${xfProto}://${xfHost}`
+
+  const host = req.headers.get("host")
+  if (host) return `http://${host}`
+
+  return new URL(req.url).origin
 }
 
 function randomNonce() {

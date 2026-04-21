@@ -25,13 +25,13 @@ bun run cli:build
 Send a file:
 
 ```bash
-./dist/streamdrop send ./myfile.zip --server https://your-host
+./dist/streamdrop send ./myfile.zip
 ```
 
 Receive a file:
 
 ```bash
-./dist/streamdrop receive "<share-url>" --server https://your-host
+./dist/streamdrop receive "<share-url>"
 ```
 
 ### Run locally
@@ -54,9 +54,10 @@ PORT=3000 NODE_ENV=production bun run start
 
 - `PORT` (default: `3000`)
 - `NODE_ENV` (set to `production` to disable the local startup log)
+- `PUBLIC_ORIGIN` (recommended in production: `https://streamdrop.app`)
 - `MAX_SESSIONS` (default: `10000`)
 - `MAX_RECEIVERS` (default: `1000`)
-- `SESSION_TTL_MS` (default: `7200000`)
+- `SESSION_TTL_MS` (default: `86400000`)
 - `REAPER_INTERVAL_MS` (default: `60000`)
 
 ### Reverse proxy notes

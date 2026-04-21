@@ -624,39 +624,58 @@ function sleep(ms) {
 
 function openCliModal() {
   if (!elCliModal || !elCliModalBody) return
-  const host = location.origin
-  const cloneCmd = escapeHtml(`git clone https://github.com/aleons/streamdrop && cd streamdrop`)
-  const buildCmd = escapeHtml(`bun install && bun run cli:build`)
-  const sendCmd = escapeHtml(`./dist/streamdrop send <file> --server ${host}`)
-  const recvCmd = escapeHtml(`./dist/streamdrop receive "<share-url>" --server ${host}`)
+  const cloneCmd = `git clone https://github.com/aleons/streamdrop && cd streamdrop`
+  const buildCmd = `bun install && bun run cli:build`
+  const sendCmd = `./dist/streamdrop send <file>`
+  const recvCmd = `./dist/streamdrop receive "<share-url>"`
 
-  elCliModalBody.innerHTML = `
-    <div class="dim" style="font-size:13px;line-height:1.6">
-      Portable CLI for StreamDrop. Uses end-to-end encryption and the same relay backend as the web UI.
-    </div>
+  const addKicker = (text, marginTop) => {
+    const el = document.createElement("div")
+    el.className = "kicker space-top"
+    el.textContent = text
+    if (marginTop) el.style.marginTop = marginTop
+    elCliModalBody.appendChild(el)
+  }
 
-    <div class="kicker space-top" style="margin-top:18px">Install (from source)</div>
-    <div class="copy-row" style="margin-bottom:8px">
-      <input class="input mono" readonly value="${cloneCmd}" />
-      <button class="btn btn-small" type="button" data-copy>Copy</button>
-    </div>
-    <div class="copy-row">
-      <input class="input mono" readonly value="${buildCmd}" />
-      <button class="btn btn-small" type="button" data-copy>Copy</button>
-    </div>
+  const addCopyRow = (value, marginBottom) => {
+    const row = document.createElement("div")
+    row.className = "copy-row"
+    if (marginBottom) row.style.marginBottom = marginBottom
 
-    <div class="kicker space-top" style="margin-top:18px">Send</div>
-    <div class="copy-row">
-      <input class="input mono" readonly value="${sendCmd}" />
-      <button class="btn btn-small" type="button" data-copy>Copy</button>
-    </div>
+    const input = document.createElement("input")
+    input.className = "input mono"
+    input.readOnly = true
+    input.value = value
 
-    <div class="kicker space-top">Receive</div>
-    <div class="copy-row">
-      <input class="input mono" readonly value="${recvCmd}" />
-      <button class="btn btn-small" type="button" data-copy>Copy</button>
-    </div>
-  `
+    const btn = document.createElement("button")
+    btn.className = "btn btn-small"
+    btn.type = "button"
+    btn.setAttribute("data-copy", "")
+    btn.textContent = "Copy"
+
+    row.appendChild(input)
+    row.appendChild(btn)
+    elCliModalBody.appendChild(row)
+  }
+
+  elCliModalBody.replaceChildren()
+
+  const desc = document.createElement("div")
+  desc.className = "dim"
+  desc.style.fontSize = "13px"
+  desc.style.lineHeight = "1.6"
+  desc.textContent = "Portable CLI for StreamDrop. Uses end-to-end encryption and the same relay backend as the web UI."
+  elCliModalBody.appendChild(desc)
+
+  addKicker("Install (from source)", "18px")
+  addCopyRow(cloneCmd, "8px")
+  addCopyRow(buildCmd)
+
+  addKicker("Send", "18px")
+  addCopyRow(sendCmd)
+
+  addKicker("Receive")
+  addCopyRow(recvCmd)
 
   elCliModal.classList.remove("hidden")
 }
@@ -664,10 +683,6 @@ function openCliModal() {
 function closeCliModal() {
   if (!elCliModal) return
   elCliModal.classList.add("hidden")
-}
-
-function escapeHtml(s) {
-  return String(s).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;")
 }
 
 async function getOrCreateSession() {

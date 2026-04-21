@@ -4,7 +4,7 @@ import { basename } from "node:path"
 
 type SessionRes = { id: string; uploadToken: string; downloadToken: string }
 
-const DEFAULT_SERVER = "http://localhost:3000"
+const DEFAULT_SERVER = "https://streamdrop.app"
 
 const argv = Bun.argv.slice(2)
 const cmd = argv[0]
@@ -46,6 +46,9 @@ Usage:
 
 Environment:
   STREAMDROP_SERVER
+
+Default server:
+  ${DEFAULT_SERVER}
 `)
 }
 
