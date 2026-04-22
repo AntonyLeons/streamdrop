@@ -116,8 +116,14 @@ export function renderUploadPage(session: Session | null, nonce: string) {
                     <div class="meter meter-small"><div class="bar share-bar"></div></div>
                   </div>
                   <div class="share-actions">
-                    <button class="btn btn-small" type="button" data-copy data-copy-kind="curl">curl</button>
-                    <button class="btn btn-small" type="button" data-copy data-copy-kind="wget">wget</button>
+                    <span class="tooltip">
+                      <button class="btn btn-small" type="button" data-copy data-copy-kind="curl" aria-describedby="cli-plain-tip">curl</button>
+                      <span id="cli-plain-tip" class="tooltip-bubble" role="tooltip">Not E2EE</span>
+                    </span>
+                    <span class="tooltip">
+                      <button class="btn btn-small" type="button" data-copy data-copy-kind="wget" aria-describedby="cli-plain-tip2">wget</button>
+                      <span id="cli-plain-tip2" class="tooltip-bubble" role="tooltip">Not E2EE</span>
+                    </span>
                     <button class="btn btn-small" type="button" data-action="open-share">Download</button>
                     <button class="btn btn-small" type="button" data-toggle="qr">QR</button>
                     <button class="btn btn-small btn-danger" type="button" data-action="delete">Delete</button>
