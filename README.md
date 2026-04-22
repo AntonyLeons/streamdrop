@@ -5,6 +5,7 @@ Design + implementation planning docs:
 - [spec.md](./spec.md)
 - [checklist.md](./checklist.md)
 - [tasks.md](./tasks.md)
+- [docs/implementation.md](./docs/implementation.md)
 
 ## Deploy
 
@@ -33,6 +34,10 @@ Receive a file:
 ```bash
 ./dist/streamdrop receive "<share-url>"
 ```
+
+### Release binaries
+
+GitHub Releases include prebuilt CLI binaries for macOS, Linux, and Windows, plus matching `.sha256` checksum files.
 
 ### Run locally
 

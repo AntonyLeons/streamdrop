@@ -54,7 +54,10 @@ jobs:
         run: |
           cd dist
           tar -czf "streamdrop-${{ matrix.name }}.tar.gz" "streamdrop${{ matrix.ext }}"
+          cd ..
+          shasum -a 256 "dist/streamdrop-${{ matrix.name }}.tar.gz" | awk '{print $1}' > "dist/streamdrop-${{ matrix.name }}.tar.gz.sha256"
           echo "file=dist/streamdrop-${{ matrix.name }}.tar.gz" >> "$GITHUB_OUTPUT"
+          echo "sha=dist/streamdrop-${{ matrix.name }}.tar.gz.sha256" >> "$GITHUB_OUTPUT"
 
       - name: Package (zip)
         if: matrix.pack == 'zip'
@@ -63,10 +66,15 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Compress-Archive -Path "dist/streamdrop${{ matrix.ext }}" -DestinationPath "dist/streamdrop-${{ matrix.name }}.zip" -Force
+          $hash = (Get-FileHash "dist/streamdrop-${{ matrix.name }}.zip" -Algorithm SHA256).Hash.ToLower()
+          $hash | Out-File -FilePath "dist/streamdrop-${{ matrix.name }}.zip.sha256" -Encoding ascii -Force
           "file=dist/streamdrop-${{ matrix.name }}.zip" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "sha=dist/streamdrop-${{ matrix.name }}.zip.sha256" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.release.tag_name }}
-          files: ${{ steps.package_tar.outputs.file || steps.package_zip.outputs.file }}
+          files: |
+            ${{ steps.package_tar.outputs.file || steps.package_zip.outputs.file }}
+            ${{ steps.package_tar.outputs.sha || steps.package_zip.outputs.sha }}
