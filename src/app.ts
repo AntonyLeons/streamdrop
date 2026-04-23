@@ -22,6 +22,7 @@ type AppEnv = {
 
 export function createApp() {
   const app = new Hono<AppEnv>()
+  const iceServers = getIceServers()
 
   app.use("*", async (c, next) => {
     const nonce = randomNonce()
@@ -88,7 +89,18 @@ export function createApp() {
   app.get("/", (c) => {
     const session = createSession()
     if (!session) return c.html(renderServiceUnavailablePage(), 503, { "cache-control": "no-store" })
-    return c.html(renderUploadPage(session, c.get("cspNonce")), 200, { "cache-control": "no-store" })
+    return c.html(renderUploadPage(session, c.get("cspNonce"), { iceServers }), 200, { "cache-control": "no-store" })
+  })
+
+  app.get("/meta/:id", (c) => {
+    const id = c.req.param("id")
+    const session = getSessionById(id)
+    if (!session) return c.json({ error: "not_found" }, 404, { "cache-control": "no-store" })
+    return c.json(
+      { id: session.id, downloadToken: session.downloadToken, fileName: session.fileName, iceServers },
+      200,
+      { "cache-control": "no-store" },
+    )
   })
 
   app.post("/session", (c) => {
@@ -152,7 +164,7 @@ export function createApp() {
     const id = c.req.param("id")
     const session = getSessionById(id)
     if (!session) return c.html(renderNotFoundPage(), 404, { "cache-control": "no-store" })
-    return c.html(renderDownloadPage(session, c.get("cspNonce")), 200, { "cache-control": "no-store" })
+    return c.html(renderDownloadPage(session, c.get("cspNonce"), { iceServers }), 200, { "cache-control": "no-store" })
   })
 
   app.on(["PUT", "POST"], "/upload/:uploadToken/:channelId", async (c) => {
@@ -385,6 +397,24 @@ function getAllowedOrigin(req: Request) {
   if (host) return `http://${host}`
 
   return new URL(req.url).origin
+}
+
+function getIceServers() {
+  const stunEnv = Bun.env.STUN_URLS?.trim()
+  const stunUrls = stunEnv
+    ? stunEnv.split(",").map((s) => s.trim()).filter(Boolean)
+    : ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"]
+
+  const out: Array<{ urls: string[]; username?: string; credential?: string }> = [{ urls: stunUrls }]
+
+  const turnUrl = Bun.env.TURN_URL?.trim()
+  if (turnUrl) {
+    const username = Bun.env.TURN_USERNAME?.trim() || undefined
+    const credential = Bun.env.TURN_PASSWORD?.trim() || undefined
+    out.push({ urls: [turnUrl], username, credential })
+  }
+
+  return out
 }
 
 function randomNonce() {

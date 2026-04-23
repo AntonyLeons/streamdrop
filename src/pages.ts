@@ -1,8 +1,13 @@
 import type { Session } from "./sessions"
 
-export function renderUploadPage(session: Session | null, nonce: string) {
+export function renderUploadPage(session: Session | null, nonce: string, opts: { iceServers: unknown } = { iceServers: [] }) {
   const config = session
-    ? JSON.stringify({ id: session.id, uploadToken: session.uploadToken, downloadToken: session.downloadToken })
+    ? JSON.stringify({
+        id: session.id,
+        uploadToken: session.uploadToken,
+        downloadToken: session.downloadToken,
+        iceServers: opts.iceServers,
+      })
     : "{}"
 
   return htmlPage({
@@ -167,8 +172,8 @@ export function renderUploadPage(session: Session | null, nonce: string) {
   })
 }
 
-export function renderDownloadPage(session: Session, nonce: string) {
-  const config = JSON.stringify({ id: session.id, downloadToken: session.downloadToken })
+export function renderDownloadPage(session: Session, nonce: string, opts: { iceServers: unknown } = { iceServers: [] }) {
+  const config = JSON.stringify({ id: session.id, downloadToken: session.downloadToken, iceServers: opts.iceServers })
 
   return htmlPage({
     title: "StreamDrop — Receive File",

@@ -355,6 +355,22 @@ async function startTransfer(file) {
     transferStats.set(session.id, { done: 1, total: 1, name: file.name })
     setMeta("Ready. Share the links below.")
 
+    startP2PHost({
+      sessionId: session.id,
+      uploadToken: session.uploadToken,
+      cipherBlob,
+      iceServers: seedCfg.iceServers || [],
+      signal: abortController.signal,
+      onStreamStart: () => {
+        setStep("stream", true)
+        markStepDone("stream")
+      },
+      onStreamDone: () => {
+        setStep("ready", true)
+        markStepDone("ready")
+      },
+    })
+
     let activeUploads = 0
     const inFlight = new Set()
 
@@ -615,6 +631,142 @@ async function waitForReceiverOnline(sessionId, signal) {
     }
 
     await sleep(400)
+  }
+}
+
+function startP2PHost({ sessionId, uploadToken, cipherBlob, iceServers, signal, onStreamStart, onStreamDone }) {
+  if (typeof RTCPeerConnection === "undefined") return
+  if (signal?.aborted) return
+
+  const wsUrl = `${location.origin.replace(/^http/, "ws")}/signal/${encodeURIComponent(sessionId)}?ut=${encodeURIComponent(uploadToken)}`
+  let ws
+  try {
+    ws = new WebSocket(wsUrl)
+  } catch {
+    return
+  }
+
+  const pcs = new Map()
+  const sendCandidate = (to, c) => {
+    try {
+      ws.send(JSON.stringify({ type: "ice", to, payload: { candidate: c } }))
+    } catch {}
+  }
+
+  const closeAll = () => {
+    try {
+      ws.close()
+    } catch {}
+    for (const pc of pcs.values()) {
+      try {
+        pc.close()
+      } catch {}
+    }
+    pcs.clear()
+  }
+
+  if (signal) signal.addEventListener("abort", closeAll, { once: true })
+
+  ws.addEventListener("message", async (ev) => {
+    if (signal?.aborted) return
+    let msg
+    try {
+      msg = JSON.parse(String(ev.data))
+    } catch {
+      return
+    }
+
+    if (msg?.type === "offer" && msg.from && msg.payload?.sdp) {
+      const peerId = String(msg.from)
+      if (pcs.has(peerId)) return
+
+      const pc = new RTCPeerConnection({ iceServers: Array.isArray(iceServers) ? iceServers : [] })
+      pcs.set(peerId, pc)
+
+      pc.addEventListener("icecandidate", (e) => {
+        if (e.candidate) sendCandidate(peerId, e.candidate)
+      })
+
+      pc.addEventListener("connectionstatechange", () => {
+        if (pc.connectionState === "failed" || pc.connectionState === "closed" || pc.connectionState === "disconnected") {
+          try {
+            pc.close()
+          } catch {}
+          pcs.delete(peerId)
+        }
+      })
+
+      pc.addEventListener("datachannel", (e) => {
+        const dc = e.channel
+        dc.binaryType = "arraybuffer"
+
+        dc.addEventListener("open", async () => {
+          if (onStreamStart) onStreamStart()
+          try {
+            await sendBlobOverDataChannel(cipherBlob, dc, signal)
+          } catch {}
+          try {
+            dc.close()
+          } catch {}
+          if (onStreamDone) onStreamDone()
+        })
+      })
+
+      try {
+        await pc.setRemoteDescription(msg.payload.sdp)
+        const answer = await pc.createAnswer()
+        await pc.setLocalDescription(answer)
+        ws.send(JSON.stringify({ type: "answer", to: peerId, payload: { sdp: pc.localDescription } }))
+      } catch {
+        try {
+          pc.close()
+        } catch {}
+        pcs.delete(peerId)
+      }
+      return
+    }
+
+    if (msg?.type === "ice" && msg.from && msg.payload?.candidate) {
+      const peerId = String(msg.from)
+      const pc = pcs.get(peerId)
+      if (!pc) return
+      try {
+        await pc.addIceCandidate(msg.payload.candidate)
+      } catch {}
+    }
+  })
+}
+
+async function sendBlobOverDataChannel(blob, dc, signal) {
+  const reader = blob.stream().getReader()
+  const high = 8 * 1024 * 1024
+  const low = 2 * 1024 * 1024
+  try {
+    dc.bufferedAmountLowThreshold = low
+  } catch {}
+
+  try {
+    while (true) {
+      if (signal?.aborted) throw new DOMException("Aborted", "AbortError")
+      const { value, done } = await reader.read()
+      if (done) break
+      if (!value || value.byteLength === 0) continue
+
+      while (!signal?.aborted && dc.bufferedAmount > high) {
+        await new Promise((resolve) => {
+          const h = () => {
+            dc.removeEventListener("bufferedamountlow", h)
+            resolve()
+          }
+          dc.addEventListener("bufferedamountlow", h, { once: true })
+          setTimeout(h, 200)
+        })
+      }
+
+      dc.send(value)
+    }
+  } finally {
+    reader.cancel().catch(() => {})
   }
 }
 

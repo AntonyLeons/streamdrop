@@ -47,6 +47,42 @@ async function run({ raw }) {
   elCancel.addEventListener("click", onCancel, { once: true })
 
   try {
+    const p2p = await tryP2PStream({
+      id: cfg.id,
+      downloadToken: cfg.downloadToken,
+      iceServers: cfg.iceServers || [],
+      signal: abortController.signal,
+    })
+    if (p2p) {
+      if (elMeter) elMeter.classList.remove("hidden")
+      setBar(0)
+      let plainBytes = 0
+      const decrypt = createDecryptTransform({
+        key,
+        sessionId: cfg.id,
+        onProgress: (n) => {
+          plainBytes = n
+          setMeta(`${prettyBytes(n)} decrypted`)
+          setBar(0.12 + Math.min(0.88, (Math.log10(1 + n) / 8) * 0.88))
+        },
+      })
+
+      setStep("decrypt")
+      const plaintext = p2p.pipeThrough(decrypt)
+      setStep("save")
+      const file = await streamToOPFS(plaintext, abortController.signal)
+      const url = URL.createObjectURL(file)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = suggestedName
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setBar(1)
+      setMeta(`${prettyBytes(plainBytes)} downloaded`)
+      return
+    }
+
     let attempt = 0
     while (true) {
       attempt++
@@ -215,6 +251,115 @@ function prettyBytes(n) {
     i++
   }
   return `${v < 10 && i ? v.toFixed(1) : Math.round(v)} ${u[i]}`
+}
+
+async function tryP2PStream({ id, downloadToken, iceServers, signal }) {
+  if (typeof RTCPeerConnection === "undefined") return null
+  if (signal?.aborted) return null
+
+  const wsUrl = `${location.origin.replace(/^http/, "ws")}/signal/${encodeURIComponent(id)}?dt=${encodeURIComponent(downloadToken)}`
+  let ws
+  try {
+    ws = new WebSocket(wsUrl)
+  } catch {
+    return null
+  }
+
+  const pc = new RTCPeerConnection({ iceServers: Array.isArray(iceServers) ? iceServers : [] })
+
+  let done = false
+  const cleanup = () => {
+    if (done) return
+    done = true
+    try {
+      ws.close()
+    } catch {}
+    try {
+      pc.close()
+    } catch {}
+  }
+
+  if (signal) signal.addEventListener("abort", cleanup, { once: true })
+
+  const dc = pc.createDataChannel("streamdrop", { ordered: true })
+  dc.binaryType = "arraybuffer"
+
+  pc.addEventListener("icecandidate", (e) => {
+    if (!e.candidate) return
+    try {
+      ws.send(JSON.stringify({ type: "ice", payload: { candidate: e.candidate } }))
+    } catch {}
+  })
+
+  const stream = new ReadableStream({
+    start(controller) {
+      dc.addEventListener("message", (e) => {
+        const d = e.data
+        if (d instanceof ArrayBuffer) controller.enqueue(new Uint8Array(d))
+        else if (ArrayBuffer.isView(d)) controller.enqueue(new Uint8Array(d.buffer, d.byteOffset, d.byteLength))
+      })
+      dc.addEventListener("close", () => {
+        controller.close()
+        cleanup()
+      })
+      dc.addEventListener("error", () => {
+        controller.error(new Error("datachannel_error"))
+        cleanup()
+      })
+    },
+    cancel() {
+      cleanup()
+    },
+  })
+
+  const timeoutMs = 5000
+  const waitOpen = new Promise((resolve) => dc.addEventListener("open", resolve, { once: true }))
+
+  ws.addEventListener("message", async (ev) => {
+    let msg
+    try {
+      msg = JSON.parse(String(ev.data))
+    } catch {
+      return
+    }
+
+    if (msg?.type === "answer" && msg.payload?.sdp) {
+      try {
+        await pc.setRemoteDescription(msg.payload.sdp)
+      } catch {}
+      return
+    }
+
+    if (msg?.type === "ice" && msg.payload?.candidate) {
+      try {
+        await pc.addIceCandidate(msg.payload.candidate)
+      } catch {}
+    }
+
+    if (msg?.type === "busy") {
+      cleanup()
+    }
+  })
+
+  try {
+    const offer = await pc.createOffer()
+    await pc.setLocalDescription(offer)
+    ws.send(JSON.stringify({ type: "offer", payload: { sdp: pc.localDescription } }))
+  } catch {
+    cleanup()
+    return null
+  }
+
+  try {
+    await Promise.race([waitOpen, sleep(timeoutMs)])
+  } catch {}
+
+  if (dc.readyState !== "open") {
+    cleanup()
+    return null
+  }
+
+  return stream
 }
 
 function sleep(ms) {
