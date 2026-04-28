@@ -468,32 +468,31 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Share section ───────────────────────────────────── */
-.share { margin-top: 22px; }
-.shares { display: flex; flex-direction: column; gap: 10px; }
-.share-item {
+.sd-files { margin-top: 22px; }
+.sd-files-list { display: flex; flex-direction: column; gap: 10px; }
+.sd-file-item {
   padding: 12px 14px;
   border-radius: var(--radius);
   border: 1px solid var(--glass-border);
   background: var(--panel);
 }
-.share-row {
+.sd-file-row {
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: start;
   gap: 12px;
 }
-.share-left { flex: 1 1 280px; min-width: 0; }
-.share-filename {
+.sd-file-left { flex: 1 1 280px; min-width: 0; }
+.sd-file-name {
   font-size: 12px;
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.share-state { font-size: 11px; margin-top: 2px; }
-.share-badges { margin-top: 8px; }
-.share-badge {
+.sd-file-state { font-size: 11px; margin-top: 2px; }
+.sd-file-badges { margin-top: 8px; }
+.sd-file-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -509,10 +508,10 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
   margin-top: 8px;
   height: 3px;
 }
-.share-bar {
+.sd-file-bar {
   transition: width .15s ease;
 }
-.share-actions {
+.sd-file-actions {
   display: flex;
   gap: 8px;
   align-items: center;
@@ -520,32 +519,32 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
   flex-wrap: wrap;
   align-self: start;
 }
-.cli-off .share-actions button[data-copy-kind="curl"],
-.cli-off .share-actions button[data-copy-kind="wget"] {
+.cli-off .sd-file-actions button[data-copy-kind="curl"],
+.cli-off .sd-file-actions button[data-copy-kind="wget"] {
   display: none;
 }
 
-.share-actions button[data-copy-kind="curl"],
-.share-actions button[data-copy-kind="wget"] {
+.sd-file-actions button[data-copy-kind="curl"],
+.sd-file-actions button[data-copy-kind="wget"] {
   background: rgba(251,191,36,.10);
   border-color: rgba(251,191,36,.35);
   color: var(--warn);
 }
 
-.share-actions button[data-copy-kind="curl"]:hover,
-.share-actions button[data-copy-kind="wget"]:hover {
+.sd-file-actions button[data-copy-kind="curl"]:hover,
+.sd-file-actions button[data-copy-kind="wget"]:hover {
   background: rgba(251,191,36,.18);
   box-shadow: 0 0 0 3px rgba(251,191,36,.12);
   color: #fff;
 }
-.share-link-row { margin-top: 10px; }
-.share-details { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.06); }
-.share-grid {
+.sd-file-link-row { margin-top: 10px; }
+.sd-file-details { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.06); }
+.sd-file-grid {
   display: grid;
   grid-template-columns: 1.45fr .7fr;
   gap: 20px;
 }
-.share-grid > div {
+.sd-file-grid > div {
   min-width: 0;
 }
 
@@ -717,13 +716,13 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
 /* ── Responsive ──────────────────────────────────────── */
 @media (max-width: 860px) {
   .shell { padding-top: 32px; }
-  .share-grid { grid-template-columns: 1fr; }
+  .sd-file-grid { grid-template-columns: 1fr; }
   .qr { width: 180px; height: 180px; }
   h1 { font-size: 26px; }
 }
 
 @media (max-width: 520px) {
-  .share-row { grid-template-columns: 1fr; }
-  .share-actions { width: 100%; justify-content: flex-start; }
-  .share-filename { white-space: normal; }
+  .sd-file-row { grid-template-columns: 1fr; }
+  .sd-file-actions { width: 100%; justify-content: flex-start; }
+  .sd-file-name { white-space: normal; }
 }

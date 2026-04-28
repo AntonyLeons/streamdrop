@@ -38,8 +38,8 @@ test("upload page loads with correct UI", async ({ page }) => {
   await expect(page.locator("[data-step='encrypt']")).toBeVisible()
   await expect(page.locator("[data-step='stream']")).toBeVisible()
   await expect(page.locator("[data-step='ready']")).toBeVisible()
-  await expect(page.locator("#share")).toBeVisible()
-  await expect(page.locator("#share-empty")).toBeVisible()
+  await expect(page.locator("#sd-files")).toBeVisible()
+  await expect(page.locator("#sd-files-empty")).toBeVisible()
   await expect(page.locator("text=CLI endpoints")).toHaveCount(0)
 })
 
@@ -59,11 +59,11 @@ test("selecting a file shows share link and QR section", async ({ page }) => {
   await page.goto("/")
   await uploadFile(page, "hello.txt", "Hello StreamDrop E2E!")
 
-  await expect(page.locator("#share-empty")).toBeHidden({ timeout: 20_000 })
+  await expect(page.locator("#sd-files-empty")).toBeHidden({ timeout: 20_000 })
 
   // Share link should contain the session id and a key fragment
   const cfg = await getPageCfg(page)
-  const link = await page.locator(".share-item .share-link").first().inputValue()
+  const link = await page.locator(".sd-file-item .sd-file-link").first().inputValue()
   expect(link).toContain(`/${cfg.id}#`)
   expect(link).toMatch(/^https?:\/\/.+\/[A-Za-z0-9_-]+#[A-Za-z0-9_-]+(,.*)?$/)
 })
@@ -72,9 +72,9 @@ test("copy button updates text briefly", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"])
   await page.goto("/")
   await uploadFile(page, "copy-test.txt", "copy test")
-  await expect(page.locator("#share-empty")).toBeHidden({ timeout: 20_000 })
+  await expect(page.locator("#sd-files-empty")).toBeHidden({ timeout: 20_000 })
 
-  const btn = page.locator(".share-item").first().locator(".share-link-row button[data-copy]")
+  const btn = page.locator(".sd-file-item").first().locator(".sd-file-link-row button[data-copy]")
   await btn.click()
   await expect(btn).toHaveText("Copied")
   await expect(btn).toHaveText("Copy", { timeout: 3_000 })
@@ -97,7 +97,7 @@ test("single file click opens picker only once (no double dialog)", async ({ pag
   })
 
   await uploadFile(page, "once.txt", "one key only")
-  await expect(page.locator("#share-empty")).toBeHidden({ timeout: 20_000 })
+  await expect(page.locator("#sd-files-empty")).toBeHidden({ timeout: 20_000 })
 
   expect(keyCalls).toBe(1)
 })
@@ -109,10 +109,10 @@ test("selecting multiple files shows multiple share links", async ({ page }) => 
     { name: "b.txt", content: "b" },
   ])
 
-  await expect(page.locator("#share-empty")).toBeHidden({ timeout: 20_000 })
-  await expect(page.locator(".share-item")).toHaveCount(2, { timeout: 20_000 })
+  await expect(page.locator("#sd-files-empty")).toBeHidden({ timeout: 20_000 })
+  await expect(page.locator(".sd-file-item")).toHaveCount(2, { timeout: 20_000 })
 
-  const links = await page.locator(".share-item .share-link").evaluateAll((els) =>
+  const links = await page.locator(".sd-file-item .sd-file-link").evaluateAll((els) =>
     els.map((el) => (el instanceof HTMLInputElement ? el.value : "")),
   )
   expect(links.length).toBe(2)
@@ -126,8 +126,8 @@ test("progress advances during encryption", async ({ page }) => {
   await page.goto("/")
   const largeFile = Buffer.alloc(512 * 1024, 0x55) // 512 KB
   await uploadFile(page, "large.bin", largeFile)
-  await expect(page.locator(".share-item [data-badge='encrypted']").first()).toBeVisible({ timeout: 60_000 })
-  const width = await page.locator(".share-item .share-bar").first().evaluate((el) => {
+  await expect(page.locator(".sd-file-item [data-badge='encrypted']").first()).toBeVisible({ timeout: 60_000 })
+  const width = await page.locator(".sd-file-item .sd-file-bar").first().evaluate((el) => {
     return parseInt((el as HTMLElement).style.width || "0")
   })
   expect(Number.isFinite(width)).toBe(true)

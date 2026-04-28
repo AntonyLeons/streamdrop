@@ -104,7 +104,7 @@ export function renderUploadPage(session: Session | null, nonce: string) {
 
           <div id="meta" class="meta mono"></div>
 
-          <div id="share" class="share">
+          <div id="sd-files" class="sd-files">
             <div class="kicker">Files</div>
             <div class="row" style="margin-top:10px; align-items:center; justify-content:flex-end; gap:12px">
               <div class="dim" style="font-size:13px; display:flex; gap:8px; align-items:center">
@@ -121,17 +121,17 @@ export function renderUploadPage(session: Session | null, nonce: string) {
                 <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
               </label>
             </div>
-            <div id="share-empty" class="dim" style="font-size:13px;margin-top:10px">Select files above to generate share links.</div>
+            <div id="sd-files-empty" class="dim" style="font-size:13px;margin-top:10px">Select files above to generate share links.</div>
             <div style="height:10px"></div>
-            <div id="shares" class="shares"></div>
-            <template id="share-item-template">
-              <section class="share-item">
-                <div class="share-row">
-                  <div class="share-left">
-                    <div class="mono share-filename"></div>
-                    <div class="mono dim share-state"></div>
-                    <div class="share-badges hidden" data-badge="encrypted">
-                      <span class="share-badge">
+            <div id="sd-files-list" class="sd-files-list"></div>
+            <template id="sd-file-template">
+              <section class="sd-file-item">
+                <div class="sd-file-row">
+                  <div class="sd-file-left">
+                    <div class="mono sd-file-name"></div>
+                    <div class="mono dim sd-file-state"></div>
+                    <div class="sd-file-badges hidden" data-badge="encrypted">
+                      <span class="sd-file-badge">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                           <rect x="3" y="11" width="18" height="11" rx="2"></rect>
                           <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
@@ -139,9 +139,9 @@ export function renderUploadPage(session: Session | null, nonce: string) {
                         Encrypted
                       </span>
                     </div>
-                    <div class="meter meter-small"><div class="bar share-bar"></div></div>
+                    <div class="meter meter-small"><div class="bar sd-file-bar"></div></div>
                   </div>
-                  <div class="share-actions">
+                  <div class="sd-file-actions">
                     <span class="tooltip">
                       <button class="btn btn-small" type="button" data-copy data-copy-kind="curl" aria-describedby="cli-plain-tip">curl</button>
                       <span id="cli-plain-tip" class="tooltip-bubble" role="tooltip">Not E2EE</span>
@@ -150,21 +150,21 @@ export function renderUploadPage(session: Session | null, nonce: string) {
                       <button class="btn btn-small" type="button" data-copy data-copy-kind="wget" aria-describedby="cli-plain-tip2">wget</button>
                       <span id="cli-plain-tip2" class="tooltip-bubble" role="tooltip">Not E2EE</span>
                     </span>
-                    <button class="btn btn-small" type="button" data-action="open-share">Download</button>
+                    <button class="btn btn-small" type="button" data-action="open-link">Download</button>
                     <button class="btn btn-small" type="button" data-toggle="qr">QR</button>
                     <button class="btn btn-small btn-danger" type="button" data-action="delete">Delete</button>
                   </div>
                 </div>
-                <div class="share-link-row">
+                <div class="sd-file-link-row">
                   <div class="kicker">Share link</div>
                   <div class="copy-row">
-                    <input class="input mono share-link" readonly />
+                    <input class="input mono sd-file-link" readonly />
                     <button class="btn btn-small" type="button" data-copy>Copy</button>
                   </div>
                 </div>
-                <div class="share-details hidden">
+                <div class="sd-file-details hidden">
                   <div class="qr-wrap">
-                    <canvas width="200" height="200" class="qr share-qr"></canvas>
+                    <canvas width="200" height="200" class="qr sd-file-qr"></canvas>
                   </div>
                 </div>
               </section>

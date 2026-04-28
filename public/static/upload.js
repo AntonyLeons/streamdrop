@@ -6,10 +6,10 @@ let seedUsed = false
 const elDrop = document.getElementById("dropzone")
 const elFile = document.getElementById("file")
 const elMeta = document.getElementById("meta")
-const elShare = document.getElementById("share")
-const elShares = document.getElementById("shares")
-const elShareTemplate = document.getElementById("share-item-template")
-const elShareEmpty = document.getElementById("share-empty")
+const elShare = document.getElementById("sd-files")
+const elShares = document.getElementById("sd-files-list")
+const elShareTemplate = document.getElementById("sd-file-template")
+const elShareEmpty = document.getElementById("sd-files-empty")
 const elError = document.getElementById("error")
 const elCliRecipesLink = document.getElementById("cli-recipes-link")
 const elCliModal = document.getElementById("cli-modal")
@@ -73,7 +73,7 @@ function enableCli(on) {
   cliEnabled = !!on
   document.documentElement.classList.toggle("cli-off", !on)
   if (elCliToggle) elCliToggle.checked = !!on
-  for (const item of document.querySelectorAll(".share-item")) updateCliCopyValues(item)
+  for (const item of document.querySelectorAll(".sd-file-item")) updateCliCopyValues(item)
 }
 
 function updateCliCopyValues(root) {
@@ -215,9 +215,9 @@ document.addEventListener("click", async (e) => {
     return
   }
 
-  const openBtn = e.target?.closest?.('button[data-action="open-share"]')
+  const openBtn = e.target?.closest?.('button[data-action="open-link"]')
   if (openBtn) {
-    const root = openBtn.closest(".share-item")
+    const root = openBtn.closest(".sd-file-item")
     if (!root) return
     const shareUrl = root.dataset.shareUrl || ""
     if (shareUrl) window.open(shareUrl, "_blank", "noopener,noreferrer")
@@ -226,7 +226,7 @@ document.addEventListener("click", async (e) => {
 
   const delBtn = e.target?.closest?.('button[data-action="delete"]')
   if (delBtn) {
-    const root = delBtn.closest(".share-item")
+    const root = delBtn.closest(".sd-file-item")
     if (!root) return
     const sessionId = root.dataset.sessionId || ""
     const uploadToken = root.dataset.uploadToken || ""
@@ -255,13 +255,13 @@ document.addEventListener("click", async (e) => {
 
   const toggleBtn = e.target?.closest?.('button[data-toggle="qr"]')
   if (toggleBtn) {
-    const root = toggleBtn.closest(".share-item")
+    const root = toggleBtn.closest(".sd-file-item")
     if (!root) return
-    const details = root.querySelector(".share-details")
+    const details = root.querySelector(".sd-file-details")
     if (!details) return
     details.classList.toggle("hidden")
     if (!details.classList.contains("hidden") && root.dataset.qrRendered !== "1") {
-      const elQr = root.querySelector(".share-qr")
+      const elQr = root.querySelector(".sd-file-qr")
       const text = root.dataset.shareUrl || ""
       try {
         if (window.QRCode && elQr && text) {
@@ -519,13 +519,13 @@ function getActiveTransferCount() {
 
 function createShareItem({ file, shareUrl }) {
   const frag = elShareTemplate.content.cloneNode(true)
-  const root = frag.querySelector(".share-item")
-  const elFilename = root.querySelector(".share-filename")
-  const elState = root.querySelector(".share-state")
+  const root = frag.querySelector(".sd-file-item")
+  const elFilename = root.querySelector(".sd-file-name")
+  const elState = root.querySelector(".sd-file-state")
   const elEncrypted = root.querySelector('[data-badge="encrypted"]')
-  const elBar = root.querySelector(".share-bar")
+  const elBar = root.querySelector(".sd-file-bar")
   const elMeter = elBar ? elBar.closest(".meter") : null
-  const elLink = root.querySelector(".share-link")
+  const elLink = root.querySelector(".sd-file-link")
 
   root.dataset.shareUrl = shareUrl
   root.dataset.qrRendered = "0"
