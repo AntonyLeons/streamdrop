@@ -6,7 +6,6 @@ let seedUsed = false
 const elDrop = document.getElementById("dropzone")
 const elFile = document.getElementById("file")
 const elMeta = document.getElementById("meta")
-const elShare = document.getElementById("sd-files")
 const elShares = document.getElementById("sd-files-list")
 const elShareTemplate = document.getElementById("sd-file-template")
 const elShareEmpty = document.getElementById("sd-files-empty")
