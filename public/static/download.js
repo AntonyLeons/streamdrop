@@ -9,6 +9,7 @@ const elMeta = document.getElementById("meta")
 const elHint = document.getElementById("hint")
 const elError = document.getElementById("error")
 const elCancel = document.getElementById("cancel")
+const elThemeToggle = document.getElementById("theme-toggle")
 
 const frag = location.hash.startsWith("#") ? location.hash.slice(1) : ""
 const [keyFrag, ...nameParts] = frag.split(",")
@@ -23,6 +24,25 @@ setStep("wait")
 setMeta(`Waiting for ${suggestedName}. Click start when ready.`)
 
 let started = false
+
+if (elThemeToggle) {
+  const syncThemeToggle = () => {
+    const isLight = document.documentElement.dataset.theme === "light"
+    elThemeToggle.setAttribute("aria-pressed", isLight ? "true" : "false")
+    elThemeToggle.setAttribute("aria-label", isLight ? "Switch to dark theme" : "Switch to light theme")
+    elThemeToggle.title = isLight ? "Switch to dark theme" : "Switch to light theme"
+  }
+
+  syncThemeToggle()
+  elThemeToggle.addEventListener("click", () => {
+    const theme = document.documentElement.dataset.theme === "light" ? "dark" : "light"
+    document.documentElement.dataset.theme = theme
+    try {
+      localStorage.setItem("sd_theme", theme)
+    } catch {}
+    syncThemeToggle()
+  })
+}
 
 elStart.addEventListener("click", async () => {
   clearError()

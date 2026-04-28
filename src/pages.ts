@@ -1,5 +1,8 @@
 import type { Session } from "./sessions"
 
+const FAVICON_HREF =
+  "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌊</text></svg>"
+
 export function renderUploadPage(session: Session | null, nonce: string) {
   const config = session
     ? JSON.stringify({ id: session.id, uploadToken: session.uploadToken, downloadToken: session.downloadToken })
@@ -7,11 +10,12 @@ export function renderUploadPage(session: Session | null, nonce: string) {
 
   return htmlPage({
     title: "StreamDrop — Encrypted File Transfer",
+    nonce,
     body: `
       <main class="shell">
         <header class="hero">
           <div class="brand">
-            <div class="logo">SD</div>
+            <div class="logo"><img class="logo-img" src="${FAVICON_HREF}" alt="" /></div>
             <div>
               <h1>StreamDrop</h1>
               <p>End-to-end encrypted. Zero storage. Real-time.</p>
@@ -25,13 +29,35 @@ export function renderUploadPage(session: Session | null, nonce: string) {
               <div class="kicker">Session</div>
               <div class="mono dim" style="font-size:12px;margin-top:3px">${escapeHtml(session?.id ?? "—")}</div>
             </div>
-            <a class="link" href="#" id="cli-recipes-link">StreamDrop CLI</a>
+            <div style="display:flex; gap:12px; align-items:center">
+              <button id="theme-toggle" class="icon-btn" type="button" aria-label="Toggle theme">
+                <span class="theme-icon theme-icon-sun" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="4"></circle>
+                    <path d="M12 2v2"></path>
+                    <path d="M12 20v2"></path>
+                    <path d="M4.93 4.93l1.41 1.41"></path>
+                    <path d="M17.66 17.66l1.41 1.41"></path>
+                    <path d="M2 12h2"></path>
+                    <path d="M20 12h2"></path>
+                    <path d="M6.34 17.66l-1.41 1.41"></path>
+                    <path d="M19.07 4.93l-1.41 1.41"></path>
+                  </svg>
+                </span>
+                <span class="theme-icon theme-icon-moon" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path>
+                  </svg>
+                </span>
+              </button>
+              <a class="link" href="#" id="cli-recipes-link">StreamDrop CLI</a>
+            </div>
           </div>
 
           <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-label="Drop file to upload">
             <div class="drop-inner">
               <div class="drop-icon">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(124,92,255,.85)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                   <polyline points="17 8 12 3 7 8"/>
                   <line x1="12" y1="3" x2="12" y2="15"/>
@@ -172,11 +198,12 @@ export function renderDownloadPage(session: Session, nonce: string) {
 
   return htmlPage({
     title: "StreamDrop — Receive File",
+    nonce,
     body: `
       <main class="shell">
         <header class="hero">
           <div class="brand">
-            <div class="logo">SD</div>
+            <div class="logo"><img class="logo-img" src="${FAVICON_HREF}" alt="" /></div>
             <div>
               <h1>Receive</h1>
               <p>Decryption happens locally in your browser. The server never sees your file.</p>
@@ -190,7 +217,29 @@ export function renderDownloadPage(session: Session, nonce: string) {
               <div class="kicker">Session</div>
               <div class="mono dim" style="font-size:12px;margin-top:3px">${escapeHtml(session.id)}</div>
             </div>
-            <a class="link" href="/">New transfer</a>
+            <div style="display:flex; gap:12px; align-items:center">
+              <button id="theme-toggle" class="icon-btn" type="button" aria-label="Toggle theme">
+                <span class="theme-icon theme-icon-sun" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="4"></circle>
+                    <path d="M12 2v2"></path>
+                    <path d="M12 20v2"></path>
+                    <path d="M4.93 4.93l1.41 1.41"></path>
+                    <path d="M17.66 17.66l1.41 1.41"></path>
+                    <path d="M2 12h2"></path>
+                    <path d="M20 12h2"></path>
+                    <path d="M6.34 17.66l-1.41 1.41"></path>
+                    <path d="M19.07 4.93l-1.41 1.41"></path>
+                  </svg>
+                </span>
+                <span class="theme-icon theme-icon-moon" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path>
+                  </svg>
+                </span>
+              </button>
+              <a class="link" href="/">New transfer</a>
+            </div>
           </div>
 
           <div class="badge-row">
@@ -241,14 +290,15 @@ export function renderDownloadPage(session: Session, nonce: string) {
   })
 }
 
-export function renderNotFoundPage() {
+export function renderNotFoundPage(nonce: string) {
   return htmlPage({
     title: "StreamDrop — Not Found",
+    nonce,
     body: `
       <main class="shell">
         <header class="hero">
           <div class="brand">
-            <div class="logo">SD</div>
+            <div class="logo"><img class="logo-img" src="${FAVICON_HREF}" alt="" /></div>
             <div><h1>StreamDrop</h1><p>Encrypted file transfer.</p></div>
           </div>
         </header>
@@ -263,14 +313,15 @@ export function renderNotFoundPage() {
   })
 }
 
-export function renderServiceUnavailablePage() {
+export function renderServiceUnavailablePage(nonce: string) {
   return htmlPage({
     title: "StreamDrop — Busy",
+    nonce,
     body: `
       <main class="shell">
         <header class="hero">
           <div class="brand">
-            <div class="logo">SD</div>
+            <div class="logo"><img class="logo-img" src="${FAVICON_HREF}" alt="" /></div>
             <div><h1>StreamDrop</h1><p>Encrypted file transfer.</p></div>
           </div>
         </header>
@@ -285,7 +336,7 @@ export function renderServiceUnavailablePage() {
   })
 }
 
-function htmlPage(opts: { title: string; body: string }) {
+function htmlPage(opts: { title: string; body: string; nonce: string }) {
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -293,7 +344,8 @@ function htmlPage(opts: { title: string; body: string }) {
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="description" content="Zero-storage, end-to-end encrypted real-time file transfer. No accounts. No cloud." />
     <title>${escapeHtml(opts.title)}</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌊</text></svg>">
+    <script nonce="${opts.nonce}">(()=>{try{const s=localStorage.getItem("sd_theme");const p=window.matchMedia&&window.matchMedia("(prefers-color-scheme: light)").matches;const t=s==="light"||s==="dark"?s:p?"light":"dark";document.documentElement.dataset.theme=t}catch{}})();</script>
+    <link rel="icon" href="${FAVICON_HREF}">
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />

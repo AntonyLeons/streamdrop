@@ -87,7 +87,7 @@ export function createApp() {
 
   app.get("/", (c) => {
     const session = createSession()
-    if (!session) return c.html(renderServiceUnavailablePage(), 503, { "cache-control": "no-store" })
+    if (!session) return c.html(renderServiceUnavailablePage(c.get("cspNonce")), 503, { "cache-control": "no-store" })
     return c.html(renderUploadPage(session, c.get("cspNonce")), 200, { "cache-control": "no-store" })
   })
 
@@ -151,7 +151,7 @@ export function createApp() {
   app.get("/:id", (c) => {
     const id = c.req.param("id")
     const session = getSessionById(id)
-    if (!session) return c.html(renderNotFoundPage(), 404, { "cache-control": "no-store" })
+    if (!session) return c.html(renderNotFoundPage(c.get("cspNonce")), 404, { "cache-control": "no-store" })
     return c.html(renderDownloadPage(session, c.get("cspNonce")), 200, { "cache-control": "no-store" })
   })
 

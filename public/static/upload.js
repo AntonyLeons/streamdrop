@@ -15,6 +15,7 @@ const elCliRecipesLink = document.getElementById("cli-recipes-link")
 const elCliModal = document.getElementById("cli-modal")
 const elCliModalBody = document.getElementById("cli-modal-body")
 const elCliToggle = document.getElementById("cli-toggle")
+const elThemeToggle = document.getElementById("theme-toggle")
 
 setStep("key")
 
@@ -28,6 +29,25 @@ document.documentElement.classList.add("cli-off")
 try {
   if (localStorage.getItem("sd_cli") === "1") enableCli(true)
 } catch {}
+
+if (elThemeToggle) {
+  const syncThemeToggle = () => {
+    const isLight = document.documentElement.dataset.theme === "light"
+    elThemeToggle.setAttribute("aria-pressed", isLight ? "true" : "false")
+    elThemeToggle.setAttribute("aria-label", isLight ? "Switch to dark theme" : "Switch to light theme")
+    elThemeToggle.title = isLight ? "Switch to dark theme" : "Switch to light theme"
+  }
+
+  syncThemeToggle()
+  elThemeToggle.addEventListener("click", () => {
+    const theme = document.documentElement.dataset.theme === "light" ? "dark" : "light"
+    document.documentElement.dataset.theme = theme
+    try {
+      localStorage.setItem("sd_theme", theme)
+    } catch {}
+    syncThemeToggle()
+  })
+}
 
 if (elCliToggle) {
   elCliToggle.addEventListener("change", () => {
@@ -245,11 +265,14 @@ document.addEventListener("click", async (e) => {
       const text = root.dataset.shareUrl || ""
       try {
         if (window.QRCode && elQr && text) {
+          const style = getComputedStyle(document.documentElement)
+          const dark = style.getPropertyValue("--v").trim() || "#22d3ee"
+          const light = style.getPropertyValue("--bg").trim() || "#0d1020"
           const opts = {
             width: 200,
             margin: 1,
             errorCorrectionLevel: "M",
-            color: { dark: "#7c5cff", light: "#0d1020" },
+            color: { dark, light },
           }
           window.QRCode.toCanvas(elQr, text, opts, (err) => {
             if (err) return

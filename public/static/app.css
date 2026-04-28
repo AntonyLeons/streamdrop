@@ -2,7 +2,7 @@
 
 /* ─────────────────────────────────────────────────────
    StreamDrop Design System
-   Identity: Dark space, electric violet, glass panels
+   Identity: Dark space, ocean glow, glass panels
    ───────────────────────────────────────────────────── */
 
 :root {
@@ -18,12 +18,13 @@
   --text-muted: rgba(238,240,248,.52);
   --text-faint: rgba(238,240,248,.28);
 
-  /* Brand accent — electric violet */
-  --v: #7c5cff;
-  --v-bright: #a78bff;
-  --v-glow: rgba(124,92,255,.22);
-  --v-border: rgba(124,92,255,.35);
-  --v-surface: rgba(124,92,255,.08);
+  /* Brand accent — ocean cyan */
+  --v: #22d3ee;
+  --v-bright: #38bdf8;
+  --v-deep: #0284c7;
+  --v-glow: rgba(34,211,238,.22);
+  --v-border: rgba(34,211,238,.32);
+  --v-surface: rgba(34,211,238,.10);
 
   /* Functional */
   --good: #34d399;
@@ -38,6 +39,58 @@
   --sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --radius: 16px;
   --radius-sm: 10px;
+
+  --aurora-1: rgba(34,211,238,.16);
+  --aurora-2: rgba(34,197,94,.08);
+  --aurora-3: rgba(14,165,233,.10);
+
+  --panel: rgba(0,0,0,.18);
+  --field: rgba(0,0,0,.25);
+  --code-bg: rgba(0,0,0,.35);
+  --code-text: rgba(238,240,248,.75);
+  --tooltip-bg: rgba(0,0,0,.82);
+  --modal-bg: rgba(10,12,22,.96);
+  --meter-bg: rgba(255,255,255,.06);
+  --step-bg: rgba(255,255,255,.03);
+  --card-inset: rgba(255,255,255,.06);
+  --card-shadow: 0 32px 80px rgba(0,0,0,.45);
+}
+
+html[data-theme="dark"] { color-scheme: dark; }
+
+html[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f6f7ff;
+  --bg-mid: #edf0ff;
+  --glass: rgba(255,255,255,.68);
+  --glass-border: rgba(15,23,42,.12);
+  --glass-hover: rgba(255,255,255,.84);
+
+  --text: #0f172a;
+  --text-muted: rgba(15,23,42,.62);
+  --text-faint: rgba(15,23,42,.32);
+
+  --v: #0891b2;
+  --v-bright: #0284c7;
+  --v-deep: #0369a1;
+  --v-glow: rgba(8,145,178,.22);
+  --v-border: rgba(8,145,178,.30);
+  --v-surface: rgba(8,145,178,.12);
+
+  --aurora-1: rgba(14,165,233,.16);
+  --aurora-2: rgba(34,197,94,.10);
+  --aurora-3: rgba(8,145,178,.12);
+
+  --panel: rgba(255,255,255,.55);
+  --field: rgba(255,255,255,.70);
+  --code-bg: rgba(255,255,255,.70);
+  --code-text: rgba(15,23,42,.78);
+  --tooltip-bg: rgba(15,23,42,.92);
+  --modal-bg: rgba(247,248,255,.96);
+  --meter-bg: rgba(15,23,42,.08);
+  --step-bg: rgba(15,23,42,.04);
+  --card-inset: rgba(255,255,255,.75);
+  --card-shadow: 0 28px 70px rgba(15,23,42,.16);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -51,14 +104,14 @@ body {
   min-height: 100vh;
   /* Signature background: two slow radial "aurora" blobs */
   background-image:
-    radial-gradient(ellipse 900px 600px at 15% -5%, rgba(124,92,255,.20) 0%, transparent 60%),
-    radial-gradient(ellipse 600px 400px at 90% 10%, rgba(56,182,255,.09) 0%, transparent 55%),
-    radial-gradient(ellipse 500px 500px at 70% 95%, rgba(124,92,255,.10) 0%, transparent 60%);
+    radial-gradient(ellipse 900px 600px at 15% -5%, var(--aurora-1) 0%, transparent 60%),
+    radial-gradient(ellipse 600px 400px at 90% 10%, var(--aurora-2) 0%, transparent 55%),
+    radial-gradient(ellipse 500px 500px at 70% 95%, var(--aurora-3) 0%, transparent 60%);
   background-attachment: fixed;
 }
 
 a { color: var(--v-bright); text-decoration: none; }
-a:hover { color: #fff; }
+a:hover { color: var(--text); }
 
 /* ── Layout ──────────────────────────────────────────── */
 .shell {
@@ -80,11 +133,16 @@ a:hover { color: #fff; }
   font-size: 13px;
   letter-spacing: .5px;
   color: #fff;
-  /* Violet gradient badge */
-  background: linear-gradient(135deg, #7c5cff 0%, #5b3fe0 100%);
-  box-shadow: 0 0 0 1px rgba(124,92,255,.5), 0 8px 32px rgba(124,92,255,.35);
+  background: linear-gradient(135deg, var(--v) 0%, var(--v-deep) 100%);
+  box-shadow: 0 0 0 1px var(--v-border), 0 8px 32px var(--v-glow);
   position: relative;
   overflow: hidden;
+}
+.logo-img {
+  width: 28px;
+  height: 28px;
+  position: relative;
+  z-index: 1;
 }
 /* Subtle sheen */
 .logo::after {
@@ -92,6 +150,7 @@ a:hover { color: #fff; }
   position: absolute; inset: 0;
   background: linear-gradient(135deg, rgba(255,255,255,.18) 0%, transparent 60%);
   border-radius: inherit;
+  z-index: 0;
 }
 
 h1 {
@@ -116,8 +175,8 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   box-shadow:
-    0 1px 0 rgba(255,255,255,.06) inset,
-    0 32px 80px rgba(0,0,0,.45);
+    0 1px 0 var(--card-inset) inset,
+    var(--card-shadow);
 }
 
 .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
@@ -148,18 +207,50 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
   white-space: nowrap;
 }
 .link:hover {
-  background: rgba(124,92,255,.18);
-  box-shadow: 0 0 0 3px rgba(124,92,255,.12);
-  color: #fff;
+  background: var(--v-surface);
+  box-shadow: 0 0 0 3px var(--v-glow);
+  color: var(--text);
 }
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid var(--v-border);
+  background: var(--v-surface);
+  color: var(--v-bright);
+  cursor: pointer;
+  transition: background .15s, box-shadow .15s, color .15s, transform .1s;
+}
+.icon-btn:hover {
+  background: var(--v-surface);
+  box-shadow: 0 0 0 3px var(--v-glow);
+  color: var(--text);
+}
+.icon-btn:active { transform: translateY(1px); }
+.icon-btn:focus-visible {
+  outline: 2px solid var(--v-bright);
+  outline-offset: 2px;
+}
+
+.theme-icon { display: inline-flex; }
+.theme-icon-sun { display: none; }
+.theme-icon-moon { display: inline-flex; }
+html[data-theme="light"] .theme-icon-sun { display: inline-flex; }
+html[data-theme="light"] .theme-icon-moon { display: none; }
+html[data-theme="dark"] .theme-icon-sun { display: none; }
+html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
 
 /* ── Dropzone ─────────────────────────────────────────── */
 .dropzone {
   margin-top: 16px;
   position: relative;
-  border: 1.5px dashed rgba(124,92,255,.30);
+  border: 1.5px dashed var(--v-border);
   border-radius: var(--radius);
-  background: rgba(124,92,255,.04);
+  background: var(--v-surface);
   min-height: 176px;
   cursor: pointer;
   outline: none;
@@ -167,17 +258,17 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
 }
 .dropzone:hover {
   border-color: var(--v);
-  background: rgba(124,92,255,.08);
-  box-shadow: 0 0 0 4px rgba(124,92,255,.08), 0 0 40px rgba(124,92,255,.06);
+  background: var(--v-surface);
+  box-shadow: 0 0 0 4px var(--v-glow), 0 0 40px var(--v-glow);
 }
 .dropzone:focus {
   border-color: var(--v);
-  box-shadow: 0 0 0 4px rgba(124,92,255,.14);
+  box-shadow: 0 0 0 4px var(--v-glow);
 }
 .dropzone.drag {
   border-color: var(--v-bright);
-  background: rgba(124,92,255,.12);
-  box-shadow: 0 0 0 6px rgba(124,92,255,.12), 0 0 60px rgba(124,92,255,.08);
+  background: var(--v-surface);
+  box-shadow: 0 0 0 6px var(--v-glow), 0 0 60px var(--v-glow);
 }
 
 .drop-inner {
@@ -196,6 +287,7 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
   display: grid; place-items: center;
   margin-bottom: 14px;
   box-shadow: 0 4px 16px rgba(0,0,0,.3);
+  color: var(--v-bright);
 }
 
 .drop-title { font-size: 15px; font-weight: 600; color: var(--text); }
@@ -217,13 +309,13 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
   padding: 7px 13px;
   border-radius: 999px;
   border: 1px solid var(--glass-border);
-  background: rgba(255,255,255,.03);
+  background: var(--step-bg);
   transition: border-color .25s, background .25s, box-shadow .25s;
 }
 .step.on {
   border-color: var(--v-border);
   background: var(--v-surface);
-  box-shadow: 0 0 0 3px rgba(124,92,255,.10);
+  box-shadow: 0 0 0 3px var(--v-glow);
 }
 .step.done {
   border-color: rgba(52,211,153,.28);
@@ -292,9 +384,9 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
   transition: transform .15s ease, background .15s ease;
 }
 .switch-input:checked + .switch-track {
-  background: #34c759;
-  border-color: #34c759;
-  box-shadow: 0 0 0 3px rgba(52,199,89,.22);
+  background: var(--v);
+  border-color: var(--v);
+  box-shadow: 0 0 0 3px var(--v-glow);
 }
 .switch-input:checked + .switch-track .switch-thumb {
   transform: translateX(18px);
@@ -333,7 +425,7 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
   padding: 10px 12px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--glass-border);
-  background: rgba(0,0,0,.82);
+  background: var(--tooltip-bg);
   color: var(--text);
   font-size: 12px;
   line-height: 1.45;
@@ -356,7 +448,7 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
   margin-top: 14px;
   height: 4px;
   border-radius: 999px;
-  background: rgba(255,255,255,.06);
+  background: var(--meter-bg);
   overflow: hidden;
 }
 .bar {
@@ -365,7 +457,7 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
   border-radius: 999px;
   background: linear-gradient(90deg, var(--v) 0%, var(--v-bright) 100%);
   transition: width .3s ease;
-  box-shadow: 0 0 12px rgba(124,92,255,.6);
+  box-shadow: 0 0 12px var(--v-glow);
 }
 
 .meta {
@@ -383,7 +475,7 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
   padding: 12px 14px;
   border-radius: var(--radius);
   border: 1px solid var(--glass-border);
-  background: rgba(0,0,0,.18);
+  background: var(--panel);
 }
 .share-row {
   display: grid;
@@ -469,7 +561,7 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
 /* ── Input ───────────────────────────────────────────── */
 .input {
   flex: 1; min-width: 0;
-  background: rgba(0,0,0,.25);
+  background: var(--field);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
   padding: 10px 13px;
@@ -481,7 +573,7 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
 }
 .input:focus {
   border-color: var(--v-border);
-  box-shadow: 0 0 0 4px rgba(124,92,255,.10);
+  box-shadow: 0 0 0 4px var(--v-glow);
 }
 
 /* ── Buttons ─────────────────────────────────────────── */
@@ -494,7 +586,7 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
   cursor: pointer;
   white-space: nowrap;
   transition: background .15s, box-shadow .15s, transform .1s;
-  /* Default: ghost violet */
+  /* Default: ghost accent */
   background: var(--v-surface);
   border: 1px solid var(--v-border);
   color: var(--v-bright);
@@ -515,22 +607,22 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
   color: #fff;
 }
 .btn:hover {
-  background: rgba(124,92,255,.16);
-  box-shadow: 0 0 0 3px rgba(124,92,255,.12);
-  color: #fff;
+  background: var(--v-surface);
+  box-shadow: 0 0 0 3px var(--v-glow);
+  color: var(--text);
 }
 .btn:active { transform: translateY(1px); }
 
 /* Primary filled variant */
 .btn-primary {
-  background: linear-gradient(135deg, var(--v) 0%, #5b3fe0 100%);
-  border-color: rgba(124,92,255,.6);
+  background: linear-gradient(135deg, var(--v) 0%, var(--v-deep) 100%);
+  border-color: var(--v-border);
   color: #fff;
-  box-shadow: 0 4px 20px rgba(124,92,255,.30);
+  box-shadow: 0 4px 20px var(--v-glow);
 }
 .btn-primary:hover {
-  background: linear-gradient(135deg, #8d6fff 0%, var(--v) 100%);
-  box-shadow: 0 6px 28px rgba(124,92,255,.40);
+  background: linear-gradient(135deg, var(--v-bright) 0%, var(--v) 100%);
+  box-shadow: 0 6px 28px var(--v-glow);
   color: #fff;
 }
 
@@ -542,12 +634,12 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
   padding: 14px 16px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--glass-border);
-  background: rgba(0,0,0,.35);
+  background: var(--code-bg);
   overflow: auto;
   font-family: var(--mono);
   font-size: 12px;
   line-height: 1.7;
-  color: rgba(238,240,248,.75);
+  color: var(--code-text);
 }
 
 /* ── Error box ───────────────────────────────────────── */
@@ -608,7 +700,7 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
   width: min(920px, calc(100vw - 32px));
   max-height: calc(100vh - 56px);
   overflow: auto;
-  background: rgba(10,12,22,.96);
+  background: var(--modal-bg);
   border: 1px solid var(--glass-border);
   border-radius: 18px;
   padding: 18px;
