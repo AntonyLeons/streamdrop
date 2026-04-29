@@ -10,9 +10,6 @@ const elShares = document.getElementById("sd-files-list")
 const elShareTemplate = document.getElementById("sd-file-template")
 const elShareEmpty = document.getElementById("sd-files-empty")
 const elError = document.getElementById("error")
-const elCliRecipesLink = document.getElementById("cli-recipes-link")
-const elCliModal = document.getElementById("cli-modal")
-const elCliModalBody = document.getElementById("cli-modal-body")
 const elCliToggle = document.getElementById("cli-toggle")
 const elThemeToggle = document.getElementById("theme-toggle")
 
@@ -56,17 +53,6 @@ if (elCliToggle) {
     } catch {}
   })
 }
-
-if (elCliRecipesLink) {
-  elCliRecipesLink.addEventListener("click", (e) => {
-    e.preventDefault()
-    openCliModal()
-  })
-}
-
-window.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && elCliModal && !elCliModal.classList.contains("hidden")) closeCliModal()
-})
 
 function enableCli(on) {
   cliEnabled = !!on
@@ -208,12 +194,6 @@ elFile.addEventListener("change", () => {
 })
 
 document.addEventListener("click", async (e) => {
-  const closeModalBtn = e.target?.closest?.('[data-action="close-cli-modal"]')
-  if (closeModalBtn) {
-    closeCliModal()
-    return
-  }
-
   const openBtn = e.target?.closest?.('button[data-action="open-link"]')
   if (openBtn) {
     const root = openBtn.closest(".sd-file-item")
@@ -642,69 +622,6 @@ async function waitForReceiverOnline(sessionId, signal) {
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms))
-}
-
-function openCliModal() {
-  if (!elCliModal || !elCliModalBody) return
-  const cloneCmd = `git clone https://github.com/aleons/streamdrop && cd streamdrop`
-  const buildCmd = `bun install && bun run cli:build`
-  const sendCmd = `./dist/streamdrop send <file>`
-  const recvCmd = `./dist/streamdrop receive "<share-url>"`
-
-  const addKicker = (text, marginTop) => {
-    const el = document.createElement("div")
-    el.className = "kicker space-top"
-    el.textContent = text
-    if (marginTop) el.style.marginTop = marginTop
-    elCliModalBody.appendChild(el)
-  }
-
-  const addCopyRow = (value, marginBottom) => {
-    const row = document.createElement("div")
-    row.className = "copy-row"
-    if (marginBottom) row.style.marginBottom = marginBottom
-
-    const input = document.createElement("input")
-    input.className = "input mono"
-    input.readOnly = true
-    input.value = value
-
-    const btn = document.createElement("button")
-    btn.className = "btn btn-small"
-    btn.type = "button"
-    btn.setAttribute("data-copy", "")
-    btn.textContent = "Copy"
-
-    row.appendChild(input)
-    row.appendChild(btn)
-    elCliModalBody.appendChild(row)
-  }
-
-  elCliModalBody.replaceChildren()
-
-  const desc = document.createElement("div")
-  desc.className = "dim"
-  desc.style.fontSize = "13px"
-  desc.style.lineHeight = "1.6"
-  desc.textContent = "Portable CLI for StreamDrop. Uses end-to-end encryption and the same relay backend as the web UI."
-  elCliModalBody.appendChild(desc)
-
-  addKicker("Install (from source)", "18px")
-  addCopyRow(cloneCmd, "8px")
-  addCopyRow(buildCmd)
-
-  addKicker("Send", "18px")
-  addCopyRow(sendCmd)
-
-  addKicker("Receive")
-  addCopyRow(recvCmd)
-
-  elCliModal.classList.remove("hidden")
-}
-
-function closeCliModal() {
-  if (!elCliModal) return
-  elCliModal.classList.add("hidden")
 }
 
 async function getOrCreateSession() {

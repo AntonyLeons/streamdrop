@@ -50,7 +50,6 @@ export function renderUploadPage(session: Session | null, nonce: string) {
                   </svg>
                 </span>
               </button>
-              <a class="link" href="#" id="cli-recipes-link">StreamDrop CLI</a>
             </div>
           </div>
 
@@ -143,12 +142,12 @@ export function renderUploadPage(session: Session | null, nonce: string) {
                   </div>
                   <div class="sd-file-actions">
                     <span class="tooltip">
-                      <button class="btn btn-small" type="button" data-copy data-copy-kind="curl" aria-describedby="cli-plain-tip">curl</button>
-                      <span id="cli-plain-tip" class="tooltip-bubble" role="tooltip">Not E2EE</span>
+                      <button class="btn btn-small" type="button" data-copy data-copy-kind="curl">curl</button>
+                      <span class="tooltip-bubble" role="tooltip">Not E2EE</span>
                     </span>
                     <span class="tooltip">
-                      <button class="btn btn-small" type="button" data-copy data-copy-kind="wget" aria-describedby="cli-plain-tip2">wget</button>
-                      <span id="cli-plain-tip2" class="tooltip-bubble" role="tooltip">Not E2EE</span>
+                      <button class="btn btn-small" type="button" data-copy data-copy-kind="wget">wget</button>
+                      <span class="tooltip-bubble" role="tooltip">Not E2EE</span>
                     </span>
                     <button class="btn btn-small" type="button" data-action="open-link">Download</button>
                     <button class="btn btn-small" type="button" data-toggle="qr">QR</button>
@@ -174,17 +173,6 @@ export function renderUploadPage(session: Session | null, nonce: string) {
           <div id="error" class="error hidden"></div>
         </section>
       </main>
-
-      <div id="cli-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="StreamDrop CLI">
-        <div class="modal-backdrop" data-action="close-cli-modal"></div>
-        <div class="modal-panel">
-          <div class="row" style="margin-bottom:14px">
-            <div class="kicker">StreamDrop CLI</div>
-            <button id="cli-modal-close" class="btn btn-small" type="button" data-action="close-cli-modal">Close</button>
-          </div>
-          <div id="cli-modal-body"></div>
-        </div>
-      </div>
 
       <script nonce="${nonce}">window.__STREAMDROP__=${config}</script>
       <script src="/static/vendor/qrcode.min.js"></script>
