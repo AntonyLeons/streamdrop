@@ -30,6 +30,10 @@
   --good: #34d399;
   --good-glow: rgba(52,211,153,.18);
   --warn: #fbbf24;
+  --warn-text: #fbbf24;
+  --warn-surface: rgba(251,191,36,.10);
+  --warn-hover-surface: rgba(251,191,36,.18);
+  --warn-border: rgba(251,191,36,.35);
   --warn-glow: rgba(251,191,36,.18);
   --bad: #f87171;
   --bad-surface: rgba(248,113,113,.08);
@@ -49,6 +53,7 @@
   --code-bg: rgba(0,0,0,.35);
   --code-text: rgba(238,240,248,.75);
   --tooltip-bg: rgba(0,0,0,.82);
+  --tooltip-text: #eef0f8;
   --modal-bg: rgba(10,12,22,.96);
   --meter-bg: rgba(255,255,255,.06);
   --step-bg: rgba(255,255,255,.03);
@@ -86,11 +91,17 @@ html[data-theme="light"] {
   --code-bg: rgba(255,255,255,.70);
   --code-text: rgba(15,23,42,.78);
   --tooltip-bg: rgba(15,23,42,.92);
+  --tooltip-text: rgba(248,250,252,.96);
   --modal-bg: rgba(247,248,255,.96);
   --meter-bg: rgba(15,23,42,.08);
   --step-bg: rgba(15,23,42,.04);
   --card-inset: rgba(255,255,255,.75);
   --card-shadow: 0 28px 70px rgba(15,23,42,.16);
+
+  --warn-text: #92400e;
+  --warn-surface: rgba(245,158,11,.16);
+  --warn-hover-surface: rgba(245,158,11,.22);
+  --warn-border: rgba(146,64,14,.28);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -426,7 +437,7 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
   border-radius: var(--radius-sm);
   border: 1px solid var(--glass-border);
   background: var(--tooltip-bg);
-  color: var(--text);
+  color: var(--tooltip-text);
   font-size: 12px;
   line-height: 1.45;
   text-align: center;
@@ -526,16 +537,16 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
 
 .sd-file-actions button[data-copy-kind="curl"],
 .sd-file-actions button[data-copy-kind="wget"] {
-  background: rgba(251,191,36,.10);
-  border-color: rgba(251,191,36,.35);
-  color: var(--warn);
+  background: var(--warn-surface);
+  border-color: var(--warn-border);
+  color: var(--warn-text);
 }
 
 .sd-file-actions button[data-copy-kind="curl"]:hover,
 .sd-file-actions button[data-copy-kind="wget"]:hover {
-  background: rgba(251,191,36,.18);
-  box-shadow: 0 0 0 3px rgba(251,191,36,.12);
-  color: #fff;
+  background: var(--warn-hover-surface);
+  box-shadow: 0 0 0 3px var(--warn-glow);
+  color: var(--text);
 }
 .sd-file-link-row { margin-top: 10px; }
 .sd-file-details { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.06); }
