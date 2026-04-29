@@ -25,6 +25,10 @@
   --v-glow: rgba(34,211,238,.22);
   --v-border: rgba(34,211,238,.32);
   --v-surface: rgba(34,211,238,.10);
+  --logo-a: #22d3ee;
+  --logo-b: #0284c7;
+  --logo-border: rgba(34,211,238,.32);
+  --logo-glow: rgba(34,211,238,.22);
 
   /* Functional */
   --good: #34d399;
@@ -136,32 +140,26 @@ a:hover { color: var(--text); }
 .brand { display: flex; gap: 16px; align-items: center; }
 
 .logo {
-  width: 52px; height: 52px;
-  border-radius: 14px;
-  display: grid; place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-family: var(--sans);
   font-weight: 800;
   font-size: 13px;
   letter-spacing: .5px;
   color: #fff;
-  background: linear-gradient(135deg, var(--v) 0%, var(--v-deep) 100%);
-  box-shadow: 0 0 0 1px var(--v-border), 0 8px 32px var(--v-glow);
-  position: relative;
-  overflow: hidden;
+  background: none;
+  box-shadow: none;
 }
 .logo-img {
-  width: 28px;
-  height: 28px;
-  position: relative;
-  z-index: 1;
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  display: block;
 }
 /* Subtle sheen */
 .logo::after {
-  content: '';
-  position: absolute; inset: 0;
-  background: linear-gradient(135deg, rgba(255,255,255,.18) 0%, transparent 60%);
-  border-radius: inherit;
-  z-index: 0;
+  content: none;
 }
 
 h1 {

@@ -1,17 +1,26 @@
 # StreamDrop
 
-Design + implementation planning docs:
+<p align="center">
+  <img src="public/static/logo-tile.png" alt="StreamDrop" width="160" />
+</p>
 
-- [spec.md](./spec.md)
-- [checklist.md](./checklist.md)
-- [tasks.md](./tasks.md)
-- [docs/implementation.md](./docs/implementation.md)
+StreamDrop is a zero-storage, end-to-end encrypted file transfer tool.
+Files are encrypted in the sender’s browser and streamed through the server in real time.
 
-## Deploy
+## How it works
 
-### Requirements
+- Sender opens the web app and selects files
+- StreamDrop generates share links (the decryption key stays in the URL fragment after `#`)
+- Receiver opens the link and downloads; decryption happens locally in the browser
 
-- Bun (runtime)
+## Quick start (local)
+
+```bash
+bun install
+bun run dev
+```
+
+Open http://localhost:3000.
 
 ## CLI
 
@@ -35,18 +44,13 @@ Receive a file:
 ./dist/streamdrop receive "<share-url>"
 ```
 
-### Release binaries
+Release binaries: GitHub Releases include prebuilt CLI binaries for macOS, Linux, and Windows, plus matching `.sha256` checksum files.
 
-GitHub Releases include prebuilt CLI binaries for macOS, Linux, and Windows, plus matching `.sha256` checksum files.
+## Deploy
 
-### Run locally
+### Requirements
 
-```bash
-bun install
-bun run dev
-```
-
-Open http://localhost:3000.
+- Bun (runtime)
 
 ### Run in production
 
@@ -68,3 +72,10 @@ PORT=3000 NODE_ENV=production bun run start
 ### Reverse proxy notes
 
 This app keeps some HTTP connections open (receiver wait / downloads). If you're deploying behind a reverse proxy or CDN, configure its read/idle timeouts accordingly. The server itself disables Bun's idle timeout (`idleTimeout: 0` in [server.ts](file:///Users/aleons/Documents/GitHub/streamdrop/src/server.ts)).
+
+## Docs (dev)
+
+- [docs/implementation.md](./docs/implementation.md)
+- [spec.md](./spec.md)
+- [checklist.md](./checklist.md)
+- [tasks.md](./tasks.md)

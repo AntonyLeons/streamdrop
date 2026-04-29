@@ -1,7 +1,6 @@
 import type { Session } from "./sessions"
 
-const FAVICON_HREF =
-  "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌊</text></svg>"
+const LOGO_SRC = "/static/logo.png"
 
 export function renderUploadPage(session: Session | null, nonce: string) {
   const config = session
@@ -15,7 +14,7 @@ export function renderUploadPage(session: Session | null, nonce: string) {
       <main class="shell">
         <header class="hero">
           <div class="brand">
-            <div class="logo"><img class="logo-img" src="${FAVICON_HREF}" alt="" /></div>
+            <div class="logo"><img class="logo-img" src="${LOGO_SRC}" alt="" /></div>
             <div>
               <h1>StreamDrop</h1>
               <p>End-to-end encrypted. Zero storage. Real-time.</p>
@@ -191,7 +190,7 @@ export function renderDownloadPage(session: Session, nonce: string) {
       <main class="shell">
         <header class="hero">
           <div class="brand">
-            <div class="logo"><img class="logo-img" src="${FAVICON_HREF}" alt="" /></div>
+            <div class="logo"><img class="logo-img" src="${LOGO_SRC}" alt="" /></div>
             <div>
               <h1>Receive</h1>
               <p>Decryption happens locally in your browser. The server never sees your file.</p>
@@ -286,7 +285,7 @@ export function renderNotFoundPage(nonce: string) {
       <main class="shell">
         <header class="hero">
           <div class="brand">
-            <div class="logo"><img class="logo-img" src="${FAVICON_HREF}" alt="" /></div>
+            <div class="logo"><img class="logo-img" src="${LOGO_SRC}" alt="" /></div>
             <div><h1>StreamDrop</h1><p>Encrypted file transfer.</p></div>
           </div>
         </header>
@@ -309,7 +308,7 @@ export function renderServiceUnavailablePage(nonce: string) {
       <main class="shell">
         <header class="hero">
           <div class="brand">
-            <div class="logo"><img class="logo-img" src="${FAVICON_HREF}" alt="" /></div>
+            <div class="logo"><img class="logo-img" src="${LOGO_SRC}" alt="" /></div>
             <div><h1>StreamDrop</h1><p>Encrypted file transfer.</p></div>
           </div>
         </header>
@@ -333,7 +332,7 @@ function htmlPage(opts: { title: string; body: string; nonce: string }) {
     <meta name="description" content="Zero-storage, end-to-end encrypted real-time file transfer. No accounts. No cloud." />
     <title>${escapeHtml(opts.title)}</title>
     <script nonce="${opts.nonce}">(()=>{try{const s=localStorage.getItem("sd_theme");const p=window.matchMedia&&window.matchMedia("(prefers-color-scheme: light)").matches;const t=s==="light"||s==="dark"?s:p?"light":"dark";document.documentElement.dataset.theme=t}catch{}})();</script>
-    <link rel="icon" href="${FAVICON_HREF}">
+    <link rel="icon" href="${LOGO_SRC}">
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
