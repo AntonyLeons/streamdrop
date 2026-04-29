@@ -1,7 +1,7 @@
 # StreamDrop
 
 <p align="center">
-  <img src="public/static/logo-tile.png" alt="StreamDrop" width="240" />
+  <img src="public/static/logo-tile.png" alt="StreamDrop" width="300" />
 </p>
 
 StreamDrop is a zero-storage, end-to-end encrypted file transfer tool.
