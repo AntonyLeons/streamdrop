@@ -757,7 +757,11 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
 
 @media (max-width: 520px) {
   .sd-file-row { grid-template-columns: 1fr; }
-  .sd-file-actions { width: 100%; justify-content: flex-start; }
+  .sd-file-actions { width: 100%; justify-content: flex-end; }
+  .sd-file-actions button[data-action="delete"] { order: -10; margin-right: auto; }
+  .sd-file-actions button[data-toggle="qr"] { order: 8; }
+  .sd-file-actions button[data-action="open-link"] { order: 9; }
+  .sd-file-actions button[data-action="native-share"] { order: 10; }
   .sd-file-name { white-space: normal; }
 }
 
