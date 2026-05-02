@@ -194,6 +194,44 @@ elFile.addEventListener("change", () => {
 })
 
 document.addEventListener("click", async (e) => {
+  const nativeShareBtn = e.target?.closest?.('button[data-action="native-share"]')
+  if (nativeShareBtn) {
+    const root = nativeShareBtn.closest(".sd-file-item")
+    if (!root) return
+    const shareUrl = root.dataset.shareUrl || ""
+    const fileName = root.dataset.fileName || "StreamDrop"
+    if (!shareUrl) return
+
+    const flash = (label) => {
+      const oldAria = nativeShareBtn.dataset.nativeShareAria || nativeShareBtn.getAttribute("aria-label") || "Share"
+      const oldTitle = nativeShareBtn.dataset.nativeShareTitle || nativeShareBtn.getAttribute("title") || "Share"
+      nativeShareBtn.dataset.nativeShareAria = oldAria
+      nativeShareBtn.dataset.nativeShareTitle = oldTitle
+      nativeShareBtn.setAttribute("aria-label", label)
+      nativeShareBtn.setAttribute("title", label)
+      setTimeout(() => {
+        nativeShareBtn.setAttribute("aria-label", oldAria)
+        nativeShareBtn.setAttribute("title", oldTitle)
+      }, 900)
+    }
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: fileName, text: fileName, url: shareUrl })
+        flash("Shared")
+        return
+      } catch (err) {
+        if (err && err.name === "AbortError") return
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      flash("Copied")
+    } catch {}
+    return
+  }
+
   const openBtn = e.target?.closest?.('button[data-action="open-link"]')
   if (openBtn) {
     const root = openBtn.closest(".sd-file-item")
@@ -505,6 +543,7 @@ function createShareItem({ file, shareUrl }) {
   const elBar = root.querySelector(".sd-file-bar")
   const elMeter = elBar ? elBar.closest(".meter") : null
   const elLink = root.querySelector(".sd-file-link")
+  const elNativeShare = root.querySelector('button[data-action="native-share"]')
 
   root.dataset.shareUrl = shareUrl
   root.dataset.qrRendered = "0"
@@ -513,6 +552,10 @@ function createShareItem({ file, shareUrl }) {
   elFilename.textContent = `${file.name} · ${prettyBytes(file.size)}`
   elState.textContent = "Waiting"
   elLink.value = shareUrl
+  if (elNativeShare) {
+    if (navigator.share) elNativeShare.classList.remove("hidden")
+    else elNativeShare.classList.add("hidden")
+  }
 
   return {
     root,

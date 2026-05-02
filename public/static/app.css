@@ -546,6 +546,31 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
   box-shadow: 0 0 0 3px var(--warn-glow);
   color: var(--text);
 }
+
+.btn-native-share {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.btn-native-share.btn-small {
+  padding: 6px;
+  width: 32px;
+}
+.btn-native-share::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.06);
+  opacity: .9;
+}
+.btn-native-share svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  position: relative;
+}
 .sd-file-link-row { margin-top: 10px; }
 .sd-file-details { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.06); }
 .sd-file-grid {
@@ -734,4 +759,8 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
   .sd-file-row { grid-template-columns: 1fr; }
   .sd-file-actions { width: 100%; justify-content: flex-start; }
   .sd-file-name { white-space: normal; }
+}
+
+@media (min-width: 521px) {
+  .btn-native-share { display: none !important; }
 }
