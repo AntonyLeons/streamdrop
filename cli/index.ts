@@ -1,10 +1,23 @@
 import QRCode from "qrcode"
 import { createDecryptTransform, createEncryptStream } from "../public/static/crypto.js"
-import { basename } from "node:path"
+import { basename, extname, dirname, join } from "node:path"
+import { existsSync, readFileSync } from "node:fs"
+import { stat as statFs } from "node:fs/promises"
+import { homedir } from "node:os"
 
 type SessionRes = { id: string; uploadToken: string; downloadToken: string }
 
 const DEFAULT_SERVER = "https://streamdrop.app"
+
+function getDefaultServer() {
+  if (Bun.env.STREAMDROP_SERVER) return Bun.env.STREAMDROP_SERVER
+  try {
+    const rc = readFileSync(join(homedir(), ".streamdroprc"), "utf-8")
+    const match = rc.match(/SERVER=(.*)/)
+    if (match && match[1]) return match[1].trim()
+  } catch {}
+  return DEFAULT_SERVER
+}
 
 const argv = Bun.argv.slice(2)
 const cmd = argv[0]
@@ -25,7 +38,7 @@ if (cmd === "send") {
     printHelp()
     process.exit(1)
   }
-  const server = getFlagValue("--server") ?? Bun.env.STREAMDROP_SERVER ?? DEFAULT_SERVER
+  const server = getFlagValue("--server") ?? getDefaultServer()
   await runSend(server, filePath)
 } else {
   const input = argv[1]
@@ -33,7 +46,7 @@ if (cmd === "send") {
     printHelp()
     process.exit(1)
   }
-  const overrideServer = getFlagValue("--server") ?? Bun.env.STREAMDROP_SERVER
+  const overrideServer = getFlagValue("--server") ?? getDefaultServer()
   await runReceive(input, overrideServer)
 }
 
@@ -41,11 +54,14 @@ function printHelp() {
   console.log(`streamdrop
 
 Usage:
-  streamdrop send <file> [--server <url>]
-  streamdrop receive <share-url> [--server <url>]
+  streamdrop send <file_or_folder> [--server <url>]
+  streamdrop receive <share-url> [--server <url>] [--out <file>] [--no-extract]
 
 Environment:
   STREAMDROP_SERVER
+
+Config File (~/.streamdroprc):
+  SERVER=https://my-server.com
 
 Default server:
   ${DEFAULT_SERVER}
@@ -91,21 +107,40 @@ function formatBytes(bytes: number) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
 }
 
+let startTime = 0
+
 function printProgress(action: string, current: number, total?: number) {
+  if (!startTime) startTime = Date.now()
+  const elapsed = (Date.now() - startTime) / 1000
+  const speed = elapsed > 0 ? current / elapsed : 0
+  const speedStr = `${formatBytes(speed)}/s`
+
   if (total) {
     const percent = ((current / total) * 100).toFixed(1)
-    process.stdout.write(`\r\x1b[K${action}: ${formatBytes(current)} / ${formatBytes(total)} (${percent}%)`)
+    const eta = speed > 0 ? Math.round((total - current) / speed) : 0
+    const etaStr = eta > 0 ? `${eta}s left` : ""
+    process.stdout.write(`\r\x1b[K${action}: ${formatBytes(current)} / ${formatBytes(total)} (${percent}%) | ${speedStr} | ${etaStr}`)
   } else {
-    process.stdout.write(`\r\x1b[K${action}: ${formatBytes(current)}`)
+    process.stdout.write(`\r\x1b[K${action}: ${formatBytes(current)} | ${speedStr}`)
   }
 }
 
 async function runSend(serverRaw: string, filePath: string) {
   const server = normalizeServer(serverRaw)
+  if (!existsSync(filePath)) throw new Error("file_not_found")
+  
   const file = Bun.file(filePath)
-  if (!(await file.exists())) throw new Error("file_not_found")
+  const stat = await statFs(filePath)
 
-  const fileName = basename(filePath)
+  let fileName = basename(filePath)
+  let totalSize: number | undefined
+  if (stat.isDirectory()) {
+    fileName = `${fileName}.sd-dir.tar`
+    console.log(`Directory detected. Archiving on the fly...`)
+  } else {
+    totalSize = stat.size
+  }
+
   const sess = (await fetchJson(`${server}/session?name=${encodeURIComponent(fileName)}`, { method: "POST" })) as SessionRes
   if (!sess?.id || !sess.uploadToken || !sess.downloadToken) throw new Error("session_failed")
 
@@ -130,8 +165,22 @@ async function runSend(serverRaw: string, filePath: string) {
       if (!channelId) break
       
       console.log(`\nReceiver connected. Starting upload...`)
+      startTime = 0 // reset progress timer
+      
+      let streamToRead: ReadableStream<Uint8Array>
+      if (stat.isDirectory()) {
+        const tar = Bun.spawn(["tar", "-cf", "-", basename(filePath)], {
+          cwd: dirname(filePath),
+          stdout: "pipe",
+        })
+        streamToRead = tar.stdout
+      } else {
+        streamToRead = file.stream()
+      }
+
       const enc = createEncryptStream({ 
-        file, 
+        stream: streamToRead, 
+        size: totalSize,
         key, 
         sessionId: sess.id, 
         onProgress: (sent: number, total: number) => printProgress("Uploading", sent, total)
@@ -168,14 +217,37 @@ async function runReceive(input: string, overrideServer?: string | null) {
   if (keyBytes.byteLength !== 32) throw new Error("bad_key")
   const key = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["decrypt"])
 
-  const outName = safeOutName(parsed.fileName || cfg.fileName || "streamdrop.bin")
-  const outPath = `./${outName}`
+  const outFlag = getFlagValue("--out")
+  const noExtract = argv.includes("--no-extract")
+
+  let outName = safeOutName(parsed.fileName || cfg.fileName || "streamdrop.bin")
+  
+  const isAutoTar = outName.endsWith(".sd-dir.tar")
+  const shouldExtract = isAutoTar && !outFlag && !noExtract
+
+  if (isAutoTar && !shouldExtract && !outFlag) {
+    outName = outName.replace(".sd-dir.tar", ".tar")
+  }
+
+  let outPath = outFlag ? outFlag : `./${outName}`
+
+  if (!outFlag && existsSync(outPath)) {
+    const ext = extname(outPath)
+    const base = basename(outPath, ext)
+    const dir = dirname(outPath)
+    let counter = 1
+    while (existsSync(outPath)) {
+      outPath = join(dir, `${base} (${counter})${ext}`)
+      counter++
+    }
+  }
 
   console.log(`Connecting to ${server}...`)
   const res = await fetch(`${server}/d/${downloadToken}`, { method: "GET", headers: { accept: "application/octet-stream" } })
   if (!res.ok || !res.body) throw new Error(`download_failed_${res.status}`)
 
   console.log(`Downloading to ${outPath}...`)
+  startTime = 0 // reset progress timer
   const decrypt = createDecryptTransform({ 
     key, 
     sessionId: parsed.id, 
@@ -183,10 +255,35 @@ async function runReceive(input: string, overrideServer?: string | null) {
   })
   
   const plain = res.body.pipeThrough(decrypt)
-  await writeToFile(outPath, plain)
   
-  console.log() // New line after progress
-  console.log(`Saved: ${outPath}`)
+  if (shouldExtract) {
+    console.log(`Folder archive detected. Extracting on the fly...`)
+    const tarProc = Bun.spawn(["tar", "-xf", "-"], {
+      stdin: "pipe",
+      stdout: "inherit",
+      stderr: "inherit",
+    })
+
+    const writer = new WritableStream({
+      write(chunk) {
+        tarProc.stdin.write(chunk)
+      },
+      close() {
+        tarProc.stdin.end()
+      },
+    })
+
+    await plain.pipeTo(writer)
+    await tarProc.exited
+
+    console.log() // New line after progress
+    console.log(`Extracted successfully.`)
+  } else {
+    await writeToFile(outPath, plain)
+    
+    console.log() // New line after progress
+    console.log(`Saved: ${outPath}`)
+  }
 }
 
 function parseShareInput(input: string): { server?: string; id: string; keyFrag: string; fileName?: string } {

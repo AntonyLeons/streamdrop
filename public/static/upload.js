@@ -369,7 +369,8 @@ async function startTransfer(file) {
 
     let lastPct = 0
     const encStream = createEncryptStream({
-      file,
+      stream: file.stream(),
+      size: file.size,
       key,
       sessionId: session.id,
       onProgress: (done, total) => {

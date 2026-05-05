@@ -15,7 +15,7 @@ export function base64urlDecode(s) {
   return out
 }
 
-export function createEncryptStream({ file, key, sessionId, chunkSize = 256 * 1024, onProgress }) {
+export function createEncryptStream({ stream, size, key, sessionId, chunkSize = 256 * 1024, onProgress }) {
   const baseIv = crypto.getRandomValues(new Uint8Array(12))
   const header = new Uint8Array(HEADER_LEN)
   header.set(MAGIC, 0)
@@ -27,7 +27,7 @@ export function createEncryptStream({ file, key, sessionId, chunkSize = 256 * 10
   return new ReadableStream({
     async start(controller) {
       controller.enqueue(header)
-      const reader = file.stream().getReader()
+      const reader = stream.getReader()
       let buf = new Uint8Array(0)
       let chunkIndex = 0
       let sent = 0
@@ -45,7 +45,7 @@ export function createEncryptStream({ file, key, sessionId, chunkSize = 256 * 10
             const frame = await encryptFrame({ chunk, key, baseIv, sessionId, chunkIndex, encoder })
             controller.enqueue(frame)
             sent += chunk.byteLength
-            if (onProgress) onProgress(sent, file.size)
+            if (onProgress) onProgress(sent, size)
             chunkIndex++
           }
         }
@@ -54,7 +54,7 @@ export function createEncryptStream({ file, key, sessionId, chunkSize = 256 * 10
           const frame = await encryptFrame({ chunk: buf, key, baseIv, sessionId, chunkIndex, encoder })
           controller.enqueue(frame)
           sent += buf.byteLength
-          if (onProgress) onProgress(sent, file.size)
+          if (onProgress) onProgress(sent, size)
         }
 
         controller.close()
