@@ -83,6 +83,23 @@ function base64urlDecode(s: string) {
   return new Uint8Array(Buffer.from(padded, "base64"))
 }
 
+function formatBytes(bytes: number) {
+  if (bytes === 0) return "0 B"
+  const k = 1024
+  const sizes = ["B", "KB", "MB", "GB", "TB"]
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
+}
+
+function printProgress(action: string, current: number, total?: number) {
+  if (total) {
+    const percent = ((current / total) * 100).toFixed(1)
+    process.stdout.write(`\r\x1b[K${action}: ${formatBytes(current)} / ${formatBytes(total)} (${percent}%)`)
+  } else {
+    process.stdout.write(`\r\x1b[K${action}: ${formatBytes(current)}`)
+  }
+}
+
 async function runSend(serverRaw: string, filePath: string) {
   const server = normalizeServer(serverRaw)
   const file = Bun.file(filePath)
@@ -111,16 +128,28 @@ async function runSend(serverRaw: string, filePath: string) {
     while (true) {
       const channelId = await claim(server, sess.uploadToken)
       if (!channelId) break
-      const enc = createEncryptStream({ file, key, sessionId: sess.id, onProgress: undefined })
+      
+      console.log(`\nReceiver connected. Starting upload...`)
+      const enc = createEncryptStream({ 
+        file, 
+        key, 
+        sessionId: sess.id, 
+        onProgress: (sent: number, total: number) => printProgress("Uploading", sent, total)
+      })
+      
       const res = await fetch(`${server}/upload/${sess.uploadToken}/${encodeURIComponent(channelId)}`, {
         method: "PUT",
         headers: { "content-type": "application/octet-stream" },
         body: enc,
         duplex: "half",
       } as any)
+      
+      console.log() // New line after progress
       if (!res.ok) {
         const t = await safeText(res)
         console.error(`upload_failed: ${t || res.status}`)
+      } else {
+        console.log(`Upload complete.`)
       }
     }
     await sleep(250)
@@ -142,12 +171,21 @@ async function runReceive(input: string, overrideServer?: string | null) {
   const outName = safeOutName(parsed.fileName || cfg.fileName || "streamdrop.bin")
   const outPath = `./${outName}`
 
+  console.log(`Connecting to ${server}...`)
   const res = await fetch(`${server}/d/${downloadToken}`, { method: "GET", headers: { accept: "application/octet-stream" } })
   if (!res.ok || !res.body) throw new Error(`download_failed_${res.status}`)
 
-  const decrypt = createDecryptTransform({ key, sessionId: parsed.id, onProgress: undefined })
+  console.log(`Downloading to ${outPath}...`)
+  const decrypt = createDecryptTransform({ 
+    key, 
+    sessionId: parsed.id, 
+    onProgress: (received: number) => printProgress("Downloading", received) 
+  })
+  
   const plain = res.body.pipeThrough(decrypt)
   await writeToFile(outPath, plain)
+  
+  console.log() // New line after progress
   console.log(`Saved: ${outPath}`)
 }
 
