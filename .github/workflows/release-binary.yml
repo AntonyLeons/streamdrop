@@ -55,30 +55,16 @@ jobs:
         shell: bash
         run: |
           cd dist
+          mv "streamdrop-cli${{ matrix.ext }}" "streamdrop-cli-${{ matrix.name }}${{ matrix.ext }}"
+          mv "streamdrop-server${{ matrix.ext }}" "streamdrop-server-${{ matrix.name }}${{ matrix.ext }}"
           
-          if [[ "${{ matrix.ext }}" == ".exe" ]]; then
-            mv "streamdrop-cli.exe" "streamdrop-cli-${{ matrix.name }}.exe"
-            mv "streamdrop-server.exe" "streamdrop-server-${{ matrix.name }}.exe"
-            
-            shasum -a 256 "streamdrop-cli-${{ matrix.name }}.exe" | awk '{print $1}' > "streamdrop-cli-${{ matrix.name }}.exe.sha256"
-            shasum -a 256 "streamdrop-server-${{ matrix.name }}.exe" | awk '{print $1}' > "streamdrop-server-${{ matrix.name }}.exe.sha256"
-            
-            echo "file1=dist/streamdrop-cli-${{ matrix.name }}.exe" >> "$GITHUB_OUTPUT"
-            echo "sha1=dist/streamdrop-cli-${{ matrix.name }}.exe.sha256" >> "$GITHUB_OUTPUT"
-            echo "file2=dist/streamdrop-server-${{ matrix.name }}.exe" >> "$GITHUB_OUTPUT"
-            echo "sha2=dist/streamdrop-server-${{ matrix.name }}.exe.sha256" >> "$GITHUB_OUTPUT"
-          else
-            mv "streamdrop-cli" "streamdrop-cli-${{ matrix.name }}"
-            mv "streamdrop-server" "streamdrop-server-${{ matrix.name }}"
-            
-            shasum -a 256 "streamdrop-cli-${{ matrix.name }}" | awk '{print $1}' > "streamdrop-cli-${{ matrix.name }}.sha256"
-            shasum -a 256 "streamdrop-server-${{ matrix.name }}" | awk '{print $1}' > "streamdrop-server-${{ matrix.name }}.sha256"
-            
-            echo "file1=dist/streamdrop-cli-${{ matrix.name }}" >> "$GITHUB_OUTPUT"
-            echo "sha1=dist/streamdrop-cli-${{ matrix.name }}.sha256" >> "$GITHUB_OUTPUT"
-            echo "file2=dist/streamdrop-server-${{ matrix.name }}" >> "$GITHUB_OUTPUT"
-            echo "sha2=dist/streamdrop-server-${{ matrix.name }}.sha256" >> "$GITHUB_OUTPUT"
-          fi
+          shasum -a 256 "streamdrop-cli-${{ matrix.name }}${{ matrix.ext }}" | awk '{print $1}' > "streamdrop-cli-${{ matrix.name }}${{ matrix.ext }}.sha256"
+          shasum -a 256 "streamdrop-server-${{ matrix.name }}${{ matrix.ext }}" | awk '{print $1}' > "streamdrop-server-${{ matrix.name }}${{ matrix.ext }}.sha256"
+          
+          echo "file1=dist/streamdrop-cli-${{ matrix.name }}${{ matrix.ext }}" >> "$GITHUB_OUTPUT"
+          echo "sha1=dist/streamdrop-cli-${{ matrix.name }}${{ matrix.ext }}.sha256" >> "$GITHUB_OUTPUT"
+          echo "file2=dist/streamdrop-server-${{ matrix.name }}${{ matrix.ext }}" >> "$GITHUB_OUTPUT"
+          echo "sha2=dist/streamdrop-server-${{ matrix.name }}${{ matrix.ext }}.sha256" >> "$GITHUB_OUTPUT"
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
