@@ -111,13 +111,28 @@ async function run({ raw }) {
       }
 
       let plainBytes = 0
+      let startTime = Date.now()
       const decrypt = createDecryptTransform({
         key,
         sessionId: cfg.id,
         onProgress: (n) => {
           plainBytes = n
           setMeta(`${prettyBytes(n)} decrypted`)
-          setBar(0.12 + Math.min(0.88, (Math.log10(1 + n) / 8) * 0.88))
+          const elapsed = (Date.now() - startTime) / 1000
+          if (elapsed > 0.5) {
+            const speed = n / elapsed
+            if (cfg.size) {
+              const eta = Math.round((cfg.size - n) / speed)
+              const etaStr = eta > 0 ? ` · ${eta}s left` : ""
+              elHint.textContent = `Downloading · ${formatSpeed(speed)}${etaStr}`
+              setBar(Math.min(1, n / cfg.size))
+            } else {
+              elHint.textContent = `Downloading · ${formatSpeed(speed)}`
+              setBar(0.12 + Math.min(0.88, (Math.log10(1 + n) / 8) * 0.88))
+            }
+          } else if (!cfg.size) {
+            setBar(0.12 + Math.min(0.88, (Math.log10(1 + n) / 8) * 0.88))
+          }
         },
       })
 
@@ -197,6 +212,21 @@ function setBar(pct) {
 
 function setMeta(text) {
   elMeta.textContent = text
+}
+
+window.addEventListener("beforeunload", (e) => {
+  if (typeof started !== "undefined" && started && typeof abortController !== "undefined" && abortController && !abortController.signal.aborted) {
+    e.preventDefault()
+    e.returnValue = "You have an active download. Closing this page will stop it."
+  }
+})
+
+function formatSpeed(bytesPerSec) {
+  if (bytesPerSec === 0) return "0 B/s"
+  const k = 1024
+  const sizes = ["B/s", "KB/s", "MB/s", "GB/s"]
+  const i = Math.floor(Math.log(bytesPerSec) / Math.log(k))
+  return parseFloat((bytesPerSec / Math.pow(k, i)).toFixed(1)) + " " + sizes[i]
 }
 
 function setStep(name) {

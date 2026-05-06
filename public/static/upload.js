@@ -329,6 +329,21 @@ const abortControllersBySessionId = new Map()
 const cleanupBySessionId = new Map()
 const transferStats = new Map()
 
+window.addEventListener("beforeunload", (e) => {
+  if (abortControllersBySessionId.size > 0) {
+    e.preventDefault()
+    e.returnValue = "You have active file shares. Closing this page will stop them."
+  }
+})
+
+function formatSpeed(bytesPerSec) {
+  if (bytesPerSec === 0) return "0 B/s"
+  const k = 1024
+  const sizes = ["B/s", "KB/s", "MB/s", "GB/s"]
+  const i = Math.floor(Math.log(bytesPerSec) / Math.log(k))
+  return parseFloat((bytesPerSec / Math.pow(k, i)).toFixed(1)) + " " + sizes[i]
+}
+
 function handleFiles(files) {
   clearError()
   for (const file of files) startTransfer(file).catch((e) => showError(String(e?.message ?? e ?? "error")))
@@ -402,6 +417,8 @@ async function startTransfer(file) {
     const startChannelUpload = async (channelId) => {
       activeUploads++
       item.setState(activeUploads > 1 ? `Uploading (${activeUploads})` : "Uploading")
+      let startTime = Date.now()
+      
       try {
         let res
         try {
@@ -413,6 +430,17 @@ async function startTransfer(file) {
               if (activeUploads !== 1) return
               const pct = total ? Math.min(1, done / total) : 0
               item.setBar(pct)
+              
+              if (done > 0 && total) {
+                const elapsed = (Date.now() - startTime) / 1000
+                if (elapsed > 0.5) {
+                  const speed = done / elapsed
+                  const eta = Math.round((total - done) / speed)
+                  const etaStr = eta > 0 ? ` · ${eta}s left` : ""
+                  item.setState(`Uploading · ${formatSpeed(speed)}${etaStr}`)
+                }
+              }
+              
               if (done > 0) {
                 setStep("stream", true)
                 markStepDone("stream")

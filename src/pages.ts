@@ -4,7 +4,13 @@ const LOGO_SRC = "/static/logo.png"
 
 export function renderUploadPage(session: Session | null, nonce: string) {
   const config = session
-    ? JSON.stringify({ id: session.id, uploadToken: session.uploadToken, downloadToken: session.downloadToken })
+    ? JSON.stringify({
+        id: session.id,
+        uploadToken: session.uploadToken,
+        downloadToken: session.downloadToken,
+        name: session.name,
+        size: session.size,
+      })
     : "{}"
 
   return htmlPage({
@@ -188,7 +194,12 @@ export function renderUploadPage(session: Session | null, nonce: string) {
 }
 
 export function renderDownloadPage(session: Session, nonce: string) {
-  const config = JSON.stringify({ id: session.id, downloadToken: session.downloadToken })
+  const config = JSON.stringify({
+    id: session.id,
+    downloadToken: session.downloadToken,
+    name: session.name,
+    size: session.size,
+  })
 
   return htmlPage({
     title: "StreamDrop — Receive File",
