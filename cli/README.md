@@ -15,13 +15,13 @@ The StreamDrop CLI allows you to securely send and receive files (and entire fol
 ### macOS / Linux (Homebrew)
 ```bash
 brew tap AntonyLeons/tap
-brew install streamdrop
+brew install streamdrop-cli
 ```
 
 ### Windows (Scoop)
 ```powershell
 scoop bucket add streamdrop https://github.com/AntonyLeons/homebrew-tap
-scoop install streamdrop
+scoop install streamdrop-cli
 ```
 
 ### From Source
@@ -36,7 +36,7 @@ bun run cli:build
 You can then link it or move it to your PATH:
 ```bash
 # Example: symlink to your local bin
-ln -s $(pwd)/dist/streamdrop /usr/local/bin/streamdrop
+ln -s $(pwd)/dist/streamdrop-cli /usr/local/bin/streamdrop
 ```
 
 ## Usage

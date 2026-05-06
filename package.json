@@ -9,7 +9,7 @@
     "test": "bun test src",
     "test:e2e": "playwright test",
     "check": "bunx tsc -p tsconfig.json",
-    "cli:build": "bun build cli/index.ts --compile --outfile dist/streamdrop",
+    "cli:build": "bun build cli/index.ts --compile --outfile dist/streamdrop-cli",
     "cli:dev": "bun cli/index.ts"
   },
   "dependencies": {

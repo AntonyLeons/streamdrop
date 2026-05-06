@@ -45,7 +45,7 @@ jobs:
         run: bun install
 
       - name: Build CLI
-        run: bun build cli/index.ts --compile --outfile dist/streamdrop${{ matrix.ext }}
+        run: bun build cli/index.ts --compile --outfile dist/streamdrop-cli${{ matrix.ext }}
 
       - name: Build Server
         run: bun build src/server.ts --compile --outfile dist/streamdrop-server${{ matrix.ext }}
@@ -56,13 +56,13 @@ jobs:
         shell: bash
         run: |
           cd dist
-          tar -czf "streamdrop-${{ matrix.name }}.tar.gz" "streamdrop${{ matrix.ext }}"
+          tar -czf "streamdrop-cli-${{ matrix.name }}.tar.gz" "streamdrop-cli${{ matrix.ext }}"
           tar -czf "streamdrop-server-${{ matrix.name }}.tar.gz" "streamdrop-server${{ matrix.ext }}"
           cd ..
-          shasum -a 256 "dist/streamdrop-${{ matrix.name }}.tar.gz" | awk '{print $1}' > "dist/streamdrop-${{ matrix.name }}.tar.gz.sha256"
+          shasum -a 256 "dist/streamdrop-cli-${{ matrix.name }}.tar.gz" | awk '{print $1}' > "dist/streamdrop-cli-${{ matrix.name }}.tar.gz.sha256"
           shasum -a 256 "dist/streamdrop-server-${{ matrix.name }}.tar.gz" | awk '{print $1}' > "dist/streamdrop-server-${{ matrix.name }}.tar.gz.sha256"
-          echo "file1=dist/streamdrop-${{ matrix.name }}.tar.gz" >> "$GITHUB_OUTPUT"
-          echo "sha1=dist/streamdrop-${{ matrix.name }}.tar.gz.sha256" >> "$GITHUB_OUTPUT"
+          echo "file1=dist/streamdrop-cli-${{ matrix.name }}.tar.gz" >> "$GITHUB_OUTPUT"
+          echo "sha1=dist/streamdrop-cli-${{ matrix.name }}.tar.gz.sha256" >> "$GITHUB_OUTPUT"
           echo "file2=dist/streamdrop-server-${{ matrix.name }}.tar.gz" >> "$GITHUB_OUTPUT"
           echo "sha2=dist/streamdrop-server-${{ matrix.name }}.tar.gz.sha256" >> "$GITHUB_OUTPUT"
 
@@ -73,16 +73,16 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           
-          Compress-Archive -Path "dist/streamdrop${{ matrix.ext }}" -DestinationPath "dist/streamdrop-${{ matrix.name }}.zip" -Force
-          $hash1 = (Get-FileHash "dist/streamdrop-${{ matrix.name }}.zip" -Algorithm SHA256).Hash.ToLower()
-          $hash1 | Out-File -FilePath "dist/streamdrop-${{ matrix.name }}.zip.sha256" -Encoding ascii -Force
+          Compress-Archive -Path "dist/streamdrop-cli${{ matrix.ext }}" -DestinationPath "dist/streamdrop-cli-${{ matrix.name }}.zip" -Force
+          $hash1 = (Get-FileHash "dist/streamdrop-cli-${{ matrix.name }}.zip" -Algorithm SHA256).Hash.ToLower()
+          $hash1 | Out-File -FilePath "dist/streamdrop-cli-${{ matrix.name }}.zip.sha256" -Encoding ascii -Force
           
           Compress-Archive -Path "dist/streamdrop-server${{ matrix.ext }}" -DestinationPath "dist/streamdrop-server-${{ matrix.name }}.zip" -Force
           $hash2 = (Get-FileHash "dist/streamdrop-server-${{ matrix.name }}.zip" -Algorithm SHA256).Hash.ToLower()
           $hash2 | Out-File -FilePath "dist/streamdrop-server-${{ matrix.name }}.zip.sha256" -Encoding ascii -Force
           
-          "file1=dist/streamdrop-${{ matrix.name }}.zip" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          "sha1=dist/streamdrop-${{ matrix.name }}.zip.sha256" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "file1=dist/streamdrop-cli-${{ matrix.name }}.zip" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "sha1=dist/streamdrop-cli-${{ matrix.name }}.zip.sha256" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           "file2=dist/streamdrop-server-${{ matrix.name }}.zip" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           "sha2=dist/streamdrop-server-${{ matrix.name }}.zip.sha256" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
@@ -112,10 +112,10 @@ jobs:
           gh release download $TAG -p "*.sha256"
           
           # Read SHAs into environment variables
-          echo "MAC_INTEL_SHA=$(cat streamdrop-macos-x64.tar.gz.sha256)" >> $GITHUB_ENV
-          echo "MAC_ARM_SHA=$(cat streamdrop-macos-arm64.tar.gz.sha256)" >> $GITHUB_ENV
-          echo "LINUX_INTEL_SHA=$(cat streamdrop-linux-x64.tar.gz.sha256)" >> $GITHUB_ENV
-          echo "WIN_INTEL_SHA=$(cat streamdrop-windows-x64.zip.sha256)" >> $GITHUB_ENV
+          echo "MAC_INTEL_SHA=$(cat streamdrop-cli-macos-x64.tar.gz.sha256)" >> $GITHUB_ENV
+          echo "MAC_ARM_SHA=$(cat streamdrop-cli-macos-arm64.tar.gz.sha256)" >> $GITHUB_ENV
+          echo "LINUX_INTEL_SHA=$(cat streamdrop-cli-linux-x64.tar.gz.sha256)" >> $GITHUB_ENV
+          echo "WIN_INTEL_SHA=$(cat streamdrop-cli-windows-x64.zip.sha256)" >> $GITHUB_ENV
 
       - name: Update Package Managers (Homebrew & Scoop)
         uses: actions/checkout@v4
@@ -129,18 +129,18 @@ jobs:
           cd pkg-repo
           
           # Process Homebrew Template
-          if [ -f Formula/streamdrop.rb.template ]; then
-            envsubst < Formula/streamdrop.rb.template > Formula/streamdrop.rb
-            git add Formula/streamdrop.rb
+          if [ -f Formula/streamdrop-cli.rb.template ]; then
+            envsubst < Formula/streamdrop-cli.rb.template > Formula/streamdrop-cli.rb
+            git add Formula/streamdrop-cli.rb
           fi
           
           # Process Scoop Template
-          if [ -f bucket/streamdrop.json.template ]; then
-            envsubst < bucket/streamdrop.json.template > bucket/streamdrop.json
-            git add bucket/streamdrop.json
+          if [ -f bucket/streamdrop-cli.json.template ]; then
+            envsubst < bucket/streamdrop-cli.json.template > bucket/streamdrop-cli.json
+            git add bucket/streamdrop-cli.json
           fi
           
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git commit -m "Bump streamdrop to ${{ github.event.release.tag_name }}" || echo "No changes to commit"
+          git commit -m "Bump streamdrop-cli to ${{ github.event.release.tag_name }}" || echo "No changes to commit"
           git push
