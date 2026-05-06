@@ -50,51 +50,45 @@ jobs:
       - name: Build Server
         run: bun build src/server.ts --compile --outfile dist/streamdrop-server${{ matrix.ext }}
 
-      - name: Package (tar.gz)
-        if: matrix.pack == 'tar'
-        id: package_tar
+      - name: Prepare Binaries
+        id: prepare_bin
         shell: bash
         run: |
           cd dist
-          tar -czf "streamdrop-cli-${{ matrix.name }}.tar.gz" "streamdrop-cli${{ matrix.ext }}"
-          tar -czf "streamdrop-server-${{ matrix.name }}.tar.gz" "streamdrop-server${{ matrix.ext }}"
-          cd ..
-          shasum -a 256 "dist/streamdrop-cli-${{ matrix.name }}.tar.gz" | awk '{print $1}' > "dist/streamdrop-cli-${{ matrix.name }}.tar.gz.sha256"
-          shasum -a 256 "dist/streamdrop-server-${{ matrix.name }}.tar.gz" | awk '{print $1}' > "dist/streamdrop-server-${{ matrix.name }}.tar.gz.sha256"
-          echo "file1=dist/streamdrop-cli-${{ matrix.name }}.tar.gz" >> "$GITHUB_OUTPUT"
-          echo "sha1=dist/streamdrop-cli-${{ matrix.name }}.tar.gz.sha256" >> "$GITHUB_OUTPUT"
-          echo "file2=dist/streamdrop-server-${{ matrix.name }}.tar.gz" >> "$GITHUB_OUTPUT"
-          echo "sha2=dist/streamdrop-server-${{ matrix.name }}.tar.gz.sha256" >> "$GITHUB_OUTPUT"
-
-      - name: Package (zip)
-        if: matrix.pack == 'zip'
-        id: package_zip
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
           
-          Compress-Archive -Path "dist/streamdrop-cli${{ matrix.ext }}" -DestinationPath "dist/streamdrop-cli-${{ matrix.name }}.zip" -Force
-          $hash1 = (Get-FileHash "dist/streamdrop-cli-${{ matrix.name }}.zip" -Algorithm SHA256).Hash.ToLower()
-          $hash1 | Out-File -FilePath "dist/streamdrop-cli-${{ matrix.name }}.zip.sha256" -Encoding ascii -Force
-          
-          Compress-Archive -Path "dist/streamdrop-server${{ matrix.ext }}" -DestinationPath "dist/streamdrop-server-${{ matrix.name }}.zip" -Force
-          $hash2 = (Get-FileHash "dist/streamdrop-server-${{ matrix.name }}.zip" -Algorithm SHA256).Hash.ToLower()
-          $hash2 | Out-File -FilePath "dist/streamdrop-server-${{ matrix.name }}.zip.sha256" -Encoding ascii -Force
-          
-          "file1=dist/streamdrop-cli-${{ matrix.name }}.zip" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          "sha1=dist/streamdrop-cli-${{ matrix.name }}.zip.sha256" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          "file2=dist/streamdrop-server-${{ matrix.name }}.zip" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          "sha2=dist/streamdrop-server-${{ matrix.name }}.zip.sha256" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          if [[ "${{ matrix.ext }}" == ".exe" ]]; then
+            mv "streamdrop-cli.exe" "streamdrop-cli-${{ matrix.name }}.exe"
+            mv "streamdrop-server.exe" "streamdrop-server-${{ matrix.name }}.exe"
+            
+            shasum -a 256 "streamdrop-cli-${{ matrix.name }}.exe" | awk '{print $1}' > "streamdrop-cli-${{ matrix.name }}.exe.sha256"
+            shasum -a 256 "streamdrop-server-${{ matrix.name }}.exe" | awk '{print $1}' > "streamdrop-server-${{ matrix.name }}.exe.sha256"
+            
+            echo "file1=dist/streamdrop-cli-${{ matrix.name }}.exe" >> "$GITHUB_OUTPUT"
+            echo "sha1=dist/streamdrop-cli-${{ matrix.name }}.exe.sha256" >> "$GITHUB_OUTPUT"
+            echo "file2=dist/streamdrop-server-${{ matrix.name }}.exe" >> "$GITHUB_OUTPUT"
+            echo "sha2=dist/streamdrop-server-${{ matrix.name }}.exe.sha256" >> "$GITHUB_OUTPUT"
+          else
+            mv "streamdrop-cli" "streamdrop-cli-${{ matrix.name }}"
+            mv "streamdrop-server" "streamdrop-server-${{ matrix.name }}"
+            
+            shasum -a 256 "streamdrop-cli-${{ matrix.name }}" | awk '{print $1}' > "streamdrop-cli-${{ matrix.name }}.sha256"
+            shasum -a 256 "streamdrop-server-${{ matrix.name }}" | awk '{print $1}' > "streamdrop-server-${{ matrix.name }}.sha256"
+            
+            echo "file1=dist/streamdrop-cli-${{ matrix.name }}" >> "$GITHUB_OUTPUT"
+            echo "sha1=dist/streamdrop-cli-${{ matrix.name }}.sha256" >> "$GITHUB_OUTPUT"
+            echo "file2=dist/streamdrop-server-${{ matrix.name }}" >> "$GITHUB_OUTPUT"
+            echo "sha2=dist/streamdrop-server-${{ matrix.name }}.sha256" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.release.tag_name }}
           files: |
-            ${{ steps.package_tar.outputs.file1 || steps.package_zip.outputs.file1 }}
-            ${{ steps.package_tar.outputs.sha1 || steps.package_zip.outputs.sha1 }}
-            ${{ steps.package_tar.outputs.file2 || steps.package_zip.outputs.file2 }}
-            ${{ steps.package_tar.outputs.sha2 || steps.package_zip.outputs.sha2 }}
+            ${{ steps.prepare_bin.outputs.file1 }}
+            ${{ steps.prepare_bin.outputs.sha1 }}
+            ${{ steps.prepare_bin.outputs.file2 }}
+            ${{ steps.prepare_bin.outputs.sha2 }}
 
   publish-managers:
     name: Publish to Package Managers
@@ -112,10 +106,11 @@ jobs:
           gh release download $TAG -p "*.sha256"
           
           # Read SHAs into environment variables
-          echo "MAC_INTEL_SHA=$(cat streamdrop-cli-macos-x64.tar.gz.sha256)" >> $GITHUB_ENV
-          echo "MAC_ARM_SHA=$(cat streamdrop-cli-macos-arm64.tar.gz.sha256)" >> $GITHUB_ENV
-          echo "LINUX_INTEL_SHA=$(cat streamdrop-cli-linux-x64.tar.gz.sha256)" >> $GITHUB_ENV
-          echo "WIN_INTEL_SHA=$(cat streamdrop-cli-windows-x64.zip.sha256)" >> $GITHUB_ENV
+          echo "MAC_INTEL_SHA=$(cat streamdrop-cli-macos-x64.sha256)" >> $GITHUB_ENV
+          echo "MAC_ARM_SHA=$(cat streamdrop-cli-macos-arm64.sha256)" >> $GITHUB_ENV
+          echo "LINUX_INTEL_SHA=$(cat streamdrop-cli-linux-x64.sha256)" >> $GITHUB_ENV
+          echo "WIN_INTEL_SHA=$(cat streamdrop-cli-windows-x64.exe.sha256)" >> $GITHUB_ENV
+
 
       - name: Update Package Managers (Homebrew & Scoop)
         uses: actions/checkout@v4
