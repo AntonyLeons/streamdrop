@@ -1,4 +1,4 @@
-name: Release CLI
+name: Release Binaries
 
 on:
   release:
@@ -44,8 +44,11 @@ jobs:
       - name: Install
         run: bun install
 
-      - name: Build
+      - name: Build CLI
         run: bun build cli/index.ts --compile --outfile dist/streamdrop${{ matrix.ext }}
+
+      - name: Build Server
+        run: bun build src/server.ts --compile --outfile dist/streamdrop-server${{ matrix.ext }}
 
       - name: Package (tar.gz)
         if: matrix.pack == 'tar'
@@ -54,10 +57,14 @@ jobs:
         run: |
           cd dist
           tar -czf "streamdrop-${{ matrix.name }}.tar.gz" "streamdrop${{ matrix.ext }}"
+          tar -czf "streamdrop-server-${{ matrix.name }}.tar.gz" "streamdrop-server${{ matrix.ext }}"
           cd ..
           shasum -a 256 "dist/streamdrop-${{ matrix.name }}.tar.gz" | awk '{print $1}' > "dist/streamdrop-${{ matrix.name }}.tar.gz.sha256"
-          echo "file=dist/streamdrop-${{ matrix.name }}.tar.gz" >> "$GITHUB_OUTPUT"
-          echo "sha=dist/streamdrop-${{ matrix.name }}.tar.gz.sha256" >> "$GITHUB_OUTPUT"
+          shasum -a 256 "dist/streamdrop-server-${{ matrix.name }}.tar.gz" | awk '{print $1}' > "dist/streamdrop-server-${{ matrix.name }}.tar.gz.sha256"
+          echo "file1=dist/streamdrop-${{ matrix.name }}.tar.gz" >> "$GITHUB_OUTPUT"
+          echo "sha1=dist/streamdrop-${{ matrix.name }}.tar.gz.sha256" >> "$GITHUB_OUTPUT"
+          echo "file2=dist/streamdrop-server-${{ matrix.name }}.tar.gz" >> "$GITHUB_OUTPUT"
+          echo "sha2=dist/streamdrop-server-${{ matrix.name }}.tar.gz.sha256" >> "$GITHUB_OUTPUT"
 
       - name: Package (zip)
         if: matrix.pack == 'zip'
@@ -65,19 +72,29 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
+          
           Compress-Archive -Path "dist/streamdrop${{ matrix.ext }}" -DestinationPath "dist/streamdrop-${{ matrix.name }}.zip" -Force
-          $hash = (Get-FileHash "dist/streamdrop-${{ matrix.name }}.zip" -Algorithm SHA256).Hash.ToLower()
-          $hash | Out-File -FilePath "dist/streamdrop-${{ matrix.name }}.zip.sha256" -Encoding ascii -Force
-          "file=dist/streamdrop-${{ matrix.name }}.zip" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          "sha=dist/streamdrop-${{ matrix.name }}.zip.sha256" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          $hash1 = (Get-FileHash "dist/streamdrop-${{ matrix.name }}.zip" -Algorithm SHA256).Hash.ToLower()
+          $hash1 | Out-File -FilePath "dist/streamdrop-${{ matrix.name }}.zip.sha256" -Encoding ascii -Force
+          
+          Compress-Archive -Path "dist/streamdrop-server${{ matrix.ext }}" -DestinationPath "dist/streamdrop-server-${{ matrix.name }}.zip" -Force
+          $hash2 = (Get-FileHash "dist/streamdrop-server-${{ matrix.name }}.zip" -Algorithm SHA256).Hash.ToLower()
+          $hash2 | Out-File -FilePath "dist/streamdrop-server-${{ matrix.name }}.zip.sha256" -Encoding ascii -Force
+          
+          "file1=dist/streamdrop-${{ matrix.name }}.zip" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "sha1=dist/streamdrop-${{ matrix.name }}.zip.sha256" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "file2=dist/streamdrop-server-${{ matrix.name }}.zip" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "sha2=dist/streamdrop-server-${{ matrix.name }}.zip.sha256" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.release.tag_name }}
           files: |
-            ${{ steps.package_tar.outputs.file || steps.package_zip.outputs.file }}
-            ${{ steps.package_tar.outputs.sha || steps.package_zip.outputs.sha }}
+            ${{ steps.package_tar.outputs.file1 || steps.package_zip.outputs.file1 }}
+            ${{ steps.package_tar.outputs.sha1 || steps.package_zip.outputs.sha1 }}
+            ${{ steps.package_tar.outputs.file2 || steps.package_zip.outputs.file2 }}
+            ${{ steps.package_tar.outputs.sha2 || steps.package_zip.outputs.sha2 }}
 
   publish-managers:
     name: Publish to Package Managers

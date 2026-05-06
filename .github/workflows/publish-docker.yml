@@ -49,13 +49,3 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           outputs: type=docker,dest=/tmp/streamdrop-docker.tar
-
-      - name: Compress Docker image
-        run: |
-          gzip -c /tmp/streamdrop-docker.tar > /tmp/streamdrop-docker.tar.gz
-
-      - name: Upload Docker image to Release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ github.event.release.tag_name }}
-          files: /tmp/streamdrop-docker.tar.gz

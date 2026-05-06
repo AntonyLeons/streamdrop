@@ -1,0 +1,42 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:github-actions
+
+      - name: Deploy via SSH over Tailscale
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_TAILSCALE_IP }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            # 1. Download the latest server binary for Linux x64
+            wget -qO streamdrop-server.tar.gz "https://github.com/AntonyLeons/streamdrop/releases/latest/download/streamdrop-server-linux-x64.tar.gz"
+            
+            # 2. Extract it
+            tar -xzf streamdrop-server.tar.gz
+            
+            # 3. Move it to the install location
+            sudo mv streamdrop-server /usr/local/bin/streamdrop-server
+            sudo chmod +x /usr/local/bin/streamdrop-server
+            
+            # 4. Clean up
+            rm streamdrop-server.tar.gz
+            
+            # 5. Restart the systemd service to apply the new binary
+            sudo systemctl restart streamdrop
+            
+            echo "Deploy successful!"
