@@ -25,7 +25,13 @@ jobs:
         run: bunx tsc -p tsconfig.json --noEmit
 
       - name: Run tests
-        run: bun test
+        run: bun test tests/cli.test.ts src/
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright E2E tests
+        run: npx playwright test
 
       - name: Build CLI (Dry Run)
         run: bun build cli/index.ts --compile --outfile dist/streamdrop-cli
