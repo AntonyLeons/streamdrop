@@ -105,6 +105,17 @@ test("DELETE /session/:uploadToken deletes session", async () => {
   expect(res2.status).toBe(404)
 })
 
+test("GET /stats returns stats", async () => {
+  const app = createApp()
+  const res = await app.request("/stats")
+  expect(res.status).toBe(200)
+  const data = await res.json()
+  expect(data).toHaveProperty("totalSessions")
+  expect(data).toHaveProperty("totalBytes")
+  expect(data).toHaveProperty("totalFiles")
+  expect(data).toHaveProperty("activeSessions")
+})
+
 test("GET / returns 503 when session cap is reached", async () => {
   const app = createApp()
   const res = await app.request("/")

@@ -10,9 +10,11 @@ import {
   type Session,
   deleteSession,
   waitForReceiverWithTimeout,
+  getSessionCount,
 } from "./sessions"
 import { renderDownloadPage, renderNotFoundPage, renderUploadPage, renderServiceUnavailablePage } from "./pages"
 import { getQRCodeVendorJS } from "./vendor/qrcode"
+import { incrementBytes, incrementFiles, getStats } from "./stats"
 
 type AppEnv = {
   Variables: {
@@ -84,6 +86,8 @@ export function createApp() {
   app.use("/static/*", serveStatic({ root: "./public" }))
 
   app.get("/health", (c) => c.json({ ok: true }))
+
+  app.get("/stats", (c) => c.json(getStats(getSessionCount()), 200, { "cache-control": "no-store" }))
 
   app.get("/", (c) => {
     const session = createSession()
@@ -173,6 +177,7 @@ export function createApp() {
 
     try {
       await pipeToController(ch.controller, body, c.req.raw.signal)
+      incrementFiles()
     } catch (e) {
       const isAbort =
         (e instanceof DOMException && e.name === "AbortError") ||
@@ -210,6 +215,7 @@ export function createApp() {
 
     try {
       await pipeToController(ch.controller, body, c.req.raw.signal)
+      incrementFiles()
     } catch (e) {
       const isAbort =
         (e instanceof DOMException && e.name === "AbortError") ||
@@ -437,6 +443,9 @@ async function pipeToController(
       const { value, done } = await reader.read()
       if (done) break
       if (!value || value.byteLength === 0) continue
+      
+      incrementBytes(value.byteLength)
+      
       for (let i = 0; i < 200; i++) {
         if (signal?.aborted) throw new DOMException("Aborted", "AbortError")
         const desired = controller.desiredSize

@@ -14,7 +14,7 @@ test("encrypt->decrypt roundtrip (multi-chunk)", async () => {
   const file = makeFile(plain)
   const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"])
 
-  const enc = cryptoMod.createEncryptStream({ file, key, sessionId: "test", chunkSize: 64 * 1024 })
+  const enc = cryptoMod.createEncryptStream({ stream: file.stream(), size: file.size, key, sessionId: "test", chunkSize: 64 * 1024 })
   const cipher = await readAll(enc)
 
   const key2 = await crypto.subtle.importKey(
@@ -43,7 +43,7 @@ test("decrypt detects tampering", async () => {
   const file = makeFile(plain)
   const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"])
 
-  const enc = cryptoMod.createEncryptStream({ file, key, sessionId: "test2", chunkSize: 64 * 1024 })
+  const enc = cryptoMod.createEncryptStream({ stream: file.stream(), size: file.size, key, sessionId: "test2", chunkSize: 64 * 1024 })
   const cipher = await readAll(enc)
   const idx = Math.min(40, cipher.length - 1)
   cipher[idx] = (cipher[idx] ?? 0) ^ 0x01

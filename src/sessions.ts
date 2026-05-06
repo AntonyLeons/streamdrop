@@ -1,3 +1,5 @@
+import { incrementSessions } from "./stats"
+
 export type SessionStatus = "waiting" | "active" | "done"
 
 export type Waiter = { resolve: () => void; reject: (err: Error) => void }
@@ -66,6 +68,9 @@ export function createSession(now = Date.now()): Session | null {
   sessionsById.set(id, session)
   sessionsByUploadToken.set(uploadToken, session)
   sessionsByDownloadToken.set(downloadToken, session)
+  
+  incrementSessions()
+  
   return session
 }
 
