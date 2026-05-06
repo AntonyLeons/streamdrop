@@ -12,11 +12,23 @@ The StreamDrop CLI allows you to securely send and receive files (and entire fol
 
 ## Installation
 
+### macOS / Linux (Homebrew)
+```bash
+brew tap AntonyLeons/tap
+brew install streamdrop
+```
+
+### Windows (Scoop)
+```powershell
+scoop bucket add streamdrop https://github.com/AntonyLeons/homebrew-tap
+scoop install streamdrop
+```
+
 ### From Source
 Ensure you have [Bun](https://bun.sh/) installed, then build the binary:
 
 ```bash
-git clone https://github.com/yourusername/streamdrop.git
+git clone https://github.com/AntonyLeons/streamdrop.git
 cd streamdrop
 bun run cli:build
 ```

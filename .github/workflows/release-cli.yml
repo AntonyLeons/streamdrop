@@ -78,3 +78,52 @@ jobs:
           files: |
             ${{ steps.package_tar.outputs.file || steps.package_zip.outputs.file }}
             ${{ steps.package_tar.outputs.sha || steps.package_zip.outputs.sha }}
+
+  publish-managers:
+    name: Publish to Package Managers
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Release SHAs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          echo "VERSION=${TAG#v}" >> $GITHUB_ENV
+          
+          # Download all the .sha256 files from the current release
+          gh release download $TAG -p "*.sha256"
+          
+          # Read SHAs into environment variables
+          echo "MAC_INTEL_SHA=$(cat streamdrop-macos-x64.tar.gz.sha256)" >> $GITHUB_ENV
+          echo "MAC_ARM_SHA=$(cat streamdrop-macos-arm64.tar.gz.sha256)" >> $GITHUB_ENV
+          echo "LINUX_INTEL_SHA=$(cat streamdrop-linux-x64.tar.gz.sha256)" >> $GITHUB_ENV
+          echo "WIN_INTEL_SHA=$(cat streamdrop-windows-x64.zip.sha256)" >> $GITHUB_ENV
+
+      - name: Update Package Managers (Homebrew & Scoop)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/homebrew-tap
+          token: ${{ secrets.PAT_TOKEN }}
+          path: pkg-repo
+
+      - name: Push Updates
+        run: |
+          cd pkg-repo
+          
+          # Process Homebrew Template
+          if [ -f Formula/streamdrop.rb.template ]; then
+            envsubst < Formula/streamdrop.rb.template > Formula/streamdrop.rb
+            git add Formula/streamdrop.rb
+          fi
+          
+          # Process Scoop Template
+          if [ -f bucket/streamdrop.json.template ]; then
+            envsubst < bucket/streamdrop.json.template > bucket/streamdrop.json
+            git add bucket/streamdrop.json
+          fi
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "Bump streamdrop to ${{ github.event.release.tag_name }}" || echo "No changes to commit"
+          git push
