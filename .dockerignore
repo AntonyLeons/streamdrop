@@ -1,0 +1,9 @@
+node_modules
+.git
+.github
+dist
+tests
+.vscode
+*.md
+.dockerignore
+Dockerfile
