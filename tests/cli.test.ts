@@ -1,9 +1,10 @@
 import { test, expect, beforeAll, afterAll } from "bun:test"
 import { spawn } from "node:child_process"
 import { randomBytes } from "node:crypto"
-import { rm, writeFile, readFile } from "node:fs/promises"
+import { rm, writeFile, readFile, mkdir } from "node:fs/promises"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
+import { existsSync } from "node:fs"
 import { createApp } from "../src/app"
 
 let testServer: any
@@ -83,4 +84,88 @@ test("CLI sends and receives a file successfully", async () => {
   // Cleanup
   await rm(testFilePath, { force: true })
   await rm(receivedFilePath, { force: true })
+}, 15000)
+
+test("CLI handles file overwrite protection correctly", async () => {
+  const testFileName = `cli-test-overwrite-${Date.now()}.bin`
+  const testFilePath = join(tmpdir(), testFileName)
+  const receivedFilePath1 = join(process.cwd(), testFileName)
+  const receivedFilePath2 = join(process.cwd(), `cli-test-overwrite-${Date.now()} (1).bin`) // We expect this, but the naming logic handles the base name
+
+  const testData = randomBytes(1024)
+  await writeFile(testFilePath, testData)
+
+  let shareUrl = ""
+  const sender = spawn(cliBinaryPath, ["send", testFilePath, "--server", serverUrl])
+  
+  await new Promise<void>((resolve, reject) => {
+    let output = ""
+    sender.stdout.on("data", (data) => {
+      output += data.toString()
+      const match = output.match(/Share URL: (http[^\s]+)/)
+      if (match) {
+        shareUrl = match[1]
+        resolve()
+      }
+    })
+    sender.on("error", reject)
+  })
+
+  // Receiver 1
+  const receiver1 = spawn(cliBinaryPath, ["receive", shareUrl, "--server", serverUrl])
+  await new Promise<void>((resolve) => receiver1.on("close", resolve))
+  expect(existsSync(receivedFilePath1)).toBe(true)
+
+  // Receiver 2 (should create 'filename (1).bin')
+  const receiver2 = spawn(cliBinaryPath, ["receive", shareUrl, "--server", serverUrl])
+  await new Promise<void>((resolve) => receiver2.on("close", resolve))
+
+  const expectedOverwrittenFile = receivedFilePath1.replace(".bin", " (1).bin")
+  expect(existsSync(expectedOverwrittenFile)).toBe(true)
+
+  sender.kill()
+  
+  await rm(testFilePath, { force: true })
+  await rm(receivedFilePath1, { force: true })
+  await rm(expectedOverwrittenFile, { force: true })
+}, 15000)
+
+test("CLI sends and extracts a folder automatically", async () => {
+  const dirName = `cli-test-dir-${Date.now()}`
+  const dirPath = join(tmpdir(), dirName)
+  const receivedDirPath = join(process.cwd(), dirName)
+
+  await mkdir(dirPath, { recursive: true })
+  await writeFile(join(dirPath, "hello.txt"), "hello world")
+  await writeFile(join(dirPath, "nested.bin"), randomBytes(1024))
+
+  let shareUrl = ""
+  const sender = spawn(cliBinaryPath, ["send", dirPath, "--server", serverUrl])
+  
+  await new Promise<void>((resolve, reject) => {
+    let output = ""
+    sender.stdout.on("data", (data) => {
+      output += data.toString()
+      const match = output.match(/Share URL: (http[^\s]+)/)
+      if (match) {
+        shareUrl = match[1]
+        resolve()
+      }
+    })
+    sender.on("error", reject)
+  })
+
+  const receiver = spawn(cliBinaryPath, ["receive", shareUrl, "--server", serverUrl])
+  await new Promise<void>((resolve) => receiver.on("close", resolve))
+  sender.kill()
+
+  // Verify extraction
+  expect(existsSync(receivedDirPath)).toBe(true)
+  expect(existsSync(join(receivedDirPath, "hello.txt"))).toBe(true)
+  const helloContent = await readFile(join(receivedDirPath, "hello.txt"), "utf8")
+  expect(helloContent).toBe("hello world")
+
+  // Cleanup
+  await rm(dirPath, { recursive: true, force: true })
+  await rm(receivedDirPath, { recursive: true, force: true })
 }, 15000)
