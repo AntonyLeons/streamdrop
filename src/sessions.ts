@@ -17,6 +17,7 @@ export type Session = {
   uploadToken: string
   downloadToken: string
   fileName?: string
+  fileSize?: number
   createdAt: number
   lastTouchedAt: number
   status: SessionStatus

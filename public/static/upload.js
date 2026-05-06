@@ -80,7 +80,7 @@ async function ensureRawCliSession(root) {
   const sessionId = root.dataset.sessionId || ""
   if (!sessionId) return
   const file = fileBySessionId.get(sessionId)
-  const info = await getOrCreateCliRawSession(sessionId, file?.name || "")
+  const info = await getOrCreateCliRawSession(sessionId, file)
   if (!info) return
 
   const btnCurl = root.querySelector('button[data-copy-kind="curl"]')
@@ -93,11 +93,11 @@ async function ensureRawCliSession(root) {
   if (file && abort) startRawHosting(sessionId, info, file, abort.signal)
 }
 
-async function getOrCreateCliRawSession(sessionId, fileName) {
+async function getOrCreateCliRawSession(sessionId, file) {
   const existing = cliRawBySessionId.get(sessionId)
   if (existing) return existing
 
-  const qs = fileName ? `?name=${encodeURIComponent(fileName)}` : ""
+  const qs = file ? `?name=${encodeURIComponent(file.name)}&size=${file.size}` : ""
   const res = await fetch(`/session${qs}`, { method: "POST", headers: { accept: "application/json" } })
   if (!res.ok) return null
   const data = await res.json()
@@ -350,7 +350,7 @@ function handleFiles(files) {
 }
 
 async function startTransfer(file) {
-  const session = await getOrCreateSession()
+  const session = await getOrCreateSession(file)
 
   setStep("key", true)
   setMeta(`${file.name} · ${prettyBytes(file.size)}`)
@@ -696,13 +696,14 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms))
 }
 
-async function getOrCreateSession() {
+async function getOrCreateSession(file) {
   if (!seedUsed && seedCfg && seedCfg.id && seedCfg.uploadToken && seedCfg.downloadToken) {
     seedUsed = true
     return seedCfg
   }
 
-  const res = await fetch("/session", { method: "POST", headers: { accept: "application/json" } })
+  const qs = file ? `?name=${encodeURIComponent(file.name)}&size=${file.size}` : ""
+  const res = await fetch(`/session${qs}`, { method: "POST", headers: { accept: "application/json" } })
   if (!res.ok) {
     const msg = await safeText(res)
     throw new Error(msg || `session_failed_${res.status}`)

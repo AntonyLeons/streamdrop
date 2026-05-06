@@ -136,7 +136,12 @@ a:hover { color: var(--text); }
 }
 
 /* ── Header ──────────────────────────────────────────── */
-.hero { margin-bottom: 32px; }
+.hero { 
+  margin-bottom: 32px; 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+}
 .brand { display: flex; gap: 16px; align-items: center; }
 
 .logo {

@@ -102,6 +102,11 @@ export function createApp() {
     if (!session) return c.json({ error: "at_capacity" }, 503, { "cache-control": "no-store" })
     const name = c.req.query("name") || undefined
     if (name) session.fileName = safeFileName(name) || undefined
+    const sizeStr = c.req.query("size")
+    if (sizeStr) {
+      const parsedSize = parseInt(sizeStr, 10)
+      if (!isNaN(parsedSize) && parsedSize >= 0) session.fileSize = parsedSize
+    }
     return c.json(
       { id: session.id, uploadToken: session.uploadToken, downloadToken: session.downloadToken },
       200,
