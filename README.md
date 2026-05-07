@@ -76,6 +76,3 @@ This app keeps some HTTP connections open (receiver wait / downloads). If you're
 ## Docs (dev)
 
 - [docs/implementation.md](./docs/implementation.md)
-- [spec.md](./spec.md)
-- [checklist.md](./checklist.md)
-- [tasks.md](./tasks.md)
