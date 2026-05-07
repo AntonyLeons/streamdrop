@@ -76,3 +76,8 @@ This app keeps some HTTP connections open (receiver wait / downloads). If you're
 ## Docs (dev)
 
 - [docs/implementation.md](./docs/implementation.md)
+
+## IOS/Webkit
+
+Readable stream API is not supported in IOS/Webkit.
+Please use Chrome or Firefox for uploading.
