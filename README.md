@@ -64,8 +64,8 @@ PORT=3000 NODE_ENV=production bun run start
 - `PORT` (default: `3000`)
 - `NODE_ENV` (set to `production` to disable the local startup log)
 - `PUBLIC_ORIGIN` (recommended in production: `https://streamdrop.app`)
-- `MAX_SESSIONS` (default: `10000`)
-- `MAX_RECEIVERS` (default: `1000`)
+- `MAX_SESSIONS` (default: `50000`)
+- `MAX_RECEIVERS` (default: `2000`)
 - `SESSION_TTL_MS` (default: `86400000`)
 - `REAPER_INTERVAL_MS` (default: `60000`)
 

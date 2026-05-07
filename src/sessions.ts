@@ -27,8 +27,8 @@ export type Session = {
   receiverWaiters: Set<Waiter>
 }
 
-const DEFAULT_MAX_RECEIVERS = 1000
-const DEFAULT_MAX_SESSIONS = 10000
+const DEFAULT_MAX_RECEIVERS = 2000
+const DEFAULT_MAX_SESSIONS = 50000
 const DEFAULT_SESSION_TTL_MS = 12 * 60 * 60 * 1000
 const DEFAULT_REAPER_INTERVAL_MS = 60 * 1000
 
