@@ -13,12 +13,13 @@
     "cli:dev": "bun cli/index.ts"
   },
   "dependencies": {
-    "hono": "^4.9.0",
+    "@noble/curves": "^2.2.0",
+    "hono": "^4.12.18",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
     "@types/bun": "latest",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3"
   }
 }
