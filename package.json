@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "bun --watch src/server.ts",
     "start": "bun src/server.ts",
-    "test": "bun test src",
+    "test": "bun test src tests/*.test.ts",
     "test:e2e": "playwright test",
     "check": "bunx tsc -p tsconfig.json",
     "cli:build": "bun build cli/index.ts --compile --outfile dist/streamdrop-cli",
