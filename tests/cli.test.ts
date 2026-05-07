@@ -9,7 +9,8 @@ import { createApp } from "../src/app"
 
 let testServer: any
 let serverUrl: string
-let cliBinaryPath = join(process.cwd(), "dist", "streamdrop")
+const bunPath = process.execPath
+const cliScriptPath = join(process.cwd(), "cli", "index.ts")
 
 beforeAll(async () => {
   const app = createApp()
@@ -37,7 +38,7 @@ test("CLI sends and receives a file successfully", async () => {
   let shareUrl = ""
   
   // Start the sender
-  const sender = spawn(cliBinaryPath, ["send", testFilePath, "--server", serverUrl])
+  const sender = spawn(bunPath, [cliScriptPath, "send", testFilePath, "--server", serverUrl])
   
   // Read sender output to get the share URL
   await new Promise<void>((resolve, reject) => {
@@ -57,7 +58,7 @@ test("CLI sends and receives a file successfully", async () => {
   expect(shareUrl).toBeTruthy()
 
   // Start the receiver
-  const receiver = spawn(cliBinaryPath, ["receive", shareUrl, "--server", serverUrl])
+  const receiver = spawn(bunPath, [cliScriptPath, "receive", shareUrl, "--server", serverUrl])
   
   await new Promise<void>((resolve, reject) => {
     receiver.on("close", (code) => {
@@ -96,7 +97,7 @@ test("CLI handles file overwrite protection correctly", async () => {
   await writeFile(testFilePath, testData)
 
   let shareUrl = ""
-  const sender = spawn(cliBinaryPath, ["send", testFilePath, "--server", serverUrl])
+  const sender = spawn(bunPath, [cliScriptPath, "send", testFilePath, "--server", serverUrl])
   
   await new Promise<void>((resolve, reject) => {
     let output = ""
@@ -112,12 +113,12 @@ test("CLI handles file overwrite protection correctly", async () => {
   })
 
   // Receiver 1
-  const receiver1 = spawn(cliBinaryPath, ["receive", shareUrl, "--server", serverUrl])
+  const receiver1 = spawn(bunPath, [cliScriptPath, "receive", shareUrl, "--server", serverUrl])
   await new Promise<void>((resolve) => receiver1.on("close", resolve))
   expect(existsSync(receivedFilePath1)).toBe(true)
 
   // Receiver 2 (should create 'filename (1).bin')
-  const receiver2 = spawn(cliBinaryPath, ["receive", shareUrl, "--server", serverUrl])
+  const receiver2 = spawn(bunPath, [cliScriptPath, "receive", shareUrl, "--server", serverUrl])
   await new Promise<void>((resolve) => receiver2.on("close", resolve))
 
   const expectedOverwrittenFile = receivedFilePath1.replace(".bin", " (1).bin")
@@ -140,7 +141,7 @@ test("CLI sends and extracts a folder automatically", async () => {
   await writeFile(join(dirPath, "nested.bin"), randomBytes(1024))
 
   let shareUrl = ""
-  const sender = spawn(cliBinaryPath, ["send", dirPath, "--server", serverUrl])
+  const sender = spawn(bunPath, [cliScriptPath, "send", dirPath, "--server", serverUrl])
   
   await new Promise<void>((resolve, reject) => {
     let output = ""
@@ -155,7 +156,7 @@ test("CLI sends and extracts a folder automatically", async () => {
     sender.on("error", reject)
   })
 
-  const receiver = spawn(cliBinaryPath, ["receive", shareUrl, "--server", serverUrl])
+  const receiver = spawn(bunPath, [cliScriptPath, "receive", shareUrl, "--server", serverUrl])
   await new Promise<void>((resolve) => receiver.on("close", resolve))
   sender.kill()
 

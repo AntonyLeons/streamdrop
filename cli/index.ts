@@ -21,6 +21,7 @@ function getDefaultServer() {
 
 const argv = Bun.argv.slice(2)
 const cmd = argv[0]
+let startTime = 0
 
 if (!cmd || cmd === "help" || cmd === "--help" || cmd === "-h") {
   printHelp()
@@ -106,8 +107,6 @@ function formatBytes(bytes: number) {
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
 }
-
-let startTime = 0
 
 function printProgress(action: string, current: number, total?: number) {
   if (!startTime) startTime = Date.now()
