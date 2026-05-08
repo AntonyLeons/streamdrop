@@ -26,6 +26,68 @@ afterAll(async () => {
   if (testServer) testServer.stop()
 })
 
+test("CLI receives using the new quote-free receive code format", async () => {
+  const testFileName = `cli-test-quotefree-${Date.now()}.bin`
+  const testFilePath = join(tmpdir(), testFileName)
+  const receivedFilePath = join(process.cwd(), testFileName)
+
+  const testData = randomBytes(1024)
+  await writeFile(testFilePath, testData)
+
+  let receiveCode = ""
+  
+  const sender = spawn(bunPath, [cliScriptPath, "send", testFilePath, "--server", serverUrl])
+  
+  await new Promise<void>((resolve, reject) => {
+    let output = ""
+    sender.stdout.on("data", (data) => {
+      output += data.toString()
+      const match = output.match(/Receive: streamdrop receive ([^\s]+)/)
+      if (match) {
+        receiveCode = match[1]
+        resolve()
+      }
+    })
+    sender.on("error", reject)
+  })
+
+  expect(receiveCode).toBeTruthy()
+  expect(receiveCode).toContain(":")
+
+  const receiver = spawn(bunPath, [cliScriptPath, "receive", receiveCode, "--server", serverUrl])
+  
+  await new Promise<void>((resolve, reject) => {
+    receiver.on("close", (code) => {
+      if (code === 0) resolve()
+      else reject(new Error(`Receiver exited with code ${code}`))
+    })
+    receiver.on("error", reject)
+  })
+
+  sender.kill()
+
+  const receivedData = await readFile(receivedFilePath)
+  expect(receivedData.length).toBe(testData.length)
+
+  await rm(testFilePath, { force: true })
+  await rm(receivedFilePath, { force: true })
+}, 15000)
+
+test("CLI fails gracefully with a human-readable error for 404", async () => {
+  const fakeCode = "fakeId:fakeKey:fake.txt"
+  
+  const receiver = spawn(bunPath, [cliScriptPath, "receive", fakeCode, "--server", serverUrl])
+  
+  let errOutput = ""
+  await new Promise<void>((resolve) => {
+    receiver.stderr.on("data", (data) => errOutput += data.toString())
+    receiver.on("close", resolve)
+  })
+
+  expect(errOutput).toContain("Error: File session not found or has expired.")
+  expect(errOutput).not.toContain("session_page_failed_404")
+  expect(errOutput).not.toContain("at fetchSessionCfg")
+})
 test("CLI sends and receives a file successfully", async () => {
   const testFileName = `cli-test-${Date.now()}.bin`
   const testFilePath = join(tmpdir(), testFileName)
