@@ -158,15 +158,15 @@ async function runSend(serverRaw: string, filePath: string) {
   const shareUrl = `${server}/${sess.id}#${keyFrag},${encodeURIComponent(fileName)}`
   const receiveCode = `${sess.id}:${keyFrag}:${encodeURIComponent(fileName)}`
 
-  console.log(`Share URL: ${shareUrl}`)
+  console.log(`\n  \x1b[1mShare URL:\x1b[0m \x1b[36m${shareUrl}\x1b[0m`)
   if (server === DEFAULT_SERVER) {
-    console.log(`Receive: streamdrop receive ${receiveCode}`)
+    console.log(`  \x1b[1mReceive:\x1b[0m   \x1b[33mstreamdrop receive ${receiveCode}\x1b[0m\n`)
   } else {
-    console.log(`Receive: streamdrop receive ${receiveCode} --server ${server}`)
+    console.log(`  \x1b[1mReceive:\x1b[0m   \x1b[33mstreamdrop receive ${receiveCode} --server ${server}\x1b[0m\n`)
   }
   try {
     const qr = await QRCode.toString(shareUrl, { type: "terminal", small: true })
-    console.log(qr.trimEnd())
+    console.log(qr.trimEnd() + "\n")
   } catch {}
 
   const key = await crypto.subtle.importKey("raw", rawKey, { name: "AES-GCM" }, false, ["encrypt"])
@@ -178,7 +178,7 @@ async function runSend(serverRaw: string, filePath: string) {
       const channelId = await claim(server, sess.uploadToken)
       if (!channelId) break
       
-      console.log(`\nReceiver connected. Starting upload...`)
+      console.log(`\x1b[32mReceiver connected. Starting upload...\x1b[0m`)
       startTime = 0 // reset progress timer
       
       let streamToRead: ReadableStream<Uint8Array>
@@ -210,9 +210,9 @@ async function runSend(serverRaw: string, filePath: string) {
       console.log() // New line after progress
       if (!res.ok) {
         const t = await safeText(res)
-        console.error(`upload_failed: ${t || res.status}`)
+        console.error(`\x1b[31mUpload failed: ${t || res.status}\x1b[0m\n`)
       } else {
-        console.log(`Upload complete.`)
+        console.log(`\x1b[32mUpload complete.\x1b[0m\n`)
       }
     }
     await sleep(250)
@@ -256,11 +256,11 @@ async function runReceive(input: string, overrideServer?: string | null) {
     }
   }
 
-  console.log(`Connecting to ${server}...`)
+  console.log(`\x1b[36mConnecting to ${server}...\x1b[0m`)
   const res = await fetch(`${server}/d/${downloadToken}`, { method: "GET", headers: { accept: "application/octet-stream" } })
   if (!res.ok || !res.body) throw new Error(`download_failed_${res.status}`)
 
-  console.log(`Downloading to ${outPath}...`)
+  console.log(`\x1b[36mDownloading to ${outPath}...\x1b[0m`)
   startTime = 0 // reset progress timer
   const decrypt = createDecryptTransform({ 
     key, 
@@ -291,12 +291,12 @@ async function runReceive(input: string, overrideServer?: string | null) {
     await tarProc.exited
 
     console.log() // New line after progress
-    console.log(`Extracted successfully.`)
+    console.log(`\x1b[32mExtracted successfully.\x1b[0m\n`)
   } else {
     await writeToFile(outPath, plain)
     
     console.log() // New line after progress
-    console.log(`Saved: ${outPath}`)
+    console.log(`\x1b[32mSaved: ${outPath}\x1b[0m\n`)
   }
 }
 
