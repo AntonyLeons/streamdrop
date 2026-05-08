@@ -40,7 +40,12 @@ if (cmd === "send") {
     process.exit(1)
   }
   const server = getFlagValue("--server") ?? getDefaultServer()
-  await runSend(server, filePath)
+  try {
+    await runSend(server, filePath)
+  } catch (err: any) {
+    console.error(`\nError: ${err.message}`)
+    process.exit(1)
+  }
 } else {
   const input = argv[1]
   if (!input) {
@@ -48,7 +53,12 @@ if (cmd === "send") {
     process.exit(1)
   }
   const overrideServer = getFlagValue("--server") ?? getDefaultServer()
-  await runReceive(input, overrideServer)
+  try {
+    await runReceive(input, overrideServer)
+  } catch (err: any) {
+    console.error(`\nError: ${err.message}`)
+    process.exit(1)
+  }
 }
 
 function printHelp() {
@@ -347,7 +357,10 @@ function safeOutName(name: string) {
 
 async function fetchSessionCfg(server: string, id: string) {
   const res = await fetch(`${server}/${encodeURIComponent(id)}`, { headers: { accept: "text/html" } })
-  if (!res.ok) throw new Error(`session_page_failed_${res.status}`)
+  if (!res.ok) {
+    if (res.status === 404) throw new Error("File session not found or has expired.")
+    throw new Error(`Failed to fetch session: HTTP ${res.status}`)
+  }
   const html = await res.text()
   const marker = "window.__STREAMDROP__="
   const i = html.indexOf(marker)
