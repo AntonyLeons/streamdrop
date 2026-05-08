@@ -117,11 +117,11 @@ export function renderUploadPage(session: Session | null, nonce: string) {
             <div class="kicker">Files</div>
             <div class="row" style="margin-top:10px; align-items:center; justify-content:flex-end; gap:12px">
               <div class="dim" style="font-size:13px; display:flex; gap:8px; align-items:center">
-                CLI (curl/wget)
+                curl/wget
                 <span class="tooltip">
                   <button class="tooltip-icon" type="button" aria-describedby="cli-warning">i</button>
                   <span id="cli-warning" class="tooltip-bubble" role="tooltip">
-                    ⚠️: curl/wget downloads are not E2EE
+                    ⚠️: curl/wget downloads are not E2EE use the StreamDrop CLI instead.
                   </span>
                 </span>
               </div>
