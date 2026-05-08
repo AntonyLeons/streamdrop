@@ -584,7 +584,7 @@ function createShareItem({ file, shareUrl, cliCode }) {
   const elBar = root.querySelector(".sd-file-bar")
   const elMeter = elBar ? elBar.closest(".meter") : null
   const elLink = root.querySelector(".sd-file-link")
-  const elCliCode = root.querySelector(".sd-file-cli-code")
+  const btnCli = root.querySelector('button[data-copy-kind="cli"]')
   const elNativeShare = root.querySelector('button[data-action="native-share"]')
 
   root.dataset.shareUrl = shareUrl
@@ -594,11 +594,11 @@ function createShareItem({ file, shareUrl, cliCode }) {
   elFilename.textContent = `${file.name} · ${prettyBytes(file.size)}`
   elState.textContent = "Waiting"
   elLink.value = shareUrl
-  if (elCliCode && cliCode) {
+  if (btnCli && cliCode) {
     if (window.__STREAMDROP_DEFAULT_SERVER__ && window.__STREAMDROP_DEFAULT_SERVER__ !== location.origin) {
-      elCliCode.value = `streamdrop receive ${cliCode} --server ${location.origin}`
+      btnCli.dataset.copyValue = `streamdrop receive ${cliCode} --server ${location.origin}`
     } else {
-      elCliCode.value = `streamdrop receive ${cliCode}`
+      btnCli.dataset.copyValue = `streamdrop receive ${cliCode}`
     }
   }
   if (elNativeShare) {

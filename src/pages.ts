@@ -166,6 +166,7 @@ export function renderUploadPage(session: Session | null, nonce: string) {
                       <button class="btn btn-small" type="button" data-copy data-copy-kind="wget">wget</button>
                       <span class="tooltip-bubble" role="tooltip">Not E2EE</span>
                     </span>
+                    <button class="btn btn-small" type="button" data-copy data-copy-kind="cli">StreamDrop CLI</button>
                     <button class="btn btn-small" type="button" data-action="open-link">Download</button>
                     <button class="btn btn-small" type="button" data-toggle="qr">QR</button>
                     <button class="btn btn-small btn-danger" type="button" data-action="delete">Delete</button>
@@ -175,13 +176,6 @@ export function renderUploadPage(session: Session | null, nonce: string) {
                   <div class="kicker">Share link</div>
                   <div class="copy-row">
                     <input class="input mono sd-file-link" readonly />
-                    <button class="btn btn-small" type="button" data-copy>Copy</button>
-                  </div>
-                </div>
-                <div class="sd-file-link-row" style="margin-top: 12px;">
-                  <div class="kicker">streamdrop CLI</div>
-                  <div class="copy-row">
-                    <input class="input mono sd-file-cli-code" readonly />
                     <button class="btn btn-small" type="button" data-copy>Copy</button>
                   </div>
                 </div>
