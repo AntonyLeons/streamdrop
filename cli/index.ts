@@ -146,9 +146,14 @@ async function runSend(serverRaw: string, filePath: string) {
   const rawKey = crypto.getRandomValues(new Uint8Array(32))
   const keyFrag = base64urlEncode(rawKey)
   const shareUrl = `${server}/${sess.id}#${keyFrag},${encodeURIComponent(fileName)}`
+  const receiveCode = `${sess.id}:${keyFrag}:${encodeURIComponent(fileName)}`
 
   console.log(`Share URL: ${shareUrl}`)
-  console.log(`Receive: streamdrop receive "${shareUrl}" --server ${server}`)
+  if (server === DEFAULT_SERVER) {
+    console.log(`Receive: streamdrop receive ${receiveCode}`)
+  } else {
+    console.log(`Receive: streamdrop receive ${receiveCode} --server ${server}`)
+  }
   try {
     const qr = await QRCode.toString(shareUrl, { type: "terminal", small: true })
     console.log(qr.trimEnd())
@@ -287,6 +292,24 @@ async function runReceive(input: string, overrideServer?: string | null) {
 
 function parseShareInput(input: string): { server?: string; id: string; keyFrag: string; fileName?: string } {
   const s = input.trim()
+  
+  if (!s.startsWith("http://") && !s.startsWith("https://") && s.includes(":")) {
+    const parts = s.split(":")
+    const id = parts[0]
+    const keyFrag = parts[1]
+    let fileName: string | undefined
+    if (parts.length > 2) {
+      try {
+        fileName = decodeURIComponent(parts.slice(2).join(":"))
+      } catch {
+        fileName = parts.slice(2).join(":")
+      }
+    }
+    if (!id) throw new Error("missing_id")
+    if (!keyFrag) throw new Error("missing_key")
+    return { id, keyFrag, fileName }
+  }
+
   let url: URL | null = null
   if (s.startsWith("http://") || s.startsWith("https://")) {
     url = new URL(s)

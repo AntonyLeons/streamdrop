@@ -7,7 +7,7 @@ function sleep(ms: number) {
 }
 
 function extractCfg(html: string) {
-  const json = html.match(/window\.__STREAMDROP__=(\{[^<]+\})<\/script>/)?.[1]
+  const json = html.match(/window\.__STREAMDROP__=(\{[^<]+\})/)?.[1]
   return JSON.parse(json!)
 }
 

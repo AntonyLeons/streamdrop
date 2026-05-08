@@ -359,10 +359,12 @@ async function startTransfer(file) {
   const raw = new Uint8Array(await crypto.subtle.exportKey("raw", key))
   const keyB64 = base64urlEncode(raw)
   const shareUrl = `${location.origin}/${session.id}#${keyB64},${encodeURIComponent(file.name)}`
+  const cliCode = `${session.id}:${keyB64}:${encodeURIComponent(file.name)}`
 
   const item = createShareItem({
     file,
     shareUrl,
+    cliCode,
   })
   item.root.dataset.sessionId = session.id
   item.root.dataset.uploadToken = session.uploadToken
@@ -421,6 +423,16 @@ async function startTransfer(file) {
       
       try {
         let res
+        let supportsDuplex = false
+        try {
+          new Request('', { method: 'POST', body: new ReadableStream(), duplex: 'half' })
+          supportsDuplex = true
+        } catch(e) {}
+
+        if (!supportsDuplex) {
+          throw new Error("Your browser does not support stream uploading (duplex: half). Please use Chrome, Edge, or Firefox on Desktop/Android. iOS Safari is currently unsupported by Apple.")
+        }
+
         try {
           const uploadStream = wrapStreamWithProgress({
             stream: cipherBlob.stream(),
@@ -563,7 +575,7 @@ function getActiveTransferCount() {
   return active
 }
 
-function createShareItem({ file, shareUrl }) {
+function createShareItem({ file, shareUrl, cliCode }) {
   const frag = elShareTemplate.content.cloneNode(true)
   const root = frag.querySelector(".sd-file-item")
   const elFilename = root.querySelector(".sd-file-name")
@@ -572,6 +584,7 @@ function createShareItem({ file, shareUrl }) {
   const elBar = root.querySelector(".sd-file-bar")
   const elMeter = elBar ? elBar.closest(".meter") : null
   const elLink = root.querySelector(".sd-file-link")
+  const elCliCode = root.querySelector(".sd-file-cli-code")
   const elNativeShare = root.querySelector('button[data-action="native-share"]')
 
   root.dataset.shareUrl = shareUrl
@@ -581,6 +594,13 @@ function createShareItem({ file, shareUrl }) {
   elFilename.textContent = `${file.name} · ${prettyBytes(file.size)}`
   elState.textContent = "Waiting"
   elLink.value = shareUrl
+  if (elCliCode && cliCode) {
+    if (window.__STREAMDROP_DEFAULT_SERVER__ && window.__STREAMDROP_DEFAULT_SERVER__ !== location.origin) {
+      elCliCode.value = `streamdrop receive ${cliCode} --server ${location.origin}`
+    } else {
+      elCliCode.value = `streamdrop receive ${cliCode}`
+    }
+  }
   if (elNativeShare) {
     if (navigator.share) elNativeShare.classList.remove("hidden")
     else elNativeShare.classList.add("hidden")

@@ -13,7 +13,7 @@ test("GET / returns HTML successfully", async () => {
   expect(cspHome).not.toContain("script-src 'self' 'unsafe-inline'")
   const htmlHome = await resHome.text()
   expect(htmlHome).toContain("StreamDrop")
-  expect(htmlHome).toMatch(/<script nonce="[^"]+">window\.__STREAMDROP__=/)
+  expect(htmlHome).toMatch(/<script nonce="[^"]+">\s*window\.__STREAMDROP_DEFAULT_SERVER__/)
 })
 
 test("GET /health returns {ok: true}", async () => {

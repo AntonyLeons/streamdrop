@@ -178,6 +178,13 @@ export function renderUploadPage(session: Session | null, nonce: string) {
                     <button class="btn btn-small" type="button" data-copy>Copy</button>
                   </div>
                 </div>
+                <div class="sd-file-link-row" style="margin-top: 12px;">
+                  <div class="kicker">streamdrop CLI</div>
+                  <div class="copy-row">
+                    <input class="input mono sd-file-cli-code" readonly />
+                    <button class="btn btn-small" type="button" data-copy>Copy</button>
+                  </div>
+                </div>
                 <div class="sd-file-details hidden">
                   <div class="qr-wrap">
                     <canvas width="200" height="200" class="qr sd-file-qr"></canvas>
@@ -191,7 +198,10 @@ export function renderUploadPage(session: Session | null, nonce: string) {
         </section>
       </main>
 
-      <script nonce="${nonce}">window.__STREAMDROP__=${config}</script>
+      <script nonce="${nonce}">
+        window.__STREAMDROP_DEFAULT_SERVER__ = "${process.env.STREAMDROP_SERVER || "https://streamdrop.app"}"
+        window.__STREAMDROP__=${config}
+      </script>
       <script src="/static/vendor/qrcode.min.js"></script>
       <script type="module" src="/static/upload.js"></script>
     `,
