@@ -42,7 +42,8 @@ test("CLI receives using the new quote-free receive code format", async () => {
     let output = ""
     sender.stdout.on("data", (data) => {
       output += data.toString()
-      const match = output.match(/Receive: streamdrop receive ([^\s]+)/)
+      const cleanOutput = output.replace(/\x1b\[[0-9;]*m/g, "")
+      const match = cleanOutput.match(/Receive:\s+streamdrop receive ([^\s]+)/)
       if (match) {
         receiveCode = match[1]
         resolve()
@@ -107,7 +108,8 @@ test("CLI sends and receives a file successfully", async () => {
     let output = ""
     sender.stdout.on("data", (data) => {
       output += data.toString()
-      const match = output.match(/Share URL: (http[^\s]+)/)
+      const cleanOutput = output.replace(/\x1b\[[0-9;]*m/g, "")
+      const match = cleanOutput.match(/Share URL:\s+(http[^\s]+)/)
       if (match) {
         shareUrl = match[1]
         resolve()
@@ -165,7 +167,8 @@ test("CLI handles file overwrite protection correctly", async () => {
     let output = ""
     sender.stdout.on("data", (data) => {
       output += data.toString()
-      const match = output.match(/Share URL: (http[^\s]+)/)
+      const cleanOutput = output.replace(/\x1b\[[0-9;]*m/g, "")
+      const match = cleanOutput.match(/Share URL:\s+(http[^\s]+)/)
       if (match) {
         shareUrl = match[1]
         resolve()
@@ -209,7 +212,8 @@ test("CLI sends and extracts a folder automatically", async () => {
     let output = ""
     sender.stdout.on("data", (data) => {
       output += data.toString()
-      const match = output.match(/Share URL: (http[^\s]+)/)
+      const cleanOutput = output.replace(/\x1b\[[0-9;]*m/g, "")
+      const match = cleanOutput.match(/Share URL:\s+(http[^\s]+)/)
       if (match) {
         shareUrl = match[1]
         resolve()
