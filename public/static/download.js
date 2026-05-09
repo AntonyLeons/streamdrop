@@ -20,7 +20,6 @@ if (nameParts.length > 0) {
   } catch {}
 }
 
-setStep("wait")
 setMeta(`Waiting for ${suggestedName}. Click start when ready.`)
 
 let started = false

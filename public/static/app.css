@@ -800,6 +800,13 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
   h1 { font-size: 26px; }
 }
 
+.top-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
 @media (max-width: 520px) {
   .sd-file-row { grid-template-columns: 1fr; }
   .sd-file-actions { width: 100%; justify-content: flex-end; }

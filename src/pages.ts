@@ -39,8 +39,8 @@ export function renderUploadPage(session: Session | null, nonce: string) {
               <div class="kicker">Session</div>
               <div class="mono dim" style="font-size:12px;margin-top:3px">${escapeHtml(session?.id ?? "—")}</div>
             </div>
-            <div style="display:flex; gap:12px; align-items:center">
-              <button id="btn-cli-modal" class="btn btn-small" style="margin-right: 8px;">StreamDrop CLI</button>
+            <div class="top-controls">
+              <button id="btn-cli-modal" class="btn btn-small">StreamDrop CLI</button>
               <button id="theme-toggle" class="icon-btn" type="button" aria-label="Toggle theme">
                 <span class="theme-icon theme-icon-sun" aria-hidden="true">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -260,8 +260,8 @@ export function renderDownloadPage(session: Session, nonce: string) {
               <div class="kicker">Session</div>
               <div class="mono dim" style="font-size:12px;margin-top:3px">${escapeHtml(session.id)}</div>
             </div>
-            <div style="display:flex; gap:12px; align-items:center">
-              <button id="btn-cli-modal-dl" class="btn btn-small" style="margin-right: 8px;">StreamDrop CLI</button>
+            <div class="top-controls">
+              <button id="btn-cli-modal-dl" class="btn btn-small">StreamDrop CLI</button>
               <button id="theme-toggle" class="icon-btn" type="button" aria-label="Toggle theme">
                 <span class="theme-icon theme-icon-sun" aria-hidden="true">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -292,11 +292,6 @@ export function renderDownloadPage(session: Session, nonce: string) {
           </div>
 
           <div class="status" style="margin-top:16px">
-            <div class="step" data-step="wait">
-              <div class="dot"></div>
-              <div class="label">Waiting</div>
-            </div>
-            <span class="step-arrow">›</span>
             <div class="step" data-step="download">
               <div class="dot"></div>
               <div class="label">Download</div>
