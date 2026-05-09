@@ -208,10 +208,10 @@ document.addEventListener("click", async (e) => {
     const os = tabBtn.dataset.os
     const cliInstallCmd = document.getElementById("cli-install-cmd")
     if (cliInstallCmd) {
-      if (os === "npm") cliInstallCmd.value = "npm install -g streamdrop"
-      else if (os === "mac") cliInstallCmd.value = "brew install AntonyLeons/tap/streamdrop"
-      else if (os === "linux") cliInstallCmd.value = "brew install AntonyLeons/tap/streamdrop"
-      else if (os === "win") cliInstallCmd.value = "scoop bucket add antonyleons https://github.com/AntonyLeons/scoop-bucket && scoop install streamdrop"
+      if (os === "npm") cliInstallCmd.value = "npm install -g streamdrop-cli"
+      else if (os === "mac") cliInstallCmd.value = "brew install AntonyLeons/tap/streamdrop-cli"
+      else if (os === "linux") cliInstallCmd.value = "brew install AntonyLeons/tap/streamdrop-cli"
+      else if (os === "win") cliInstallCmd.value = "scoop bucket add antonyleons https://github.com/AntonyLeons/scoop-bucket && scoop install streamdrop-cli"
     }
     document.querySelectorAll(".tab-btn").forEach(btn => btn.classList.toggle("active", btn === tabBtn))
     return

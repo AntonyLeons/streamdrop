@@ -1,5 +1,5 @@
 {
-  "name": "streamdrop",
+  "name": "streamdrop-cli",
   "version": "1.0.0",
   "description": "Securely send and receive files directly from your terminal using StreamDrop.",
   "main": "index.js",

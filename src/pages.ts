@@ -202,7 +202,7 @@ export function renderUploadPage(session: Session | null, nonce: string) {
             
             <div class="kicker">Install</div>
             <div class="copy-row" style="margin-bottom: 24px;">
-              <input id="cli-install-cmd" class="input mono" readonly value="npm install -g streamdrop" />
+              <input id="cli-install-cmd" class="input mono" readonly value="npm install -g streamdrop-cli" />
               <button class="btn btn-small" type="button" data-copy>Copy</button>
             </div>
             

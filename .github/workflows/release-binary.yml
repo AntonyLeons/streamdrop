@@ -72,8 +72,8 @@ jobs:
           
           if [ "${{ matrix.name }}" == "linux-x64" ]; then
             cd ..
-            tar -czf streamdrop-npm.tar.gz cli-pkg/
-            echo "npm_pkg=streamdrop-npm.tar.gz" >> "$GITHUB_OUTPUT"
+            tar -czf streamdrop-cli-npm.tar.gz cli-pkg/
+            echo "npm_pkg=streamdrop-cli-npm.tar.gz" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Upload to release
