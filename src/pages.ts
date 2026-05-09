@@ -193,24 +193,25 @@ export function renderUploadPage(session: Session | null, nonce: string) {
           <div class="modal-body" style="font-size:14px;color:var(--fg-dim);">
             <p style="margin-top:0;margin-bottom:20px;">Transfer files directly from your terminal with end-to-end encryption.</p>
             
-            <div class="tabs" style="display: flex; gap: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--glass-border);">
-              <button class="tab-btn active" data-os="mac">macOS</button>
+            <div class="tabs" style="display: flex; gap: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--glass-border); overflow-x: auto; white-space: nowrap;">
+              <button class="tab-btn active" data-os="npm">npm</button>
+              <button class="tab-btn" data-os="mac">macOS</button>
               <button class="tab-btn" data-os="linux">Linux</button>
               <button class="tab-btn" data-os="win">Windows</button>
             </div>
             
             <div class="kicker">Install</div>
             <div class="copy-row" style="margin-bottom: 24px;">
-              <input id="cli-install-cmd" class="input mono" readonly value="brew install AntonyLeons/tap/streamdrop" />
+              <input id="cli-install-cmd" class="input mono" readonly value="npm install -g streamdrop" />
               <button class="btn btn-small" type="button" data-copy>Copy</button>
             </div>
             
-            <div class="kicker">Usage</div>
-            <pre class="mono" style="background: var(--bg-2); padding: 12px; border-radius: 6px; font-size: 12px; overflow-x: auto; color: var(--fg); margin: 0; line-height: 1.5;"># Send a file or folder
-streamdrop send ./my-file.zip
+            <div class="kicker" style="margin-bottom: 12px;">Usage</div>
+            <pre class="mono" style="background: #1e1e1e; border: 1px solid var(--glass-border); padding: 16px; border-radius: 8px; font-size: 13px; overflow-x: auto; color: #e5e7eb; margin: 0; line-height: 1.6;"><span style="color: #6b7280;"># Send a file or folder</span>
+<span style="color: #6b7280; user-select: none;">$</span> <span style="color: #10b981;">streamdrop</span> send ./my-file.zip
 
-# Receive a file
-streamdrop receive &lt;receive-code&gt;</pre>
+<span style="color: #6b7280;"># Receive a file</span>
+<span style="color: #6b7280; user-select: none;">$</span> <span style="color: #10b981;">streamdrop</span> receive &lt;receive-code&gt;</pre>
           </div>
         </div>
       </div>

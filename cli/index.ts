@@ -56,7 +56,11 @@ if (cmd === "send") {
   try {
     await runReceive(input, overrideServer)
   } catch (err: any) {
-    console.error(`\nError: ${err.message}`)
+    if (err.name === "AbortError") {
+      console.error(`\nError: Aborted`)
+    } else {
+      console.error(`\nError: ${err.message}`)
+    }
     process.exit(1)
   }
 }

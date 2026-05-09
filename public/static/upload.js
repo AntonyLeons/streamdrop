@@ -199,41 +199,21 @@ document.addEventListener("click", async (e) => {
     const modal = document.getElementById("cli-modal")
     if (modal) {
       modal.classList.remove("hidden")
-      const osNameSpan = document.getElementById("os-name")
-      const cliInstallCmd = document.getElementById("cli-install-cmd")
-      
-      const ua = navigator.userAgent.toLowerCase()
-      let os = "mac"
-      if (ua.includes("win")) os = "win"
-      else if (ua.includes("linux")) os = "linux"
-      
-      const setOsContent = (targetOs) => {
-        if (targetOs === "mac") {
-          cliInstallCmd.value = "brew install AntonyLeons/tap/streamdrop"
-        } else if (targetOs === "linux") {
-          cliInstallCmd.value = "brew install AntonyLeons/tap/streamdrop"
-        } else if (targetOs === "win") {
-          cliInstallCmd.value = "scoop bucket add antonyleons https://github.com/AntonyLeons/scoop-bucket && scoop install streamdrop"
-        }
-        
-        document.querySelectorAll(".tab-btn").forEach(el => {
-          if (el.dataset.os === targetOs) {
-            el.classList.add("active")
-          } else {
-            el.classList.remove("active")
-          }
-        })
-      }
-      
-      setOsContent(os)
-      
-      document.querySelectorAll(".tab-btn").forEach(btn => {
-        btn.onclick = (ev) => {
-          ev.preventDefault()
-          setOsContent(btn.dataset.os)
-        }
-      })
     }
+    return
+  }
+
+  const tabBtn = e.target?.closest?.('.tab-btn')
+  if (tabBtn) {
+    const os = tabBtn.dataset.os
+    const cliInstallCmd = document.getElementById("cli-install-cmd")
+    if (cliInstallCmd) {
+      if (os === "npm") cliInstallCmd.value = "npm install -g streamdrop"
+      else if (os === "mac") cliInstallCmd.value = "brew install AntonyLeons/tap/streamdrop"
+      else if (os === "linux") cliInstallCmd.value = "brew install AntonyLeons/tap/streamdrop"
+      else if (os === "win") cliInstallCmd.value = "scoop bucket add antonyleons https://github.com/AntonyLeons/scoop-bucket && scoop install streamdrop"
+    }
+    document.querySelectorAll(".tab-btn").forEach(btn => btn.classList.toggle("active", btn === tabBtn))
     return
   }
 

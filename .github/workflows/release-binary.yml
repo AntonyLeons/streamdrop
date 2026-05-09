@@ -50,6 +50,10 @@ jobs:
       - name: Build Server
         run: bun build src/server.ts --compile --outfile dist/streamdrop-server${{ matrix.ext }}
 
+      - name: Build NPM Package
+        if: matrix.name == 'linux-x64'
+        run: bun run cli:build-npm
+
       - name: Prepare Binaries
         id: prepare_bin
         shell: bash
@@ -65,6 +69,12 @@ jobs:
           echo "sha1=dist/streamdrop-cli-${{ matrix.name }}${{ matrix.ext }}.sha256" >> "$GITHUB_OUTPUT"
           echo "file2=dist/streamdrop-server-${{ matrix.name }}${{ matrix.ext }}" >> "$GITHUB_OUTPUT"
           echo "sha2=dist/streamdrop-server-${{ matrix.name }}${{ matrix.ext }}.sha256" >> "$GITHUB_OUTPUT"
+          
+          if [ "${{ matrix.name }}" == "linux-x64" ]; then
+            cd ..
+            tar -czf streamdrop-npm.tar.gz cli-pkg/
+            echo "npm_pkg=streamdrop-npm.tar.gz" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
@@ -75,6 +85,7 @@ jobs:
             ${{ steps.prepare_bin.outputs.sha1 }}
             ${{ steps.prepare_bin.outputs.file2 }}
             ${{ steps.prepare_bin.outputs.sha2 }}
+            ${{ steps.prepare_bin.outputs.npm_pkg }}
 
   publish-managers:
     name: Publish to Package Managers

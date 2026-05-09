@@ -1,0 +1,29 @@
+{
+  "name": "streamdrop",
+  "version": "1.0.0",
+  "description": "Securely send and receive files directly from your terminal using StreamDrop.",
+  "main": "index.js",
+  "bin": {
+    "streamdrop": "index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AntonyLeons/streamdrop.git"
+  },
+  "keywords": [
+    "streamdrop",
+    "file-transfer",
+    "e2ee",
+    "cli"
+  ],
+  "author": "Antony Leons",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/AntonyLeons/streamdrop/issues"
+  },
+  "homepage": "https://streamdrop.app",
+  "dependencies": {
+    "@noble/curves": "^2.2.0",
+    "qrcode": "^1.5.4"
+  }
+}
