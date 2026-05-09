@@ -13,7 +13,7 @@ const elError = document.getElementById("error")
 const elCliToggle = document.getElementById("cli-toggle")
 const elThemeToggle = document.getElementById("theme-toggle")
 
-setStep("key")
+setStep("encrypt")
 
 let cliEnabled = false
 const cliRawBySessionId = new Map()
@@ -402,7 +402,7 @@ function handleFiles(files) {
 async function startTransfer(file) {
   const session = await getOrCreateSession(file)
 
-  setStep("key", true)
+  setStep("encrypt", true)
   setMeta(`${file.name} · ${prettyBytes(file.size)}`)
 
   const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"])
@@ -527,14 +527,15 @@ async function startTransfer(file) {
           if (err === "receivers_lost" || err === "aborted" || err === "channel_not_found") return
           throw new Error(err || `upload_failed_${res.status}`)
         }
-
-        setStep("ready", true)
-        markStepDone("ready")
       } finally {
         activeUploads--
         if (!abortController.signal.aborted) {
           item.setState(activeUploads > 0 ? `Uploading (${activeUploads})` : "Ready")
-          if (activeUploads === 0) item.setBar(1)
+          if (activeUploads === 0) {
+            item.setBar(1)
+            setStep("wait", true)
+            markStepDone("stream") // Stream is technically over when it drops back to wait
+          }
         }
       }
     }

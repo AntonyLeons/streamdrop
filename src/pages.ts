@@ -40,7 +40,7 @@ export function renderUploadPage(session: Session | null, nonce: string) {
               <div class="mono dim" style="font-size:12px;margin-top:3px">${escapeHtml(session?.id ?? "—")}</div>
             </div>
             <div style="display:flex; gap:12px; align-items:center">
-              <button id="btn-cli-modal" class="btn btn-small desktop-only" style="margin-right: 8px;">StreamDrop CLI</button>
+              <button id="btn-cli-modal" class="btn btn-small" style="margin-right: 8px;">StreamDrop CLI</button>
               <button id="theme-toggle" class="icon-btn" type="button" aria-label="Toggle theme">
                 <span class="theme-icon theme-icon-sun" aria-hidden="true">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -82,15 +82,10 @@ export function renderUploadPage(session: Session | null, nonce: string) {
           <div class="badge-row">
             <div class="badge"><div class="badge-dot"></div>AES-256-GCM</div>
             <div class="badge"><div class="badge-dot"></div>Zero knowledge relay</div>
-            <div class="badge"><div class="badge-dot"></div>Key never leaves browser</div>
+            <div class="badge mobile-hidden"><div class="badge-dot"></div>Key never leaves browser</div>
           </div>
 
           <div class="status" style="margin-top:16px">
-            <div class="step" data-step="key">
-              <div class="dot"></div>
-              <div class="label">Key</div>
-            </div>
-            <span class="step-arrow">›</span>
             <div class="step" data-step="encrypt">
               <div class="dot"></div>
               <div class="label">Encrypt</div>
@@ -104,11 +99,6 @@ export function renderUploadPage(session: Session | null, nonce: string) {
             <div class="step" data-step="stream">
               <div class="dot"></div>
               <div class="label">Stream</div>
-            </div>
-            <span class="step-arrow">›</span>
-            <div class="step" data-step="ready">
-              <div class="dot"></div>
-              <div class="label">Share</div>
             </div>
           </div>
 
@@ -270,7 +260,7 @@ export function renderDownloadPage(session: Session, nonce: string) {
               <div class="mono dim" style="font-size:12px;margin-top:3px">${escapeHtml(session.id)}</div>
             </div>
             <div style="display:flex; gap:12px; align-items:center">
-              <button id="btn-cli-modal-dl" class="btn btn-small desktop-only" style="margin-right: 8px;">StreamDrop CLI</button>
+              <button id="btn-cli-modal-dl" class="btn btn-small" style="margin-right: 8px;">StreamDrop CLI</button>
               <button id="theme-toggle" class="icon-btn" type="button" aria-label="Toggle theme">
                 <span class="theme-icon theme-icon-sun" aria-hidden="true">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

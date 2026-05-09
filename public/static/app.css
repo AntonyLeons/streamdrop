@@ -232,6 +232,7 @@ p { margin-top: 6px; color: var(--text-muted); font-size: 14px; line-height: 1.6
   justify-content: center;
   width: 34px;
   height: 34px;
+  flex-shrink: 0;
   border-radius: 999px;
   border: 1px solid var(--v-border);
   background: var(--v-surface);
@@ -807,6 +808,8 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
   .sd-file-actions button[data-action="open-link"] { order: 9; }
   .sd-file-actions button[data-action="native-share"] { order: 10; }
   .sd-file-name { white-space: normal; }
+  .badge-row, .status { justify-content: center; }
+  .mobile-hidden { display: none !important; }
 }
 
 @media (min-width: 521px) {
