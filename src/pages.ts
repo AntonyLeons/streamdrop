@@ -40,6 +40,7 @@ export function renderUploadPage(session: Session | null, nonce: string) {
               <div class="mono dim" style="font-size:12px;margin-top:3px">${escapeHtml(session?.id ?? "—")}</div>
             </div>
             <div style="display:flex; gap:12px; align-items:center">
+              <button id="btn-cli-modal" class="btn btn-small desktop-only" style="margin-right: 8px;">StreamDrop CLI</button>
               <button id="theme-toggle" class="icon-btn" type="button" aria-label="Toggle theme">
                 <span class="theme-icon theme-icon-sun" aria-hidden="true">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -192,6 +193,38 @@ export function renderUploadPage(session: Session | null, nonce: string) {
         </section>
       </main>
 
+      <div id="cli-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2 style="margin:0;font-size:18px;">StreamDrop CLI</h2>
+            <button class="icon-btn close-modal" aria-label="Close" style="width:24px;height:24px;padding:0;line-height:1;">&times;</button>
+          </div>
+          <div class="modal-body" style="font-size:14px;color:var(--fg-dim);">
+            <p style="margin-top:0;margin-bottom:20px;">Transfer files directly from your terminal with end-to-end encryption.</p>
+            
+            <div class="kicker" style="margin-top: 16px;">Install (<span id="os-name">macOS</span>)</div>
+            <div class="copy-row" style="margin-bottom: 24px;">
+              <input id="cli-install-cmd" class="input mono" readonly value="brew install AntonyLeons/tap/streamdrop" />
+              <button class="btn btn-small" type="button" data-copy>Copy</button>
+            </div>
+            
+            <div class="kicker">Usage</div>
+            <pre class="mono" style="background: var(--bg-2); padding: 12px; border-radius: 6px; font-size: 12px; overflow-x: auto; color: var(--fg); margin: 0; line-height: 1.5;"># Send a file or folder
+streamdrop send ./my-file.zip
+
+# Receive a file
+streamdrop receive &lt;receive-code&gt;</pre>
+            
+            <div class="dim" style="font-size: 13px; margin-top: 20px; text-align: center;">
+              <a href="#" class="os-switch link" data-os="mac">macOS</a> &middot; 
+              <a href="#" class="os-switch link" data-os="linux">Linux</a> &middot; 
+              <a href="#" class="os-switch link" data-os="win">Windows</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <script nonce="${nonce}">
         window.__STREAMDROP_DEFAULT_SERVER__ = "${process.env.STREAMDROP_SERVER || "https://streamdrop.app"}"
         window.__STREAMDROP__=${config}
@@ -237,6 +270,7 @@ export function renderDownloadPage(session: Session, nonce: string) {
               <div class="mono dim" style="font-size:12px;margin-top:3px">${escapeHtml(session.id)}</div>
             </div>
             <div style="display:flex; gap:12px; align-items:center">
+              <button id="btn-cli-modal-dl" class="btn btn-small desktop-only" style="margin-right: 8px;">StreamDrop CLI</button>
               <button id="theme-toggle" class="icon-btn" type="button" aria-label="Toggle theme">
                 <span class="theme-icon theme-icon-sun" aria-hidden="true">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -302,6 +336,38 @@ export function renderDownloadPage(session: Session, nonce: string) {
           <div id="error" class="error hidden"></div>
         </section>
       </main>
+
+      <div id="cli-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2 style="margin:0;font-size:18px;">StreamDrop CLI</h2>
+            <button class="icon-btn close-modal" aria-label="Close" style="width:24px;height:24px;padding:0;line-height:1;">&times;</button>
+          </div>
+          <div class="modal-body" style="font-size:14px;color:var(--fg-dim);">
+            <p style="margin-top:0;margin-bottom:20px;">Transfer files directly from your terminal with end-to-end encryption.</p>
+            
+            <div class="kicker" style="margin-top: 16px;">Install (<span id="os-name">macOS</span>)</div>
+            <div class="copy-row" style="margin-bottom: 24px;">
+              <input id="cli-install-cmd" class="input mono" readonly value="brew install AntonyLeons/tap/streamdrop" />
+              <button class="btn btn-small" type="button" data-copy>Copy</button>
+            </div>
+            
+            <div class="kicker">Usage</div>
+            <pre class="mono" style="background: var(--bg-2); padding: 12px; border-radius: 6px; font-size: 12px; overflow-x: auto; color: var(--fg); margin: 0; line-height: 1.5;"># Send a file or folder
+streamdrop send ./my-file.zip
+
+# Receive a file
+streamdrop receive &lt;receive-code&gt;</pre>
+            
+            <div class="dim" style="font-size: 13px; margin-top: 20px; text-align: center;">
+              <a href="#" class="os-switch link" data-os="mac">macOS</a> &middot; 
+              <a href="#" class="os-switch link" data-os="linux">Linux</a> &middot; 
+              <a href="#" class="os-switch link" data-os="win">Windows</a>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <script nonce="${nonce}">window.__STREAMDROP__=${config}</script>
       <script type="module" src="/static/download.js"></script>

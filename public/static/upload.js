@@ -194,6 +194,61 @@ elFile.addEventListener("change", () => {
 })
 
 document.addEventListener("click", async (e) => {
+  const cliModalBtn = e.target?.closest?.('#btn-cli-modal') || e.target?.closest?.('#btn-cli-modal-dl')
+  if (cliModalBtn) {
+    const modal = document.getElementById("cli-modal")
+    if (modal) {
+      modal.classList.remove("hidden")
+      const osNameSpan = document.getElementById("os-name")
+      const cliInstallCmd = document.getElementById("cli-install-cmd")
+      
+      const ua = navigator.userAgent.toLowerCase()
+      let os = "mac"
+      if (ua.includes("win")) os = "win"
+      else if (ua.includes("linux")) os = "linux"
+      
+      const setOsContent = (targetOs) => {
+        if (targetOs === "mac") {
+          osNameSpan.textContent = "macOS"
+          cliInstallCmd.value = "brew install AntonyLeons/tap/streamdrop"
+        } else if (targetOs === "linux") {
+          osNameSpan.textContent = "Linux"
+          cliInstallCmd.value = "brew install AntonyLeons/tap/streamdrop"
+        } else if (targetOs === "win") {
+          osNameSpan.textContent = "Windows"
+          cliInstallCmd.value = "scoop bucket add antonyleons https://github.com/AntonyLeons/scoop-bucket && scoop install streamdrop"
+        }
+        
+        document.querySelectorAll(".os-switch").forEach(el => {
+          if (el.dataset.os === targetOs) {
+            el.style.fontWeight = "bold"
+            el.style.textDecoration = "underline"
+          } else {
+            el.style.fontWeight = "normal"
+            el.style.textDecoration = "none"
+          }
+        })
+      }
+      
+      setOsContent(os)
+      
+      document.querySelectorAll(".os-switch").forEach(btn => {
+        btn.onclick = (ev) => {
+          ev.preventDefault()
+          setOsContent(btn.dataset.os)
+        }
+      })
+    }
+    return
+  }
+
+  const closeModalBtn = e.target?.closest?.('.close-modal') || (e.target?.classList.contains('modal-backdrop') ? e.target : null)
+  if (closeModalBtn) {
+    const modal = document.getElementById("cli-modal")
+    if (modal) modal.classList.add("hidden")
+    return
+  }
+
   const nativeShareBtn = e.target?.closest?.('button[data-action="native-share"]')
   if (nativeShareBtn) {
     const root = nativeShareBtn.closest(".sd-file-item")

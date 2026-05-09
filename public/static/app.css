@@ -497,6 +497,12 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
   gap: 12px;
 }
 .sd-file-left { flex: 1 1 280px; min-width: 0; }
+@media (max-width: 768px) {
+  .desktop-only {
+    display: none !important;
+  }
+}
+
 .sd-file-name {
   font-size: 12px;
   color: var(--text);
@@ -730,19 +736,26 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
-.modal-panel {
+.modal-content {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: min(920px, calc(100vw - 32px));
+  width: min(500px, calc(100vw - 32px));
   max-height: calc(100vh - 56px);
   overflow: auto;
   background: var(--modal-bg);
   border: 1px solid var(--glass-border);
   border-radius: 18px;
-  padding: 18px;
+  padding: 24px;
   box-shadow: 0 32px 90px rgba(0,0,0,.65);
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  color: var(--text);
 }
 .recipe-block {
   padding: 14px;
