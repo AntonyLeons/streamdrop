@@ -19,7 +19,7 @@ export function renderUploadPage(session: Session | null, nonce: string) {
     body: `
       <main class="shell">
         <header class="hero">
-          <a class="brand link" href="/" style="cursor: pointer; text-decoration: none;">
+          <a class="brand" href="/" style="cursor: pointer; text-decoration: none;">
             <div class="logo"><img class="logo-img" src="${LOGO_SRC}" alt="" /></div>
             <div>
               <h1 style="color: var(--text);">StreamDrop</h1>
@@ -368,7 +368,7 @@ export function renderNotFoundPage(nonce: string) {
     body: `
       <main class="shell">
         <header class="hero">
-          <a class="brand link" href="/" style="cursor: pointer; text-decoration: none;">
+          <a class="brand" href="/" style="cursor: pointer; text-decoration: none;">
             <div class="logo"><img class="logo-img" src="${LOGO_SRC}" alt="" /></div>
             <div><h1 style="color: var(--text);">StreamDrop</h1><p style="color: var(--text-muted);">Encrypted file transfer.</p></div>
           </a>
@@ -396,7 +396,7 @@ export function renderServiceUnavailablePage(nonce: string) {
     body: `
       <main class="shell">
         <header class="hero">
-          <a class="brand link" href="/" style="cursor: pointer; text-decoration: none;">
+          <a class="brand" href="/" style="cursor: pointer; text-decoration: none;">
             <div class="logo"><img class="logo-img" src="${LOGO_SRC}" alt="" /></div>
             <div><h1 style="color: var(--text);">StreamDrop</h1><p style="color: var(--text-muted);">Encrypted file transfer.</p></div>
           </a>
