@@ -19,7 +19,7 @@ export function renderUploadPage(session: Session | null, nonce: string) {
     body: `
       <main class="shell">
         <header class="hero">
-          <div class="brand">
+          <div class="brand" onclick="window.location.href='/'" style="cursor: pointer;">
             <div class="logo"><img class="logo-img" src="${LOGO_SRC}" alt="" /></div>
             <div>
               <h1>StreamDrop</h1>
@@ -203,7 +203,13 @@ export function renderUploadPage(session: Session | null, nonce: string) {
           <div class="modal-body" style="font-size:14px;color:var(--fg-dim);">
             <p style="margin-top:0;margin-bottom:20px;">Transfer files directly from your terminal with end-to-end encryption.</p>
             
-            <div class="kicker" style="margin-top: 16px;">Install (<span id="os-name">macOS</span>)</div>
+            <div class="tabs" style="display: flex; gap: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--glass-border);">
+              <button class="tab-btn active" data-os="mac">macOS</button>
+              <button class="tab-btn" data-os="linux">Linux</button>
+              <button class="tab-btn" data-os="win">Windows</button>
+            </div>
+            
+            <div class="kicker">Install</div>
             <div class="copy-row" style="margin-bottom: 24px;">
               <input id="cli-install-cmd" class="input mono" readonly value="brew install AntonyLeons/tap/streamdrop" />
               <button class="btn btn-small" type="button" data-copy>Copy</button>
@@ -215,12 +221,6 @@ streamdrop send ./my-file.zip
 
 # Receive a file
 streamdrop receive &lt;receive-code&gt;</pre>
-            
-            <div class="dim" style="font-size: 13px; margin-top: 20px; text-align: center;">
-              <a href="#" class="os-switch link" data-os="mac">macOS</a> &middot; 
-              <a href="#" class="os-switch link" data-os="linux">Linux</a> &middot; 
-              <a href="#" class="os-switch link" data-os="win">Windows</a>
-            </div>
           </div>
         </div>
       </div>
@@ -249,7 +249,7 @@ export function renderDownloadPage(session: Session, nonce: string) {
     body: `
       <main class="shell">
         <header class="hero">
-          <div class="brand">
+          <div class="brand" onclick="window.location.href='/'" style="cursor: pointer;">
             <div class="logo"><img class="logo-img" src="${LOGO_SRC}" alt="" /></div>
             <div>
               <h1>Receive</h1>
@@ -347,7 +347,13 @@ export function renderDownloadPage(session: Session, nonce: string) {
           <div class="modal-body" style="font-size:14px;color:var(--fg-dim);">
             <p style="margin-top:0;margin-bottom:20px;">Transfer files directly from your terminal with end-to-end encryption.</p>
             
-            <div class="kicker" style="margin-top: 16px;">Install (<span id="os-name">macOS</span>)</div>
+            <div class="tabs" style="display: flex; gap: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--glass-border);">
+              <button class="tab-btn active" data-os="mac">macOS</button>
+              <button class="tab-btn" data-os="linux">Linux</button>
+              <button class="tab-btn" data-os="win">Windows</button>
+            </div>
+            
+            <div class="kicker">Install</div>
             <div class="copy-row" style="margin-bottom: 24px;">
               <input id="cli-install-cmd" class="input mono" readonly value="brew install AntonyLeons/tap/streamdrop" />
               <button class="btn btn-small" type="button" data-copy>Copy</button>
@@ -359,12 +365,6 @@ streamdrop send ./my-file.zip
 
 # Receive a file
 streamdrop receive &lt;receive-code&gt;</pre>
-            
-            <div class="dim" style="font-size: 13px; margin-top: 20px; text-align: center;">
-              <a href="#" class="os-switch link" data-os="mac">macOS</a> &middot; 
-              <a href="#" class="os-switch link" data-os="linux">Linux</a> &middot; 
-              <a href="#" class="os-switch link" data-os="win">Windows</a>
-            </div>
           </div>
         </div>
       </div>
@@ -382,7 +382,7 @@ export function renderNotFoundPage(nonce: string) {
     body: `
       <main class="shell">
         <header class="hero">
-          <div class="brand">
+          <div class="brand" onclick="window.location.href='/'" style="cursor: pointer;">
             <div class="logo"><img class="logo-img" src="${LOGO_SRC}" alt="" /></div>
             <div><h1>StreamDrop</h1><p>Encrypted file transfer.</p></div>
           </div>
@@ -410,7 +410,7 @@ export function renderServiceUnavailablePage(nonce: string) {
     body: `
       <main class="shell">
         <header class="hero">
-          <div class="brand">
+          <div class="brand" onclick="window.location.href='/'" style="cursor: pointer;">
             <div class="logo"><img class="logo-img" src="${LOGO_SRC}" alt="" /></div>
             <div><h1>StreamDrop</h1><p>Encrypted file transfer.</p></div>
           </div>

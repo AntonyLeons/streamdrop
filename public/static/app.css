@@ -723,6 +723,32 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
 
 .hidden { display: none; }
 
+/* ── Tabs ───────────────────────────────────────────── */
+.tabs {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--glass-border);
+}
+.tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 4px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+}
+.tab-btn:hover {
+  color: var(--text);
+}
+.tab-btn.active {
+  color: var(--v-bright);
+  border-bottom-color: var(--v-bright);
+}
+
 /* ── Modal ───────────────────────────────────────────── */
 .modal {
   position: fixed;

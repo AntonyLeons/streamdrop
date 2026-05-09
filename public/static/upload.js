@@ -209,30 +209,25 @@ document.addEventListener("click", async (e) => {
       
       const setOsContent = (targetOs) => {
         if (targetOs === "mac") {
-          osNameSpan.textContent = "macOS"
           cliInstallCmd.value = "brew install AntonyLeons/tap/streamdrop"
         } else if (targetOs === "linux") {
-          osNameSpan.textContent = "Linux"
           cliInstallCmd.value = "brew install AntonyLeons/tap/streamdrop"
         } else if (targetOs === "win") {
-          osNameSpan.textContent = "Windows"
           cliInstallCmd.value = "scoop bucket add antonyleons https://github.com/AntonyLeons/scoop-bucket && scoop install streamdrop"
         }
         
-        document.querySelectorAll(".os-switch").forEach(el => {
+        document.querySelectorAll(".tab-btn").forEach(el => {
           if (el.dataset.os === targetOs) {
-            el.style.fontWeight = "bold"
-            el.style.textDecoration = "underline"
+            el.classList.add("active")
           } else {
-            el.style.fontWeight = "normal"
-            el.style.textDecoration = "none"
+            el.classList.remove("active")
           }
         })
       }
       
       setOsContent(os)
       
-      document.querySelectorAll(".os-switch").forEach(btn => {
+      document.querySelectorAll(".tab-btn").forEach(btn => {
         btn.onclick = (ev) => {
           ev.preventDefault()
           setOsContent(btn.dataset.os)
