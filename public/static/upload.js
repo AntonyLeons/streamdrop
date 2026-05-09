@@ -473,16 +473,6 @@ async function startTransfer(file) {
       
       try {
         let res
-        let supportsDuplex = false
-        try {
-          new Request('', { method: 'POST', body: new ReadableStream(), duplex: 'half' })
-          supportsDuplex = true
-        } catch(e) {}
-
-        if (!supportsDuplex) {
-          throw new Error("Your browser does not support stream uploading (duplex: half). Please use Chrome, Edge, or Firefox on Desktop/Android. iOS Safari is currently unsupported by Apple.")
-        }
-
         try {
           const uploadStream = wrapStreamWithProgress({
             stream: cipherBlob.stream(),
