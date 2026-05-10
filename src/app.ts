@@ -33,6 +33,11 @@ export function createApp() {
     return c.res
   })
 
+  app.onError((err, c) => {
+    console.error(`[Router Error] ${c.req.method} ${c.req.url}:`, err)
+    return c.json({ error: "internal_server_error" }, 500)
+  })
+
   app.get("/static/app.css", async () => {
     const file = Bun.file(new URL("../public/static/app.css", import.meta.url))
     return new Response(file, {

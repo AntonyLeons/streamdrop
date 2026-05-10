@@ -23,6 +23,16 @@ const argv = Bun.argv.slice(2)
 const cmd = argv[0]
 let startTime = 0
 
+process.on("uncaughtException", (err) => {
+  console.error(`\nError: ${err.message || err}`)
+  process.exit(1)
+})
+
+process.on("unhandledRejection", (reason: any) => {
+  console.error(`\nError: ${reason?.message || reason}`)
+  process.exit(1)
+})
+
 if (!cmd || cmd === "help" || cmd === "--help" || cmd === "-h") {
   printHelp()
   process.exit(0)

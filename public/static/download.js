@@ -1,5 +1,8 @@
 import { base64urlDecode, createDecryptTransform } from "./crypto.js"
 
+window.addEventListener("unhandledrejection", (e) => showError(String(e.reason?.message ?? e.reason ?? "error")))
+window.addEventListener("error", (e) => showError(String(e.error?.message ?? e.message ?? "error")))
+
 const cfg = window.__STREAMDROP__
 
 const elStart = document.getElementById("start")
