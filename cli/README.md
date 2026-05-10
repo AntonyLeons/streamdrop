@@ -24,10 +24,6 @@ brew install streamdrop-cli
 scoop bucket add antonyleons https://github.com/AntonyLeons/scoop-bucket
 scoop install streamdrop-cli
 
-# Chocolatey
-choco install streamdrop-cli
-```
-
 ### From Source
 Ensure you have [Bun](https://bun.sh/) installed, then build the binary:
 

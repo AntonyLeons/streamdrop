@@ -212,13 +212,6 @@ export function renderUploadPage(session: Session | null, nonce: string) {
               <input id="cli-install-cmd" class="input mono" readonly value="npm install -g streamdrop-cli" />
               <button class="btn btn-small" type="button" data-copy>Copy</button>
             </div>
-            <div id="cli-install-choco-container" class="hidden">
-              <div class="kicker" style="margin-bottom: 8px;">Install with Chocolatey</div>
-              <div class="copy-row" style="margin-bottom: 24px;">
-                <input id="cli-install-choco-cmd" class="input mono" readonly value="choco install streamdrop-cli" />
-                <button class="btn btn-small" type="button" data-copy>Copy</button>
-              </div>
-            </div>
             
             <div class="kicker" style="margin-bottom: 12px;">Usage</div>
             <pre class="mono" style="background: #1e1e1e; border: 1px solid var(--glass-border); padding: 16px; border-radius: 8px; font-size: 13px; overflow-x: auto; color: #e5e7eb; margin: 0; line-height: 1.6;"><span style="color: #6b7280;"># Send a file or folder</span>
@@ -357,13 +350,6 @@ export function renderDownloadPage(session: Session, nonce: string) {
             <div class="copy-row" style="margin-bottom: 24px;" id="cli-install-row">
               <input id="cli-install-cmd" class="input mono" readonly value="npm install -g streamdrop-cli" />
               <button class="btn btn-small" type="button" data-copy>Copy</button>
-            </div>
-            <div id="cli-install-choco-container" class="hidden">
-              <div class="kicker" style="margin-bottom: 8px;">Install with Chocolatey</div>
-              <div class="copy-row" style="margin-bottom: 24px;">
-                <input id="cli-install-choco-cmd" class="input mono" readonly value="choco install streamdrop-cli" />
-                <button class="btn btn-small" type="button" data-copy>Copy</button>
-              </div>
             </div>
             
             <div class="kicker">Usage</div>

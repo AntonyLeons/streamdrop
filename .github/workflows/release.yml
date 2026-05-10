@@ -153,13 +153,6 @@ jobs:
             envsubst < bucket/streamdrop-cli.json.template > bucket/streamdrop-cli.json
             git add bucket/streamdrop-cli.json
           fi
-
-          # Process Chocolatey Template
-          if [ -f choco/streamdrop-cli.nuspec.template ]; then
-            envsubst < choco/streamdrop-cli.nuspec.template > choco/streamdrop-cli.nuspec
-            envsubst < choco/tools/chocolateyinstall.ps1.template > choco/tools/chocolateyinstall.ps1
-            git add choco/streamdrop-cli.nuspec choco/tools/chocolateyinstall.ps1
-          fi
           
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
