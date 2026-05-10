@@ -44,6 +44,16 @@ export function getSessionCount() {
   return sessionsById.size
 }
 
+export function getActiveTransferCount() {
+  let count = 0
+  for (const session of sessionsById.values()) {
+    if (session.activeSenders > 0 || session.receivers.size > 0) {
+      count++
+    }
+  }
+  return count
+}
+
 export function getMaxSessions() {
   return getEnvPositiveInt("MAX_SESSIONS", DEFAULT_MAX_SESSIONS)
 }

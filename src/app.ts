@@ -11,6 +11,7 @@ import {
   deleteSession,
   waitForReceiverWithTimeout,
   getSessionCount,
+  getActiveTransferCount,
 } from "./sessions"
 import { renderDownloadPage, renderNotFoundPage, renderUploadPage, renderServiceUnavailablePage } from "./pages"
 import { getQRCodeVendorJS } from "./vendor/qrcode"
@@ -92,7 +93,7 @@ export function createApp() {
 
   app.get("/health", (c) => c.json({ ok: true }))
 
-  app.get("/stats", (c) => c.json(getStats(getSessionCount()), 200, { "cache-control": "no-store" }))
+  app.get("/stats", (c) => c.json(getStats(getSessionCount(), getActiveTransferCount()), 200, { "cache-control": "no-store" }))
 
   app.get("/", (c) => {
     const session = createSession()

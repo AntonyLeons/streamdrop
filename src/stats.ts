@@ -39,7 +39,7 @@ export function incrementFiles() {
   monthlyStats.totalFiles++
 }
 
-export function getStats(activeSessions: number) {
+export function getStats(activeSessions: number, activeTransfers: number) {
   checkMonth()
   return {
     totalSessions: serverStats.totalSessions,
@@ -52,6 +52,7 @@ export function getStats(activeSessions: number) {
       totalFiles: monthlyStats.totalFiles,
     },
     activeSessions,
+    activeTransfers,
     uptime: process.uptime(),
   }
 }
