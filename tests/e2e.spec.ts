@@ -216,7 +216,7 @@ test.skip("upload returns 409 for a second sender on same session", async ({ pag
     })
     
     // Fire and forget
-    window.__firstFetch = fetch(`/upload/${token}`, {
+    window.__firstFetch = fetch(`/upload/${token}/test-channel`, {
       method: 'PUT',
       body: stream,
       duplex: 'half',
@@ -227,13 +227,13 @@ test.skip("upload returns 409 for a second sender on same session", async ({ pag
   // Small delay then try a second sender
   await page.waitForTimeout(50)
   
-  const retry = await page.evaluate(async (token) => {
-    const res = await fetch(`/upload/${token}`, {
-      method: "PUT",
-      body: new Uint8Array([4,5,6])
-    })
-    return { status: res.status, body: await res.json() }
-  }, cfg.uploadToken)
+    const retry = await page.evaluate(async (token) => {
+      const res = await fetch(`/upload/${token}/test-channel`, {
+        method: "PUT",
+        body: new Uint8Array([4,5,6])
+      })
+      return { status: res.status, body: await res.json() }
+    }, cfg.uploadToken)
   
   expect(retry.status).toBe(409)
   expect(retry.body.error).toBe("sender_exists")
