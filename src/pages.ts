@@ -130,6 +130,14 @@ export function renderUploadPage(session: Session | null, nonce: string) {
                   <div class="sd-file-left">
                     <div class="mono sd-file-name"></div>
                     <div class="mono dim sd-file-state"></div>
+                    <div class="sd-file-downloads hidden" style="font-size: 12px; margin-top: 6px; color: var(--accent); display: flex; align-items: center; gap: 4px; font-weight: 500;">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                      </svg>
+                      <span class="sd-file-downloads-text">Downloaded 0 times</span>
+                    </div>
                     <div class="sd-file-badges hidden" data-badge="encrypted">
                       <span class="sd-file-badge">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

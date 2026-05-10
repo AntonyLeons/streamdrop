@@ -379,11 +379,12 @@ document.addEventListener("click", async (e) => {
 const abortControllersBySessionId = new Map()
 const cleanupBySessionId = new Map()
 const transferStats = new Map()
+let globalActiveUploads = 0
 
 window.addEventListener("beforeunload", (e) => {
-  if (abortControllersBySessionId.size > 0) {
+  if (globalActiveUploads > 0) {
     e.preventDefault()
-    e.returnValue = "You have active file shares. Closing this page will stop them."
+    e.returnValue = "You have active file transfers. Closing this page will stop them."
   }
 })
 
@@ -469,6 +470,7 @@ async function startTransfer(file) {
 
     const startChannelUpload = async (channelId) => {
       activeUploads++
+      globalActiveUploads++
       item.setState(activeUploads > 1 ? `Uploading (${activeUploads})` : "Uploading")
       let startTime = Date.now()
       
@@ -556,8 +558,11 @@ async function startTransfer(file) {
           if (err === "receivers_lost" || err === "aborted" || err === "channel_not_found") return
           throw new Error(err || `upload_failed_${res.status}`)
         }
+        
+        item.incrementDownloads()
       } finally {
         activeUploads--
+        globalActiveUploads--
         if (!abortController.signal.aborted) {
           item.setState(activeUploads > 0 ? `Uploading (${activeUploads})` : "Ready")
           if (activeUploads === 0) {
@@ -656,6 +661,9 @@ function createShareItem({ file, shareUrl, cliCode }) {
   const elLink = root.querySelector(".sd-file-link")
   const btnCli = root.querySelector('button[data-copy-kind="cli"]')
   const elNativeShare = root.querySelector('button[data-action="native-share"]')
+  const elDownloads = root.querySelector(".sd-file-downloads")
+  const elDownloadsText = root.querySelector(".sd-file-downloads-text")
+  let downloads = 0
 
   root.dataset.shareUrl = shareUrl
   root.dataset.qrRendered = "0"
@@ -678,6 +686,11 @@ function createShareItem({ file, shareUrl, cliCode }) {
 
   return {
     root,
+    incrementDownloads: () => {
+      downloads++
+      if (elDownloads) elDownloads.classList.remove("hidden")
+      if (elDownloadsText) elDownloadsText.textContent = `Downloaded ${downloads} time${downloads === 1 ? "" : "s"}`
+    },
     setState: (s) => {
       elState.textContent = s
     },
