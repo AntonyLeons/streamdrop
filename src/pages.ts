@@ -433,7 +433,12 @@ function htmlPage(opts: { title: string; body: string; nonce: string }) {
     <meta name="description" content="Zero-storage, end-to-end encrypted real-time file transfer. No accounts. No cloud." />
     <title>${escapeHtml(opts.title)}</title>
     <script nonce="${opts.nonce}">(()=>{try{const s=localStorage.getItem("sd_theme");const p=window.matchMedia&&window.matchMedia("(prefers-color-scheme: light)").matches;const t=s==="light"||s==="dark"?s:p?"light":"dark";document.documentElement.dataset.theme=t}catch{}})();</script>
-    <link rel="icon" href="${LOGO_SRC}">
+    <link rel="icon" type="image/png" href="/static/favicon/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/static/favicon/favicon.svg" />
+    <link rel="shortcut icon" href="/static/favicon/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="StreamDrop" />
+    <link rel="manifest" href="/static/favicon/site.webmanifest" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
