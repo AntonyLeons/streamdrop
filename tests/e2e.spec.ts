@@ -156,7 +156,7 @@ test("download page for unknown id shows 404", async ({ page }) => {
 
 // ─── Full transfer ────────────────────────────────────────────────────────────
 
-test.skip("full upload → download round-trip", async ({ browser }) => {
+test("full upload → download round-trip", async ({ browser }) => {
   const PAYLOAD = "StreamDrop E2E round-trip payload — ✓"
 
   // Two separate browser contexts simulate independent devices
@@ -200,7 +200,7 @@ test.skip("full upload → download round-trip", async ({ browser }) => {
   }
 })
 
-test.skip("upload returns 409 for a second sender on same session", async ({ page }) => {
+test("upload returns 409 for a second sender on same session", async ({ page }) => {
   await page.goto("/")
   const cfg = await getPageCfg(page)
 
