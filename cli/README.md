@@ -18,10 +18,14 @@ brew tap AntonyLeons/tap
 brew install streamdrop-cli
 ```
 
-### Windows (Scoop)
+### Windows (Scoop & Chocolatey)
 ```powershell
-scoop bucket add streamdrop https://github.com/AntonyLeons/homebrew-tap
+# Scoop
+scoop bucket add antonyleons https://github.com/AntonyLeons/scoop-bucket
 scoop install streamdrop-cli
+
+# Chocolatey
+choco install streamdrop-cli
 ```
 
 ### From Source

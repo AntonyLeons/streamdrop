@@ -201,17 +201,23 @@ export function renderUploadPage(session: Session | null, nonce: string) {
           <div class="modal-body" style="font-size:14px;color:var(--fg-dim);">
             <p style="margin-top:0;margin-bottom:20px;">Transfer files directly from your terminal with end-to-end encryption.</p>
             
-            <div class="tabs" style="display: flex; gap: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--glass-border); overflow-x: auto; white-space: nowrap;">
+            <div class="tabs" style="display: flex; gap: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--glass-border); overflow-x: auto; white-space: nowrap; scrollbar-width: none;">
               <button class="tab-btn active" data-os="npm">npm</button>
-              <button class="tab-btn" data-os="mac">macOS</button>
-              <button class="tab-btn" data-os="linux">Linux</button>
+              <button class="tab-btn" data-os="brew">macOS / Linux</button>
               <button class="tab-btn" data-os="win">Windows</button>
             </div>
             
-            <div class="kicker">Install</div>
-            <div class="copy-row" style="margin-bottom: 24px;">
+            <div class="kicker" id="cli-install-kicker">Install with scoop</div>
+            <div class="copy-row" style="margin-bottom: 24px;" id="cli-install-row">
               <input id="cli-install-cmd" class="input mono" readonly value="npm install -g streamdrop-cli" />
               <button class="btn btn-small" type="button" data-copy>Copy</button>
+            </div>
+            <div id="cli-install-choco-container" class="hidden">
+              <div class="kicker" style="margin-bottom: 8px;">Install with Chocolatey</div>
+              <div class="copy-row" style="margin-bottom: 24px;">
+                <input id="cli-install-choco-cmd" class="input mono" readonly value="choco install streamdrop-cli" />
+                <button class="btn btn-small" type="button" data-copy>Copy</button>
+              </div>
             </div>
             
             <div class="kicker" style="margin-bottom: 12px;">Usage</div>
@@ -341,16 +347,23 @@ export function renderDownloadPage(session: Session, nonce: string) {
           <div class="modal-body" style="font-size:14px;color:var(--fg-dim);">
             <p style="margin-top:0;margin-bottom:20px;">Transfer files directly from your terminal with end-to-end encryption.</p>
             
-            <div class="tabs" style="display: flex; gap: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--glass-border);">
-              <button class="tab-btn active" data-os="mac">macOS</button>
-              <button class="tab-btn" data-os="linux">Linux</button>
+            <div class="tabs" style="display: flex; gap: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--glass-border); overflow-x: auto; white-space: nowrap; scrollbar-width: none;">
+              <button class="tab-btn active" data-os="npm">npm</button>
+              <button class="tab-btn" data-os="brew">macOS / Linux</button>
               <button class="tab-btn" data-os="win">Windows</button>
             </div>
             
-            <div class="kicker">Install</div>
-            <div class="copy-row" style="margin-bottom: 24px;">
-              <input id="cli-install-cmd" class="input mono" readonly value="brew install AntonyLeons/tap/streamdrop" />
+            <div class="kicker" id="cli-install-kicker">Install with scoop</div>
+            <div class="copy-row" style="margin-bottom: 24px;" id="cli-install-row">
+              <input id="cli-install-cmd" class="input mono" readonly value="npm install -g streamdrop-cli" />
               <button class="btn btn-small" type="button" data-copy>Copy</button>
+            </div>
+            <div id="cli-install-choco-container" class="hidden">
+              <div class="kicker" style="margin-bottom: 8px;">Install with Chocolatey</div>
+              <div class="copy-row" style="margin-bottom: 24px;">
+                <input id="cli-install-choco-cmd" class="input mono" readonly value="choco install streamdrop-cli" />
+                <button class="btn btn-small" type="button" data-copy>Copy</button>
+              </div>
             </div>
             
             <div class="kicker">Usage</div>

@@ -351,6 +351,69 @@ async function streamToOPFS(stream, signal) {
 window.addEventListener("unhandledrejection", (e) => showError(String(e.reason?.message ?? e.reason ?? "error")))
 window.addEventListener("error", (e) => showError(String(e.error?.message ?? e.message ?? "error")))
 
+document.addEventListener("click", async (e) => {
+  const cliModalBtn = e.target?.closest?.('#btn-cli-modal') || e.target?.closest?.('#btn-cli-modal-dl')
+  if (cliModalBtn) {
+    const modal = document.getElementById("cli-modal")
+    if (modal) {
+      modal.classList.remove("hidden")
+    }
+    return
+  }
+
+  const tabBtn = e.target?.closest?.('.tab-btn')
+  if (tabBtn) {
+    const os = tabBtn.dataset.os
+    const cliInstallCmd = document.getElementById("cli-install-cmd")
+    const chocoContainer = document.getElementById("cli-install-choco-container")
+    
+    if (cliInstallCmd) {
+      if (os === "npm") {
+        cliInstallCmd.value = "npm install -g streamdrop-cli"
+        if (chocoContainer) chocoContainer.classList.add("hidden")
+      } else if (os === "brew") {
+        cliInstallCmd.value = "brew install AntonyLeons/tap/streamdrop-cli"
+        if (chocoContainer) chocoContainer.classList.add("hidden")
+      } else if (os === "win") {
+        cliInstallCmd.value = "scoop bucket add antonyleons https://github.com/AntonyLeons/scoop-bucket\nscoop install streamdrop-cli"
+        if (chocoContainer) chocoContainer.classList.remove("hidden")
+      }
+    }
+    document.querySelectorAll(".tab-btn").forEach(btn => btn.classList.toggle("active", btn === tabBtn))
+    return
+  }
+
+  const closeModalBtn = e.target?.closest?.('.close-modal') || (e.target?.classList.contains('modal-backdrop') ? e.target : null)
+  if (closeModalBtn) {
+    const modal = document.getElementById("cli-modal")
+    if (modal) modal.classList.add("hidden")
+    return
+  }
+  
+  const btn = e.target?.closest?.("button[data-copy]")
+  if (!btn) return
+
+  let value = btn.dataset.copyValue
+  if (!value) {
+    const input = btn.previousElementSibling
+    if (input && input.tagName === "INPUT") value = input.value
+  }
+  if (!value) return
+
+  try {
+    await navigator.clipboard.writeText(value)
+    const old = btn.textContent
+    btn.textContent = "Copied"
+    setTimeout(() => (btn.textContent = old), 900)
+  } catch {
+    const input = btn.previousElementSibling
+    if (input && input.tagName === "INPUT") {
+      input.select()
+      document.execCommand("copy")
+    }
+  }
+})
+
 const autoKey = getKeyBytes()
 if (autoKey) {
   setMeta(`Starting ${suggestedName}…`)

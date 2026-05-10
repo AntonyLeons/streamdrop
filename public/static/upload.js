@@ -228,11 +228,19 @@ document.addEventListener("click", async (e) => {
   if (tabBtn) {
     const os = tabBtn.dataset.os
     const cliInstallCmd = document.getElementById("cli-install-cmd")
+    const chocoContainer = document.getElementById("cli-install-choco-container")
+    
     if (cliInstallCmd) {
-      if (os === "npm") cliInstallCmd.value = "npm install -g streamdrop-cli"
-      else if (os === "mac") cliInstallCmd.value = "brew install AntonyLeons/tap/streamdrop-cli"
-      else if (os === "linux") cliInstallCmd.value = "brew install AntonyLeons/tap/streamdrop-cli"
-      else if (os === "win") cliInstallCmd.value = "scoop bucket add antonyleons https://github.com/AntonyLeons/scoop-bucket && scoop install streamdrop-cli"
+      if (os === "npm") {
+        cliInstallCmd.value = "npm install -g streamdrop-cli"
+        if (chocoContainer) chocoContainer.classList.add("hidden")
+      } else if (os === "brew") {
+        cliInstallCmd.value = "brew install AntonyLeons/tap/streamdrop-cli"
+        if (chocoContainer) chocoContainer.classList.add("hidden")
+      } else if (os === "win") {
+        cliInstallCmd.value = "scoop bucket add antonyleons https://github.com/AntonyLeons/scoop-bucket\nscoop install streamdrop-cli"
+        if (chocoContainer) chocoContainer.classList.remove("hidden")
+      }
     }
     document.querySelectorAll(".tab-btn").forEach(btn => btn.classList.toggle("active", btn === tabBtn))
     return
