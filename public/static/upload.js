@@ -846,7 +846,10 @@ try {
   // Desktop Safari also lacks support (has Safari in UA but not Chrome/Edg/Android)
   const isSafariDesktop = navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome') && !navigator.userAgent.includes('Edg') && !navigator.userAgent.includes('Android')
   
-  supportsDuplex = !(isWebKit || isSafariDesktop)
+  // Firefox does not support ReadableStream in request bodies
+  const isFirefox = navigator.userAgent.toLowerCase().includes('firefox')
+  
+  supportsDuplex = !(isWebKit || isSafariDesktop || isFirefox)
 } catch(e) {
   supportsDuplex = false
 }
