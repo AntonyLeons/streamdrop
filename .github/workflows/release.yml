@@ -50,10 +50,10 @@ jobs:
         run: bun install
 
       - name: Build CLI
-        run: bun build cli/index.ts --compile --outfile dist/streamdrop-cli${{ matrix.ext }}
+        run: bun build cli/index.ts --compile --target bun-${{ matrix.name }} --outfile dist/streamdrop-cli${{ matrix.ext }}
 
       - name: Build Server
-        run: bun build src/server.ts --compile --outfile dist/streamdrop-server${{ matrix.ext }}
+        run: bun build src/server.ts --compile --target bun-${{ matrix.name }} --outfile dist/streamdrop-server${{ matrix.ext }}
 
       - name: Build NPM Package
         if: matrix.name == 'linux-x64'
@@ -152,6 +152,13 @@ jobs:
           if [ -f bucket/streamdrop-cli.json.template ]; then
             envsubst < bucket/streamdrop-cli.json.template > bucket/streamdrop-cli.json
             git add bucket/streamdrop-cli.json
+          fi
+
+          # Process Chocolatey Template
+          if [ -f choco/streamdrop-cli.nuspec.template ]; then
+            envsubst < choco/streamdrop-cli.nuspec.template > choco/streamdrop-cli.nuspec
+            envsubst < choco/tools/chocolateyinstall.ps1.template > choco/tools/chocolateyinstall.ps1
+            git add choco/streamdrop-cli.nuspec choco/tools/chocolateyinstall.ps1
           fi
           
           git config user.name "github-actions[bot]"

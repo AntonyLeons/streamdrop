@@ -77,7 +77,6 @@ This app keeps some HTTP connections open (receiver wait / downloads). If you're
 
 - [docs/implementation.md](./docs/implementation.md)
 
-## IOS/Webkit
+## iOS / Safari Compatibility
 
-Readable stream API is not supported in IOS/Webkit.
-Please use Chrome or Firefox for uploading.
+StreamDrop includes full fallback support for iOS and Safari. While Apple's WebKit engine does not currently support `ReadableStream` in `fetch()` bodies, StreamDrop automatically detects iOS and Safari and falls back to a highly optimized `XMLHttpRequest` chunking implementation. It is fully functional on all platforms!
