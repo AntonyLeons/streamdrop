@@ -132,6 +132,17 @@ async function startRawHosting(sessionId, rawSession, file, signal) {
         }
 
         let res
+        let markedDone = false
+        const markRawDone = () => {
+          if (markedDone || !item) return
+          markedDone = true
+          item.setBar(1)
+          item.setState("Ready")
+          item.incrementDownloads()
+          setStep("wait", true)
+          markStepDone("stream")
+        }
+
         try {
           if (supportsDuplex) {
             const uploadStream = wrapStreamWithProgress({
@@ -146,6 +157,8 @@ async function startRawHosting(sessionId, rawSession, file, signal) {
                   setStep("stream", true)
                   markStepDone("stream")
                 }
+                // Mark done as soon as all bytes are sent — don't wait for curl to finish downloading
+                if (total > 0 && done >= total) markRawDone()
               },
             })
 
@@ -172,19 +185,15 @@ async function startRawHosting(sessionId, rawSession, file, signal) {
                   setStep("stream", true)
                   markStepDone("stream")
                 }
+                if (total > 0 && done >= total) markRawDone()
               }
             )
           }
         } catch {
           await sleep(250)
         }
-        if (item && res && res.ok) {
-          item.setBar(1)
-          item.setState("Ready")
-          item.incrementDownloads()
-          setStep("wait", true)
-          markStepDone("stream")
-        }
+        // Fallback: if progress never fired 100% (e.g. unknown file size), mark done on 200 OK
+        if (res && res.ok) markRawDone()
       } catch {
         await sleep(250)
       }
