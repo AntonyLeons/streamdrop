@@ -19,6 +19,7 @@ try {
     port, 
     fetch: app.fetch, 
     idleTimeout: 0, 
+    // @ts-expect-error - h3 is an experimental Bun feature not yet in the official types
     h3: true,
     error(err) {
       console.error("Server Error:", err)
