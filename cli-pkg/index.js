@@ -4545,7 +4545,7 @@ function printHelp() {
   console.log(`streamdrop
 
 Usage:
-  streamdrop send <file_or_folder> [--server <url>]
+  streamdrop send <file_or_folder> [--server <url>] [--qr]
   streamdrop receive <share-url> [--server <url>] [--out <file>] [--no-extract]
 
 Environment:
@@ -4634,11 +4634,13 @@ async function runSend(serverRaw, filePath) {
     console.log(`  \x1B[1mReceive:\x1B[0m   \x1B[33mstreamdrop receive ${receiveCode} --server ${server}\x1B[0m
 `);
   }
-  try {
-    const qr = await import_qrcode.default.toString(shareUrl, { type: "terminal", small: true });
-    console.log(qr.trimEnd() + `
+  if (argv.includes("--qr")) {
+    try {
+      const qr = await import_qrcode.default.toString(shareUrl, { type: "terminal", small: true });
+      console.log(qr.trimEnd() + `
 `);
-  } catch {}
+    } catch {}
+  }
   const key = await crypto.subtle.importKey("raw", rawKey, { name: "AES-GCM" }, false, ["encrypt"]);
   while (true) {
     const ok = await waitForReceiver(server, sess.id);

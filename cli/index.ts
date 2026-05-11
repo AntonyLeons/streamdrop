@@ -81,7 +81,7 @@ function printHelp() {
   console.log(`streamdrop
 
 Usage:
-  streamdrop send <file_or_folder> [--server <url>]
+  streamdrop send <file_or_folder> [--server <url>] [--qr]
   streamdrop receive <share-url> [--server <url>] [--out <file>] [--no-extract]
 
 Environment:
@@ -179,10 +179,12 @@ async function runSend(serverRaw: string, filePath: string) {
   } else {
     console.log(`  \x1b[1mReceive:\x1b[0m   \x1b[33mstreamdrop receive ${receiveCode} --server ${server}\x1b[0m\n`)
   }
-  try {
-    const qr = await QRCode.toString(shareUrl, { type: "terminal", small: true })
-    console.log(qr.trimEnd() + "\n")
-  } catch {}
+  if (argv.includes("--qr")) {
+    try {
+      const qr = await QRCode.toString(shareUrl, { type: "terminal", small: true })
+      console.log(qr.trimEnd() + "\n")
+    } catch {}
+  }
 
   const key = await crypto.subtle.importKey("raw", rawKey, { name: "AES-GCM" }, false, ["encrypt"])
 

@@ -46,7 +46,9 @@ ln -s $(pwd)/dist/streamdrop-cli /usr/local/bin/streamdrop
 ```bash
 streamdrop send my-video.mp4
 ```
-*Output:* Generates a secure share link and a QR code in your terminal. It will wait until a receiver connects before starting the encrypted stream.
+*Output:* Generates a secure share link. It will wait until a receiver connects before starting the encrypted stream.
+
+*Tip: Add the `--qr` flag if you want to generate a terminal QR code of the share link.*
 
 ### Receiving a File
 
