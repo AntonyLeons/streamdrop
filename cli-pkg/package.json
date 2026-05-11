@@ -2,6 +2,7 @@
   "name": "streamdrop-cli",
   "version": "1.0.0",
   "description": "Securely send and receive files directly from your terminal using StreamDrop.",
+  "type": "module",
   "main": "index.js",
   "bin": {
     "streamdrop": "index.js"

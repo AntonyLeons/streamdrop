@@ -10,7 +10,7 @@
     "test:e2e": "playwright test",
     "check": "bunx tsc -p tsconfig.json",
     "cli:build": "bun build cli/index.ts --compile --outfile dist/streamdrop-cli",
-    "cli:build-npm": "bun build cli/index.ts --target node --outfile cli-pkg/index.js",
+    "cli:build-npm": "bun build cli/index.ts --target node --outfile cli-pkg/index.js && echo \"#!/usr/bin/env node\" | cat - cli-pkg/index.js > cli-pkg/index.tmp && mv cli-pkg/index.tmp cli-pkg/index.js && chmod +x cli-pkg/index.js && cp cli/README.md cli-pkg/README.md",
     "cli:dev": "bun cli/index.ts"
   },
   "dependencies": {

@@ -4469,13 +4469,15 @@ function eq3(a, b) {
 
 // cli/index.ts
 import { basename, extname, dirname, join } from "node:path";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, createReadStream, createWriteStream } from "node:fs";
 import { stat as statFs } from "node:fs/promises";
 import { homedir } from "node:os";
+import { spawn } from "node:child_process";
+import { Readable, Writable } from "node:stream";
 var DEFAULT_SERVER = "https://streamdrop.app";
 function getDefaultServer() {
-  if (Bun.env.STREAMDROP_SERVER)
-    return Bun.env.STREAMDROP_SERVER;
+  if (process.env.STREAMDROP_SERVER)
+    return process.env.STREAMDROP_SERVER;
   try {
     const rc = readFileSync(join(homedir(), ".streamdroprc"), "utf-8");
     const match = rc.match(/SERVER=(.*)/);
@@ -4484,9 +4486,19 @@ function getDefaultServer() {
   } catch {}
   return DEFAULT_SERVER;
 }
-var argv = Bun.argv.slice(2);
+var argv = process.argv.slice(2);
 var cmd = argv[0];
 var startTime = 0;
+process.on("uncaughtException", (err) => {
+  console.error(`
+Error: ${err.message || err}`);
+  process.exit(1);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error(`
+Error: ${reason?.message || reason}`);
+  process.exit(1);
+});
 if (!cmd || cmd === "help" || cmd === "--help" || cmd === "-h") {
   printHelp();
   process.exit(0);
@@ -4597,7 +4609,6 @@ async function runSend(serverRaw, filePath) {
   const server = normalizeServer(serverRaw);
   if (!existsSync(filePath))
     throw new Error("file_not_found");
-  const file = Bun.file(filePath);
   const stat = await statFs(filePath);
   let fileName = basename(filePath);
   let totalSize;
@@ -4641,13 +4652,13 @@ async function runSend(serverRaw, filePath) {
       startTime = 0;
       let streamToRead;
       if (stat.isDirectory()) {
-        const tar = Bun.spawn(["tar", "-cf", "-", basename(filePath)], {
+        const tar = spawn("tar", ["-cf", "-", basename(filePath)], {
           cwd: dirname(filePath),
-          stdout: "pipe"
+          stdio: ["ignore", "pipe", "ignore"]
         });
-        streamToRead = tar.stdout;
+        streamToRead = Readable.toWeb(tar.stdout);
       } else {
-        streamToRead = file.stream();
+        streamToRead = Readable.toWeb(createReadStream(filePath));
       }
       const enc = createEncryptStream({
         stream: streamToRead,
@@ -4719,21 +4730,20 @@ async function runReceive(input, overrideServer) {
   const plain = res.body.pipeThrough(decrypt);
   if (shouldExtract) {
     console.log(`Folder archive detected. Extracting on the fly...`);
-    const tarProc = Bun.spawn(["tar", "-xf", "-"], {
-      stdin: "pipe",
-      stdout: "inherit",
-      stderr: "inherit"
+    const tarProc = spawn("tar", ["-xf", "-"], {
+      stdio: ["pipe", "inherit", "inherit"]
     });
-    const writer = new WritableStream({
-      write(chunk) {
-        tarProc.stdin.write(chunk);
-      },
-      close() {
-        tarProc.stdin.end();
-      }
-    });
+    const writer = Writable.toWeb(tarProc.stdin);
     await plain.pipeTo(writer);
-    await tarProc.exited;
+    await new Promise((resolve, reject) => {
+      tarProc.on("close", (code) => {
+        if (code === 0)
+          resolve();
+        else
+          reject(new Error(`tar exited with code ${code}`));
+      });
+      tarProc.on("error", reject);
+    });
     console.log();
     console.log(`\x1B[32mExtracted successfully.\x1B[0m
 `);
@@ -4857,20 +4867,8 @@ async function claim(server, uploadToken) {
   }
 }
 async function writeToFile(path, stream) {
-  const w = Bun.file(path).writer();
-  const reader = stream.getReader();
-  try {
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done)
-        break;
-      if (value)
-        w.write(value);
-    }
-  } finally {
-    reader.cancel().catch(() => {});
-    await w.end();
-  }
+  const w = createWriteStream(path);
+  await stream.pipeTo(Writable.toWeb(w));
 }
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));

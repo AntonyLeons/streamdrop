@@ -1,16 +1,18 @@
 import QRCode from "qrcode"
 import { createDecryptTransform, createEncryptStream } from "../public/static/crypto.js"
 import { basename, extname, dirname, join } from "node:path"
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readFileSync, createReadStream, createWriteStream } from "node:fs"
 import { stat as statFs } from "node:fs/promises"
 import { homedir } from "node:os"
+import { spawn } from "node:child_process"
+import { Readable, Writable } from "node:stream"
 
 type SessionRes = { id: string; uploadToken: string; downloadToken: string }
 
 const DEFAULT_SERVER = "https://streamdrop.app"
 
 function getDefaultServer() {
-  if (Bun.env.STREAMDROP_SERVER) return Bun.env.STREAMDROP_SERVER
+  if (process.env.STREAMDROP_SERVER) return process.env.STREAMDROP_SERVER
   try {
     const rc = readFileSync(join(homedir(), ".streamdroprc"), "utf-8")
     const match = rc.match(/SERVER=(.*)/)
@@ -19,7 +21,7 @@ function getDefaultServer() {
   return DEFAULT_SERVER
 }
 
-const argv = Bun.argv.slice(2)
+const argv = process.argv.slice(2)
 const cmd = argv[0]
 let startTime = 0
 
@@ -152,7 +154,6 @@ async function runSend(serverRaw: string, filePath: string) {
   const server = normalizeServer(serverRaw)
   if (!existsSync(filePath)) throw new Error("file_not_found")
   
-  const file = Bun.file(filePath)
   const stat = await statFs(filePath)
 
   let fileName = basename(filePath)
@@ -197,13 +198,13 @@ async function runSend(serverRaw: string, filePath: string) {
       
       let streamToRead: ReadableStream<Uint8Array>
       if (stat.isDirectory()) {
-        const tar = Bun.spawn(["tar", "-cf", "-", basename(filePath)], {
+        const tar = spawn("tar", ["-cf", "-", basename(filePath)], {
           cwd: dirname(filePath),
-          stdout: "pipe",
+          stdio: ["ignore", "pipe", "ignore"],
         })
-        streamToRead = tar.stdout
+        streamToRead = Readable.toWeb(tar.stdout) as ReadableStream<Uint8Array>
       } else {
-        streamToRead = file.stream()
+        streamToRead = Readable.toWeb(createReadStream(filePath)) as ReadableStream<Uint8Array>
       }
 
       const enc = createEncryptStream({ 
@@ -286,23 +287,20 @@ async function runReceive(input: string, overrideServer?: string | null) {
   
   if (shouldExtract) {
     console.log(`Folder archive detected. Extracting on the fly...`)
-    const tarProc = Bun.spawn(["tar", "-xf", "-"], {
-      stdin: "pipe",
-      stdout: "inherit",
-      stderr: "inherit",
+    const tarProc = spawn("tar", ["-xf", "-"], {
+      stdio: ["pipe", "inherit", "inherit"],
     })
 
-    const writer = new WritableStream({
-      write(chunk) {
-        tarProc.stdin.write(chunk)
-      },
-      close() {
-        tarProc.stdin.end()
-      },
-    })
+    const writer = Writable.toWeb(tarProc.stdin)
 
     await plain.pipeTo(writer)
-    await tarProc.exited
+    await new Promise<void>((resolve, reject) => {
+      tarProc.on("close", (code) => {
+        if (code === 0) resolve()
+        else reject(new Error(`tar exited with code ${code}`))
+      })
+      tarProc.on("error", reject)
+    })
 
     console.log() // New line after progress
     console.log(`\x1b[32mExtracted successfully.\x1b[0m\n`)
@@ -430,18 +428,8 @@ async function claim(server: string, uploadToken: string) {
 }
 
 async function writeToFile(path: string, stream: ReadableStream<Uint8Array>) {
-  const w = Bun.file(path).writer()
-  const reader = stream.getReader()
-  try {
-    while (true) {
-      const { value, done } = await reader.read()
-      if (done) break
-      if (value) w.write(value)
-    }
-  } finally {
-    reader.cancel().catch(() => {})
-    await w.end()
-  }
+  const w = createWriteStream(path)
+  await stream.pipeTo(Writable.toWeb(w))
 }
 
 function sleep(ms: number) {
