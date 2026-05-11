@@ -177,11 +177,12 @@ async function startRawHosting(sessionId, rawSession, file, signal) {
         } catch {
           await sleep(250)
         }
-        if (item && res.ok) {
+        if (item && res && res.ok) {
           item.setBar(1)
           item.setState("Ready")
-          setStep("ready", true)
-          markStepDone("ready")
+          item.incrementDownloads()
+          setStep("wait", true)
+          markStepDone("stream")
         }
       } catch {
         await sleep(250)
@@ -679,9 +680,9 @@ function createShareItem({ file, shareUrl, cliCode }) {
   elLink.value = shareUrl
   if (btnCli && cliCode) {
     if (window.__STREAMDROP_DEFAULT_SERVER__ && window.__STREAMDROP_DEFAULT_SERVER__ !== location.origin) {
-      btnCli.dataset.copyValue = `streamdrop receive ${cliCode} --server ${location.origin}`
+      btnCli.dataset.copyValue = `streamdrop receive "${cliCode}" --server "${location.origin}"`
     } else {
-      btnCli.dataset.copyValue = `streamdrop receive ${cliCode}`
+      btnCli.dataset.copyValue = `streamdrop receive "${cliCode}"`
     }
   }
   if (elNativeShare) {
