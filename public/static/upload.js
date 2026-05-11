@@ -744,18 +744,31 @@ function wrapStreamWithProgress({ stream, total, onProgress, signal }) {
 }
 
 async function streamToTempFileOrBlob(stream, signal) {
-  if (navigator.storage && navigator.storage.getDirectory) {
-    const root = await navigator.storage.getDirectory()
-    const name = `sd_enc_${Date.now()}_${Math.random().toString(16).slice(2)}`
-    const handle = await root.getFileHandle(name, { create: true })
-    const writable = await handle.createWritable()
+  let root = null;
+  let handle = null;
+  let writable = null;
+
+  try {
+    if (navigator.storage && navigator.storage.getDirectory) {
+      root = await navigator.storage.getDirectory()
+      const name = `sd_enc_${Date.now()}_${Math.random().toString(16).slice(2)}`
+      handle = await root.getFileHandle(name, { create: true })
+      writable = await handle.createWritable()
+    }
+  } catch (e) {
+    root = null;
+    handle = null;
+    writable = null;
+  }
+
+  if (root && handle && writable) {
     await stream.pipeTo(writable, { signal })
     const file = await handle.getFile()
     return {
       blob: file,
       cleanup: async () => {
         try {
-          await root.removeEntry(name)
+          await root.removeEntry(handle.name)
         } catch {}
       },
     }

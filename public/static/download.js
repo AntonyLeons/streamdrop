@@ -298,8 +298,22 @@ async function parseError(res) {
 }
 
 async function streamToOPFS(stream, signal) {
-  if (!navigator.storage || !navigator.storage.getDirectory) {
-    // Ultimate fallback if OPFS unsupported
+  let root = null;
+  let handle = null;
+  
+  try {
+    if (navigator.storage && navigator.storage.getDirectory) {
+      root = await navigator.storage.getDirectory()
+      const name = `sd_${Date.now()}_${suggestedName}`
+      handle = await root.getFileHandle(name, { create: true })
+    }
+  } catch (e) {
+    root = null;
+    handle = null;
+  }
+
+  if (!root || !handle) {
+    // Ultimate fallback if OPFS unsupported or setup fails
     const reader = stream.getReader()
     const chunks = []
     while (true) {
@@ -310,10 +324,6 @@ async function streamToOPFS(stream, signal) {
     }
     return new Blob(chunks, { type: "application/octet-stream" })
   }
-  
-  const root = await navigator.storage.getDirectory()
-  const name = `sd_${Date.now()}_${suggestedName}`
-  const handle = await root.getFileHandle(name, { create: true })
   
   // Use createSyncAccessHandle if available for performance, otherwise standard writable
   try {
