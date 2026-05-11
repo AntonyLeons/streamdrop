@@ -227,6 +227,9 @@ export function createApp() {
     try {
       await pipeToController(ch.controller, body, c.req.raw.signal)
       incrementFiles()
+      try {
+        ch.controller.close()
+      } catch {}
     } catch (e) {
       const isAbort =
         (e instanceof DOMException && e.name === "AbortError") ||

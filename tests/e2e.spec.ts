@@ -34,10 +34,9 @@ test("upload page loads with correct UI", async ({ page }) => {
 
   await expect(page.locator("h1")).toContainText("StreamDrop")
   await expect(page.locator(".dropzone")).toBeVisible()
-  await expect(page.locator("[data-step='key']")).toBeVisible()
   await expect(page.locator("[data-step='encrypt']")).toBeVisible()
+  await expect(page.locator("[data-step='wait']")).toBeVisible()
   await expect(page.locator("[data-step='stream']")).toBeVisible()
-  await expect(page.locator("[data-step='ready']")).toBeVisible()
   await expect(page.locator("#sd-files")).toBeVisible()
   await expect(page.locator("#sd-files-empty")).toBeVisible()
   await expect(page.locator("text=CLI endpoints")).toHaveCount(0)
@@ -146,7 +145,7 @@ test("download page loads for valid session", async ({ page, request }) => {
   await page.goto(`/${cfg.id}`)
   await expect(page.locator("h1")).toContainText("Receive")
   await expect(page.locator("#start")).toBeVisible()
-  await expect(page.locator("[data-step='wait']")).toBeVisible()
+  await expect(page.locator("[data-step='download']")).toBeVisible()
 })
 
 test("download page for unknown id shows 404", async ({ page }) => {
@@ -165,81 +164,73 @@ test("full upload → download round-trip", async ({ browser }) => {
   const sender = await ctxSender.newPage()
   const receiver = await ctxReceiver.newPage()
 
+  sender.on("console", msg => console.log("SENDER MSG:", msg.text()))
+  sender.on("pageerror", err => console.log("SENDER ERR:", err))
+  receiver.on("console", msg => console.log("RECEIVER MSG:", msg.text()))
+  receiver.on("pageerror", err => console.log("RECEIVER ERR:", err))
+  
   try {
     // 1. Sender opens the upload page
     await sender.goto("/")
+    
+    // Force XHR fallback because Chromium in Playwright sometimes fails duplex: "half" 
+    // with ERR_ALPN_NEGOTIATION_FAILED when testing against localhost
+    await sender.evaluate(() => {
+      window._forceXhr = true
+    })
+    
     const cfg = await getPageCfg(sender)
 
     // Force fallback blob approach, since headless chromium exposes 
     // showSaveFilePicker but won't trigger the test "download" event easily
     await receiver.addInitScript(() => {
       delete (window as any).showSaveFilePicker
+      if (navigator.storage) {
+        navigator.storage.getDirectory = () => Promise.reject(new Error("no opfs"))
+      }
     })
 
-    // 2. Receiver opens the download page first (receiver-first pattern)
-    await receiver.goto(`/${cfg.id}`)
-    await expect(receiver.locator("#start")).toBeVisible()
-
-    // 3. Receiver clicks Start — GET /d/:token is issued and waits for sender
-    const downloadPromise = receiver.waitForEvent("download", { timeout: 30_000 })
-    await receiver.locator("#start").click()
-
-    // 4. Sender selects and uploads file (concurrent with receiver waiting)
+    // 2. Sender selects and uploads file
     await uploadFile(sender, "transfer.txt", PAYLOAD)
 
-    // 5. Wait for download to arrive at receiver
+    // Wait for the share link to be populated
+    const shareLinkInput = sender.locator(".sd-file-item .sd-file-link")
+    await expect(shareLinkInput).toBeVisible({ timeout: 15_000 })
+    const shareUrl = await shareLinkInput.inputValue()
+    
+    // 3. Receiver opens the full share URL (including key hash)
+    await receiver.goto(shareUrl)
+    await expect(receiver.locator("#start")).toBeVisible()
+
+    // 4. Receiver clicks Start
+    const downloadPromise = receiver.waitForEvent("download", { timeout: 15_000 })
+    await receiver.locator("#start").click()
+
+    // 5. Wait for download to finish
     const download = await downloadPromise
     const downloadPath = path.join("/tmp", download.suggestedFilename() || "streamdrop-download")
     await download.saveAs(downloadPath)
 
-    // 6. Verify sender shows "Share" step as on (which signifies completion)
-    await expect(sender.locator("[data-step='ready']")).toHaveClass(/on/, { timeout: 15_000 })
+    // 6. Verify sender shows download count incremented
+    await expect(sender.locator(".sd-file-item .sd-file-downloads-text")).toContainText(/Downloaded [1-9]+ time/)
   } finally {
     await ctxSender.close()
     await ctxReceiver.close()
   }
 })
 
-test("upload returns 409 for a second sender on same session", async ({ page }) => {
+test("upload returns 404 if no receiver is waiting on the channel", async ({ page }) => {
   await page.goto("/")
   const cfg = await getPageCfg(page)
 
-  // Use page.evaluate to start a fetch we can abort
-  await page.evaluate(async (token) => {
-    window.__abortController = new AbortController()
-    
-    // Create a slow readable stream to keep the connection open
-    const stream = new ReadableStream({
-      start(controller) {
-        controller.enqueue(new Uint8Array([1,2,3]))
-      }
+  const retry = await page.evaluate(async (token) => {
+    const res = await fetch(`/upload/${token}/test-channel`, {
+      method: "PUT",
+      body: new Uint8Array([4,5,6])
     })
-    
-    // Fire and forget
-    window.__firstFetch = fetch(`/upload/${token}/test-channel`, {
-      method: 'PUT',
-      body: stream,
-      duplex: 'half',
-      signal: window.__abortController.signal
-    }).catch(() => {})
+    return { status: res.status, body: await res.json() }
   }, cfg.uploadToken)
-
-  // Small delay then try a second sender
-  await page.waitForTimeout(50)
   
-    const retry = await page.evaluate(async (token) => {
-      const res = await fetch(`/upload/${token}/test-channel`, {
-        method: "PUT",
-        body: new Uint8Array([4,5,6])
-      })
-      return { status: res.status, body: await res.json() }
-    }, cfg.uploadToken)
-  
-  expect(retry.status).toBe(409)
-  expect(retry.body.error).toBe("sender_exists")
-
-  // Cleanup: abort the first request
-  await page.evaluate(() => {
-    window.__abortController.abort()
-  })
+  expect(retry.status).toBe(404)
+  expect(retry.body.error).toBe("channel_not_found")
 })

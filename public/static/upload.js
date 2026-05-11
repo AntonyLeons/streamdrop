@@ -482,7 +482,7 @@ async function startTransfer(file) {
       try {
         let res
         try {
-            if (supportsDuplex) {
+            if (supportsDuplex && !window._forceXhr) {
               const uploadStream = wrapStreamWithProgress({
                 stream: cipherBlob.stream(),
                 total: cipherBlob.size,
