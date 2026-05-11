@@ -424,6 +424,64 @@ export function renderServiceUnavailablePage(nonce: string) {
   })
 }
 
+export function renderPrivacyPage(nonce: string) {
+  return htmlPage({
+    title: "StreamDrop — Privacy Policy",
+    nonce,
+    body: `
+      <main class="shell">
+        <header class="hero">
+          <a class="brand" href="/" style="cursor: pointer; text-decoration: none;">
+            <div class="logo"><img class="logo-img" src="${LOGO_SRC}" alt="" /></div>
+            <div><h1 style="color: var(--text);">StreamDrop</h1><p style="color: var(--text-muted);">Encrypted file transfer.</p></div>
+          </a>
+        </header>
+        <section class="card" style="padding:48px 32px">
+          <h2 style="margin-top:0">Privacy Policy</h2>
+          <p style="color:var(--text); line-height: 1.6; margin-top: 16px;">
+            StreamDrop is designed to protect your privacy through end-to-end encryption and zero-storage architecture.
+          </p>
+          <ul style="color:var(--fg-dim); line-height: 1.6; padding-left: 20px;">
+            <li style="margin-bottom: 8px;"><strong>Zero Storage:</strong> We do not store, host, or cache any of your files. Data flows directly from sender to receiver.</li>
+            <li style="margin-bottom: 8px;"><strong>End-to-End Encryption:</strong> All files are encrypted in the browser using AES-256-GCM before upload. The encryption key never leaves your browser and is never sent to our servers.</li>
+            <li style="margin-bottom: 8px;"><strong>No Tracking:</strong> We do not use third-party analytics, tracking cookies, or collect personally identifiable information.</li>
+            <li style="margin-bottom: 8px;"><strong>Ephemeral Metadata:</strong> Connection metadata (such as IP addresses required for routing) is only held in memory temporarily while a transfer is active and is immediately discarded when the connection closes.</li>
+          </ul>
+        </section>
+      </main>
+    `,
+  })
+}
+
+export function renderTermsPage(nonce: string) {
+  return htmlPage({
+    title: "StreamDrop — Terms of Service",
+    nonce,
+    body: `
+      <main class="shell">
+        <header class="hero">
+          <a class="brand" href="/" style="cursor: pointer; text-decoration: none;">
+            <div class="logo"><img class="logo-img" src="${LOGO_SRC}" alt="" /></div>
+            <div><h1 style="color: var(--text);">StreamDrop</h1><p style="color: var(--text-muted);">Encrypted file transfer.</p></div>
+          </a>
+        </header>
+        <section class="card" style="padding:48px 32px">
+          <h2 style="margin-top:0">Terms of Service</h2>
+          <p style="color:var(--text); line-height: 1.6; margin-top: 16px;">
+            By using StreamDrop, you agree to the following terms:
+          </p>
+          <ul style="color:var(--fg-dim); line-height: 1.6; padding-left: 20px;">
+            <li style="margin-bottom: 8px;"><strong>Acceptable Use:</strong> You agree not to use the service to transfer illegal content, malware, or anything that violates applicable laws.</li>
+            <li style="margin-bottom: 8px;"><strong>No Warranty:</strong> StreamDrop is provided "as is" without warranty of any kind. We are not responsible for interrupted transfers, data loss, or failed connections.</li>
+            <li style="margin-bottom: 8px;"><strong>Fair Use:</strong> The service is provided for fair and reasonable usage. We reserve the right to temporarily restrict access if usage threatens the stability of the platform.</li>
+            <li style="margin-bottom: 8px;"><strong>Open Source:</strong> StreamDrop is open-source software. You are free to inspect, audit, or host the code yourself according to the MIT License.</li>
+          </ul>
+        </section>
+      </main>
+    `,
+  })
+}
+
 function htmlPage(opts: { title: string; body: string; nonce: string }) {
   return `<!doctype html>
 <html lang="en">
@@ -445,7 +503,19 @@ function htmlPage(opts: { title: string; body: string; nonce: string }) {
     <link rel="stylesheet" href="/static/app.css" />
   </head>
   <body>
-    ${opts.body}
+    <div class="page-wrapper">
+      ${opts.body}
+      <footer class="site-footer">
+        <div class="footer-links">
+          <a href="/privacy">Privacy Policy</a>
+          <span class="footer-dot">•</span>
+          <a href="/terms">Terms of Service</a>
+        </div>
+        <div class="footer-credit">
+          A <a href="https://leons.dev/" target="_blank" rel="noopener noreferrer">leons.dev</a> project
+        </div>
+      </footer>
+    </div>
   </body>
 </html>`
 }

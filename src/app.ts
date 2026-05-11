@@ -13,7 +13,7 @@ import {
   getSessionCount,
   getActiveTransferCount,
 } from "./sessions"
-import { renderDownloadPage, renderNotFoundPage, renderUploadPage, renderServiceUnavailablePage } from "./pages"
+import { renderDownloadPage, renderNotFoundPage, renderUploadPage, renderServiceUnavailablePage, renderPrivacyPage, renderTermsPage } from "./pages"
 import { getQRCodeVendorJS } from "./vendor/qrcode"
 import { incrementBytes, incrementFiles, getStats } from "./stats"
 
@@ -99,6 +99,18 @@ export function createApp() {
     const session = createSession()
     if (!session) return c.html(renderServiceUnavailablePage(c.get("cspNonce")), 503, { "cache-control": "no-store" })
     return c.html(renderUploadPage(session, c.get("cspNonce")), 200, { "cache-control": "no-store" })
+  })
+
+  app.get("/privacy", (c) => {
+    return c.html(renderPrivacyPage(c.get("cspNonce")), 200, {
+      "cache-control": "public, max-age=86400",
+    })
+  })
+
+  app.get("/terms", (c) => {
+    return c.html(renderTermsPage(c.get("cspNonce")), 200, {
+      "cache-control": "public, max-age=86400",
+    })
   })
 
   app.post("/session", (c) => {

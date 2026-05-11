@@ -130,6 +130,7 @@ a:hover { color: var(--text); }
 
 /* ── Layout ──────────────────────────────────────────── */
 .shell {
+  width: 100%;
   max-width: 960px;
   margin: 0 auto;
   padding: 52px 24px 80px;
@@ -821,4 +822,39 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
 
 @media (min-width: 521px) {
   .btn-native-share { display: none !important; }
+}
+
+/* ── Footer ─────────────────────────────────────────── */
+.page-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+.shell {
+  flex: 1;
+}
+.site-footer {
+  margin-top: auto;
+  padding: 32px 24px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.footer-links {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.footer-links a, .footer-credit a {
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.footer-links a:hover, .footer-credit a:hover {
+  color: var(--v-bright);
+}
+.footer-dot {
+  color: var(--glass-border);
 }
