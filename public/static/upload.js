@@ -131,6 +131,7 @@ async function startRawHosting(sessionId, rawSession, file, signal) {
           item.setBar(0)
         }
 
+        let res
         try {
           if (supportsDuplex) {
             const uploadStream = wrapStreamWithProgress({
