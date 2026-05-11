@@ -129,6 +129,7 @@ jobs:
         run: |
           tar -xzf streamdrop-cli-npm.tar.gz
           cd cli-pkg
+          npm version $VERSION --allow-same-version --no-git-tag-version
           npm publish --access public
 
       - name: Update Package Managers (Homebrew & Scoop)
