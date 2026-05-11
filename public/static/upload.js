@@ -369,6 +369,7 @@ document.addEventListener("click", async (e) => {
   }
   if (!value) return
 
+  if (btn.textContent === "Copied") return
   try {
     await navigator.clipboard.writeText(value)
     const old = btn.textContent
