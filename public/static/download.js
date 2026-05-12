@@ -15,15 +15,22 @@ const elCancel = document.getElementById("cancel")
 const elThemeToggle = document.getElementById("theme-toggle")
 
 const frag = location.hash.startsWith("#") ? location.hash.slice(1) : ""
-const [keyFrag, ...nameParts] = frag.split(",")
+const parts = frag.split(",")
+const keyFrag = parts[0] ?? ""
+// Last segment is a numeric byte-size appended by newer share links
+const lastPart = parts[parts.length - 1] ?? ""
+const hasSize = parts.length >= 3 && /^\d+$/.test(lastPart)
+const nameParts = hasSize ? parts.slice(1, -1) : parts.slice(1)
 let suggestedName = "streamdrop.bin"
 if (nameParts.length > 0) {
   try {
     suggestedName = decodeURIComponent(nameParts.join(","))
   } catch {}
 }
+// Prefer size from URL fragment; fall back to server-side session value
+const fileSize = hasSize ? parseInt(lastPart, 10) : (cfg.size || 0)
 
-setMeta(`Waiting for ${suggestedName}. Click start when ready.`)
+setMeta(`Waiting for ${suggestedName}${fileSize ? ` · ${prettyBytes(fileSize)}` : ""}. Click start when ready.`)
 
 let started = false
 
@@ -119,20 +126,20 @@ async function run({ raw }) {
         sessionId: cfg.id,
         onProgress: (n) => {
           plainBytes = n
-          setMeta(`${prettyBytes(n)} decrypted`)
+          setMeta(fileSize ? `${prettyBytes(n)} of ${prettyBytes(fileSize)}` : `${prettyBytes(n)} decrypted`)
           const elapsed = (Date.now() - startTime) / 1000
           if (elapsed > 0.5) {
             const speed = n / elapsed
-            if (cfg.size) {
-              const eta = Math.round((cfg.size - n) / speed)
+            if (fileSize) {
+              const eta = Math.round((fileSize - n) / speed)
               const etaStr = eta > 0 ? ` · ${eta}s left` : ""
               elHint.textContent = `Downloading · ${formatSpeed(speed)}${etaStr}`
-              setBar(Math.min(1, n / cfg.size))
+              setBar(Math.min(1, n / fileSize))
             } else {
               elHint.textContent = `Downloading · ${formatSpeed(speed)}`
               setBar(0.12 + Math.min(0.88, (Math.log10(1 + n) / 8) * 0.88))
             }
-          } else if (!cfg.size) {
+          } else if (!fileSize) {
             setBar(0.12 + Math.min(0.88, (Math.log10(1 + n) / 8) * 0.88))
           }
         },
@@ -154,7 +161,7 @@ async function run({ raw }) {
         a.click()
         a.remove()
         setBar(1)
-        setMeta(`${prettyBytes(plainBytes)} downloaded`)
+        setMeta(fileSize ? `${prettyBytes(plainBytes)} of ${prettyBytes(fileSize)} downloaded` : `${prettyBytes(plainBytes)} downloaded`)
         elHint.textContent = "Complete"
         elStart.disabled = false
         elStart.textContent = "Download again"

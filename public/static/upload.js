@@ -428,7 +428,7 @@ async function startTransfer(file) {
   const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"])
   const raw = new Uint8Array(await crypto.subtle.exportKey("raw", key))
   const keyB64 = base64urlEncode(raw)
-  const shareUrl = `${location.origin}/${session.id}#${keyB64},${encodeURIComponent(file.name)}`
+  const shareUrl = `${location.origin}/${session.id}#${keyB64},${encodeURIComponent(file.name)},${file.size}`
   const cliCode = `${session.id}:${keyB64}:${encodeURIComponent(file.name)}`
 
   const item = createShareItem({

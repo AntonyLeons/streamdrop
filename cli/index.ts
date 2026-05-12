@@ -170,7 +170,8 @@ async function runSend(serverRaw: string, filePath: string) {
 
   const rawKey = crypto.getRandomValues(new Uint8Array(32))
   const keyFrag = base64urlEncode(rawKey)
-  const shareUrl = `${server}/${sess.id}#${keyFrag},${encodeURIComponent(fileName)}`
+  const sizeSegment = totalSize ? `,${totalSize}` : ""
+  const shareUrl = `${server}/${sess.id}#${keyFrag},${encodeURIComponent(fileName)}${sizeSegment}`
   const receiveCode = `${sess.id}:${keyFrag}:${encodeURIComponent(fileName)}`
 
   console.log(`\n  \x1b[1mShare URL:\x1b[0m \x1b[36m${shareUrl}\x1b[0m`)
@@ -347,8 +348,13 @@ function parseShareInput(input: string): { server?: string; id: string; keyFrag:
   if (!id) throw new Error("missing_id")
 
   const frag = url.hash.startsWith("#") ? url.hash.slice(1) : ""
-  const [keyFrag, ...nameParts] = frag.split(",")
+  const fragParts = frag.split(",")
+  const keyFrag = fragParts[0] ?? ""
   if (!keyFrag) throw new Error("missing_key")
+  // Last segment may be a numeric byte-size appended by newer share links
+  const lastPart = fragParts[fragParts.length - 1] ?? ""
+  const hasSize = fragParts.length >= 3 && /^\d+$/.test(lastPart)
+  const nameParts = hasSize ? fragParts.slice(1, -1) : fragParts.slice(1)
 
   let fileName: string | undefined
   if (nameParts.length > 0) {
