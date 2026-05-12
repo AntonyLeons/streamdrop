@@ -95,20 +95,20 @@ export function createApp() {
 
   app.get("/stats", (c) => c.json(getStats(getSessionCount(), getActiveTransferCount()), 200, { "cache-control": "no-store" }))
 
-  app.get("/", (c) => {
+  app.get("/", async (c) => {
     const session = createSession()
-    if (!session) return c.html(renderServiceUnavailablePage(c.get("cspNonce")), 503, { "cache-control": "no-store" })
-    return c.html(renderUploadPage(session, c.get("cspNonce")), 200, { "cache-control": "no-store" })
+    if (!session) return c.html(await renderServiceUnavailablePage(c.get("cspNonce")), 503, { "cache-control": "no-store" })
+    return c.html(await renderUploadPage(session, c.get("cspNonce")), 200, { "cache-control": "no-store" })
   })
 
-  app.get("/privacy", (c) => {
-    return c.html(renderPrivacyPage(c.get("cspNonce")), 200, {
+  app.get("/privacy", async (c) => {
+    return c.html(await renderPrivacyPage(c.get("cspNonce")), 200, {
       "cache-control": "public, max-age=86400",
     })
   })
 
-  app.get("/terms", (c) => {
-    return c.html(renderTermsPage(c.get("cspNonce")), 200, {
+  app.get("/terms", async (c) => {
+    return c.html(await renderTermsPage(c.get("cspNonce")), 200, {
       "cache-control": "public, max-age=86400",
     })
   })
@@ -175,11 +175,11 @@ export function createApp() {
     return new Response(null, { status: 204, headers: { "cache-control": "no-store" } })
   })
 
-  app.get("/:id", (c) => {
+  app.get("/:id", async (c) => {
     const id = c.req.param("id")
     const session = getSessionById(id)
-    if (!session) return c.html(renderNotFoundPage(c.get("cspNonce")), 404, { "cache-control": "no-store" })
-    return c.html(renderDownloadPage(session, c.get("cspNonce")), 200, { "cache-control": "no-store" })
+    if (!session) return c.html(await renderNotFoundPage(c.get("cspNonce")), 404, { "cache-control": "no-store" })
+    return c.html(await renderDownloadPage(session, c.get("cspNonce")), 200, { "cache-control": "no-store" })
   })
 
   app.on(["PUT", "POST"], "/upload/:uploadToken/:channelId", async (c) => {

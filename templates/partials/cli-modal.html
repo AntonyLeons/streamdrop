@@ -1,0 +1,31 @@
+<div id="cli-modal" class="modal hidden">
+  <div class="modal-backdrop"></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 style="margin:0;font-size:18px;">StreamDrop CLI</h2>
+      <button class="icon-btn close-modal" aria-label="Close" style="width:24px;height:24px;padding:0;line-height:1;">&times;</button>
+    </div>
+    <div class="modal-body" style="font-size:14px;color:var(--fg-dim);">
+      <p style="margin-top:0;margin-bottom:20px;">Transfer files directly from your terminal with end-to-end encryption.</p>
+
+      <div class="tabs" style="display: flex; gap: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--glass-border); overflow-x: auto; white-space: nowrap; scrollbar-width: none;">
+        <button class="tab-btn active" data-os="npm">npm</button>
+        <button class="tab-btn" data-os="brew">macOS / Linux</button>
+        <button class="tab-btn" data-os="win">Windows</button>
+      </div>
+
+      <div class="kicker" id="cli-install-kicker">Install with scoop</div>
+      <div class="copy-row" style="margin-bottom: 24px;" id="cli-install-row">
+        <input id="cli-install-cmd" class="input mono" readonly value="npm install -g streamdrop-cli" />
+        <button class="btn btn-small" type="button" data-copy>Copy</button>
+      </div>
+
+      <div class="kicker" style="margin-bottom: 12px;">Usage</div>
+      <pre class="mono" style="background: #1e1e1e; border: 1px solid var(--glass-border); padding: 16px; border-radius: 8px; font-size: 13px; overflow-x: auto; color: #e5e7eb; margin: 0; line-height: 1.6;"><span style="color: #6b7280;"># Send a file or folder</span>
+<span style="color: #6b7280; user-select: none;">$</span> <span style="color: #10b981;">streamdrop</span> send ./my-file.zip
+
+<span style="color: #6b7280;"># Receive a file</span>
+<span style="color: #6b7280; user-select: none;">$</span> <span style="color: #10b981;">streamdrop</span> receive &lt;receive-code&gt;</pre>
+    </div>
+  </div>
+</div>
