@@ -382,8 +382,9 @@ document.addEventListener("click", async (e) => {
   try {
     await navigator.clipboard.writeText(value)
     const old = btn.textContent
+    btn.style.minWidth = btn.offsetWidth + "px"
     btn.textContent = "Copied"
-    setTimeout(() => (btn.textContent = old), 900)
+    setTimeout(() => { btn.textContent = old; btn.style.minWidth = "" }, 900)
   } catch {
     const input = btn.previousElementSibling
     if (input && input.tagName === "INPUT") {
