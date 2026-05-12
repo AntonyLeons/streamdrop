@@ -16,6 +16,7 @@ RUN bun install --frozen-lockfile --production
 # Copy application code
 COPY src ./src
 COPY public ./public
+COPY templates ./templates
 
 # Expose the application port
 EXPOSE 3000
