@@ -297,6 +297,7 @@ export function createApp() {
     headers.set("content-type", "application/octet-stream")
     headers.set("cache-control", "no-store")
     headers.set("accept-ranges", "none")
+    headers.set("x-accel-buffering", "no")
     setAttachmentContentDisposition(headers, "streamdrop.enc")
     headers.set("x-streamdrop-channel", channelId)
 
@@ -342,6 +343,7 @@ export function createApp() {
     headers.set("content-type", "application/octet-stream")
     headers.set("cache-control", "no-store")
     headers.set("accept-ranges", "none")
+    headers.set("x-accel-buffering", "no")
     setAttachmentContentDisposition(headers, safeFileName(session.fileName) || "streamdrop.bin")
     headers.set("x-streamdrop-channel", channelId)
 

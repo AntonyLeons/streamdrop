@@ -107,7 +107,8 @@ async function run({ raw }) {
         if (err === "not_found") {
           throw new Error("Session not found.")
         }
-        if (err === "too_many_receivers") {
+        // Retry on transient proxy/gateway errors (Cloudflare 524/502/503, etc.) and back-pressure
+        if (err === "too_many_receivers" || res.status >= 500) {
           await sleep(backoffMs(attempt))
           continue
         }
