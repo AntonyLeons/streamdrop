@@ -1,0 +1,158 @@
+<!--#include partial="head.html"-->
+  <body>
+    <div class="page-wrapper">
+      <main class="shell">
+        <!--#include partial="header.html" heading="StreamDrop" subtitle="End-to-end encrypted. Zero storage. Real-time."-->
+
+        <section class="card">
+          <div class="row">
+            <div>
+              <div class="kicker">Session</div>
+              <div class="mono dim" style="font-size:12px;margin-top:3px">{{session_id}}</div>
+            </div>
+            <div class="top-controls">
+              <button id="btn-cli-modal" class="btn btn-small">StreamDrop CLI</button>
+              <!--#include partial="theme-toggle.html"-->
+            </div>
+          </div>
+
+          <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-label="Drop file to upload">
+            <div class="drop-inner">
+              <div class="drop-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+              </div>
+              <div class="drop-title">Drop your files here</div>
+              <div class="drop-sub">or click to browse · encrypted before upload</div>
+            </div>
+            <input id="file" class="file" type="file" multiple />
+          </div>
+
+          <div class="badge-row">
+            <div class="badge"><div class="badge-dot"></div>AES-256-GCM</div>
+            <div class="badge"><div class="badge-dot"></div>Zero knowledge relay</div>
+            <div class="badge mobile-hidden"><div class="badge-dot"></div>Key never leaves browser</div>
+          </div>
+
+          <div class="status" style="margin-top:16px">
+            <div class="step" data-step="encrypt">
+              <div class="dot"></div>
+              <div class="label">Encrypt</div>
+            </div>
+            <span class="step-arrow">›</span>
+            <div class="step" data-step="wait">
+              <div class="dot"></div>
+              <div class="label">Ready</div>
+            </div>
+            <span class="step-arrow">›</span>
+            <div class="step" data-step="stream">
+              <div class="dot"></div>
+              <div class="label">Stream</div>
+            </div>
+          </div>
+
+          <div id="meta" class="meta mono"></div>
+
+          <div id="sd-files" class="sd-files">
+            <div class="kicker">Files</div>
+            <div class="row" style="margin-top:10px; align-items:center; justify-content:flex-end; gap:12px">
+              <div class="dim" style="font-size:13px; display:flex; gap:8px; align-items:center">
+                curl/wget
+                <span class="tooltip">
+                  <button class="tooltip-icon" type="button" aria-describedby="cli-warning">i</button>
+                  <span id="cli-warning" class="tooltip-bubble" role="tooltip">
+                    ⚠️: curl/wget downloads are not E2EE use the StreamDrop CLI instead.
+                  </span>
+                </span>
+              </div>
+              <label class="switch" aria-label="Enable CLI (curl/wget)">
+                <input id="cli-toggle" class="switch-input" type="checkbox" />
+                <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+              </label>
+            </div>
+            <div id="sd-files-empty" class="dim" style="font-size:13px;margin-top:10px">Select files above to generate share links.</div>
+            <div style="height:10px"></div>
+            <div id="sd-files-list" class="sd-files-list"></div>
+            <template id="sd-file-template">
+              <section class="sd-file-item">
+                <div class="sd-file-row">
+                  <div class="sd-file-left">
+                    <div class="mono sd-file-name"></div>
+                    <div class="mono dim sd-file-state"></div>
+                    <div class="sd-file-downloads hidden" style="font-size: 12px; margin-top: 6px; color: var(--accent); display: flex; align-items: center; gap: 4px; font-weight: 500;">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                      </svg>
+                      <span class="sd-file-downloads-text">Downloaded 0 times</span>
+                    </div>
+                    <div class="sd-file-badges hidden" data-badge="encrypted">
+                      <span class="sd-file-badge">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <rect x="3" y="11" width="18" height="11" rx="2"></rect>
+                          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                        </svg>
+                        Encrypted
+                      </span>
+                    </div>
+                    <div class="meter meter-small"><div class="bar sd-file-bar"></div></div>
+                  </div>
+                  <div class="sd-file-actions">
+                    <button class="btn btn-small btn-native-share hidden" type="button" data-action="native-share" aria-label="Share" title="Share">
+                      <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+                        <g>
+                          <path d="M12 2.59l5.7 5.7-1.41 1.42L13 6.41V16h-2V6.41l-3.3 3.3-1.41-1.42L12 2.59zM21 15l-.02 3.51c0 1.38-1.12 2.49-2.5 2.49H5.5C4.11 21 3 19.88 3 18.5V15h2v3.5c0 .28.22.5.5.5h12.98c.28 0 .5-.22.5-.5L19 15h2z"></path>
+                        </g>
+                      </svg>
+                    </button>
+                    <span class="tooltip">
+                      <button class="btn btn-small" type="button" data-copy data-copy-kind="curl">curl</button>
+                      <span class="tooltip-bubble" role="tooltip">Not E2EE</span>
+                    </span>
+                    <span class="tooltip">
+                      <button class="btn btn-small" type="button" data-copy data-copy-kind="wget">wget</button>
+                      <span class="tooltip-bubble" role="tooltip">Not E2EE</span>
+                    </span>
+                    <button class="btn btn-small" type="button" data-copy data-copy-kind="cli">StreamDrop CLI</button>
+                    <button class="btn btn-small" type="button" data-action="open-link">Download</button>
+                    <button class="btn btn-small" type="button" data-toggle="qr">QR</button>
+                    <button class="btn btn-small btn-danger" type="button" data-action="delete">Delete</button>
+                  </div>
+                </div>
+                <div class="sd-file-link-row">
+                  <div class="kicker">Share link</div>
+                  <div class="copy-row">
+                    <input class="input mono sd-file-link" readonly />
+                    <button class="btn btn-small" type="button" data-copy>Copy</button>
+                  </div>
+                </div>
+                <div class="sd-file-details hidden">
+                  <div class="qr-wrap">
+                    <canvas width="200" height="200" class="qr sd-file-qr"></canvas>
+                  </div>
+                </div>
+              </section>
+            </template>
+          </div>
+
+          <div id="error" class="error hidden"></div>
+        </section>
+      </main>
+
+      <!--#include partial="cli-modal.html"-->
+
+      <script nonce="{{nonce}}">
+        window.__STREAMDROP_DEFAULT_SERVER__ = "{{server_url}}"
+        window.__STREAMDROP__={{config}}
+      </script>
+      <script src="/static/vendor/qrcode.min.js"></script>
+      <script type="module" src="/static/upload.js"></script>
+
+      <!--#include partial="footer.html"-->
+    </div>
+  </body>
+</html>
