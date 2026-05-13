@@ -28,7 +28,7 @@
               <div class="drop-title">Drop your files here</div>
               <div class="drop-sub">or click to browse · encrypted before upload</div>
             </div>
-            <input id="file" class="file" type="file" multiple />
+            <input id="file" class="file" type="file" multiple aria-label="Select files to upload" />
           </div>
 
           <div class="badge-row">
@@ -146,8 +146,8 @@
       <!--#include partial="cli-modal.html"-->
 
       <script nonce="{{nonce}}">
-        window.__STREAMDROP_DEFAULT_SERVER__ = "{{server_url}}"
-        window.__STREAMDROP__={{config}}
+        window.__STREAMDROP_DEFAULT_SERVER__ = "{{server_url}}";
+        window.__STREAMDROP__ = JSON.parse('{{config}}');
       </script>
       <script src="/static/vendor/qrcode.min.js"></script>
       <script type="module" src="/static/upload.js"></script>
