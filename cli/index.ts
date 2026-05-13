@@ -376,20 +376,14 @@ function safeOutName(name: string) {
 }
 
 async function fetchSessionCfg(server: string, id: string) {
-  const res = await fetch(`${server}/${encodeURIComponent(id)}`, { headers: { accept: "text/html" } })
+  const res = await fetch(`${server}/${encodeURIComponent(id)}`, { headers: { accept: "application/json" } })
   if (!res.ok) {
     if (res.status === 404) throw new Error("File session not found or has expired.")
     throw new Error(`Failed to fetch session: HTTP ${res.status}`)
   }
-  const html = await res.text()
-  const marker = "window.__STREAMDROP__="
-  const i = html.indexOf(marker)
-  if (i === -1) throw new Error("missing_cfg")
-  const j = html.indexOf("</script>", i)
-  if (j === -1) throw new Error("missing_cfg_end")
-  const raw = html.slice(i + marker.length, j).trim().replace(/;$/, "")
+  
   try {
-    return JSON.parse(raw) as any
+    return (await res.json()) as any
   } catch {
     throw new Error("bad_cfg_json")
   }

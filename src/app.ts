@@ -124,7 +124,25 @@ export function createApp() {
 
   app.get("/", async (c) => {
     const session = createSession()
-    if (!session) return c.html(await renderServiceUnavailablePage(c.get("cspNonce")), 503, { "cache-control": "no-store" })
+    const wantsJson = c.req.header("accept")?.includes("application/json")
+
+    if (!session) {
+      if (wantsJson) return c.json({ error: "at_capacity" }, 503, { "cache-control": "no-store" })
+      return c.html(await renderServiceUnavailablePage(c.get("cspNonce")), 503, { "cache-control": "no-store" })
+    }
+
+    if (wantsJson) {
+      return c.json(
+        {
+          id: session.id,
+          uploadToken: session.uploadToken,
+          downloadToken: session.downloadToken,
+        },
+        200,
+        { "cache-control": "no-store" }
+      )
+    }
+
     return c.html(await renderUploadPage(session, c.get("cspNonce")), 200, { "cache-control": "no-store" })
   })
 
@@ -205,7 +223,26 @@ export function createApp() {
   app.get("/:id", async (c) => {
     const id = c.req.param("id")
     const session = getSessionById(id)
-    if (!session) return c.html(await renderNotFoundPage(c.get("cspNonce")), 404, { "cache-control": "no-store" })
+    const wantsJson = c.req.header("accept")?.includes("application/json")
+
+    if (!session) {
+      if (wantsJson) return c.json({ error: "not_found" }, 404, { "cache-control": "no-store" })
+      return c.html(await renderNotFoundPage(c.get("cspNonce")), 404, { "cache-control": "no-store" })
+    }
+
+    if (wantsJson) {
+      return c.json(
+        {
+          id: session.id,
+          downloadToken: session.downloadToken,
+          name: session.fileName,
+          size: session.fileSize,
+        },
+        200,
+        { "cache-control": "no-store" }
+      )
+    }
+
     return c.html(await renderDownloadPage(session, c.get("cspNonce")), 200, { "cache-control": "no-store" })
   })
 

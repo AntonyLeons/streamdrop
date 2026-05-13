@@ -56,7 +56,10 @@
 
       <!--#include partial="cli-modal.html"-->
 
-      <script nonce="{{nonce}}">window.__STREAMDROP__={{config}}</script>
+      <script nonce="{{nonce}}">
+        window.__STREAMDROP_DEFAULT_SERVER__ = "{{server_url}}";
+        window.__STREAMDROP__ = {{config}};
+      </script>
       <script type="module" src="/static/download.js"></script>
 
       <!--#include partial="footer.html"-->

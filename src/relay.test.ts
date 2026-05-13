@@ -7,8 +7,16 @@ function sleep(ms: number) {
 }
 
 function extractCfg(html: string) {
-  const json = html.match(/window\.__STREAMDROP__=(\{[^<]+\})/)?.[1]
-  return JSON.parse(json!)
+  const marker = "window.__STREAMDROP__ = "
+  const i = html.indexOf(marker)
+  const start = i + marker.length
+  const end = html.indexOf(";", start)
+  return JSON.parse(html.slice(start, end))
+}
+
+async function fetchSessionCfg(base: string) {
+  const res = await fetch(`${base}/`, { headers: { accept: "application/json" } })
+  return (await res.json()) as any
 }
 
 test("receiver-first relay pipes bytes from upload to download", async () => {
@@ -17,8 +25,7 @@ test("receiver-first relay pipes bytes from upload to download", async () => {
   const base = `http://localhost:${server.port}`
 
   try {
-    const html = await fetch(`${base}/`).then((r) => r.text())
-    const cfg = extractCfg(html)
+    const cfg = await fetchSessionCfg(base)
 
     const downloadResP = fetch(`${base}/d/${cfg.downloadToken}`)
     const channelId = await claimChannelId(base, cfg.uploadToken)
@@ -74,9 +81,8 @@ test("GET /d/:token returns 429 when receiver limit is reached", async () => {
   Bun.env.MAX_RECEIVERS = "25"
   const app = createApp()
   try {
-    const sessionRes = await app.request("/")
-    const html = await sessionRes.text()
-    const cfg = extractCfg(html)
+    const sessionRes = await app.request("/", { headers: { accept: "application/json" } })
+    const cfg = (await sessionRes.json()) as any
 
     const pending: Promise<Response>[] = []
     const controllers: AbortController[] = []
@@ -106,8 +112,7 @@ test("receiver-first relay supports multiple sequential downloads (re-stream)", 
   const base = `http://localhost:${server.port}`
 
   try {
-    const html = await fetch(`${base}/`).then((r) => r.text())
-    const cfg = extractCfg(html)
+    const cfg = await fetchSessionCfg(base)
 
     const download1P = fetch(`${base}/d/${cfg.downloadToken}`)
     const ch1 = await claimChannelId(base, cfg.uploadToken)
