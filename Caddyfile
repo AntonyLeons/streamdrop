@@ -8,10 +8,12 @@ www.streamdrop.app {
 streamdrop.app {
     encode gzip zstd
 
-    reverse_proxy localhost:3000 {
+    # Docker: use "bun:3000"
+    # Non-Docker: use "localhost:3000"
+    reverse_proxy bun:3000 {
         # Critical for streaming: flush immediately, don't buffer
         flush_interval 0
-        
+
         # Optional: Increase buffer sizes for high-throughput transfers
         # buffer_requests 64KB
         # buffer_responses 64KB
