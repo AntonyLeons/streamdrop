@@ -34,6 +34,28 @@ export function createApp() {
     return c.res
   })
 
+  function setSecurityHeaders(headers: Headers, nonce: string) {
+    headers.set("X-Frame-Options", "DENY")
+    headers.set("X-Content-Type-Options", "nosniff")
+    headers.set("Referrer-Policy", "no-referrer")
+    headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
+    
+    headers.set(
+      "Content-Security-Policy",
+      `default-src 'none'; ` +
+        `script-src 'self' 'nonce-${nonce}'; ` +
+        `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; ` +
+        `font-src 'self' https://fonts.gstatic.com; ` +
+        `img-src 'self' data:; ` +
+        `connect-src 'self'; ` +
+        `base-uri 'none'; ` +
+        `form-action 'none'; ` +
+        `frame-ancestors 'none'; ` +
+        `object-src 'none'; ` +
+        `manifest-src 'self';`,
+    )
+  }
+
   app.onError((err, c) => {
     console.error(`[Router Error] ${c.req.method} ${c.req.url}:`, err)
     return c.json({ error: "internal_server_error" }, 500)
@@ -44,7 +66,7 @@ export function createApp() {
     return new Response(file, {
       headers: {
         "content-type": "text/css; charset=utf-8",
-        "cache-control": "no-store",
+        "cache-control": "public, max-age=31536000, immutable",
       },
     })
   })
@@ -89,7 +111,12 @@ export function createApp() {
     })
   })
 
-  app.use("/static/*", serveStatic({ root: "./public" }))
+  app.use("/static/*", serveStatic({
+    root: "./public",
+    onFound: (_path, c) => {
+      c.header("cache-control", "public, max-age=31536000, immutable")
+    }
+  }))
 
   app.get("/health", (c) => c.json({ ok: true }))
 
