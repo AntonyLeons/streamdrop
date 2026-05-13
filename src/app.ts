@@ -537,13 +537,7 @@ async function pipeToController(
       if (!value || value.byteLength === 0) continue
       
       incrementBytes(value.byteLength)
-      
-      for (let i = 0; i < 200; i++) {
-        if (signal?.aborted) throw new DOMException("Aborted", "AbortError")
-        const desired = controller.desiredSize
-        if (desired === null || desired > 0) break
-        await new Promise((r) => setTimeout(r, 0))
-      }
+
       try {
         controller.enqueue(value)
       } catch {
