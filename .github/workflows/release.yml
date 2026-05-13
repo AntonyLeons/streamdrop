@@ -123,6 +123,9 @@ jobs:
     name: Publish to Package Managers
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Checkout Source
         uses: actions/checkout@v6
@@ -151,13 +154,11 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Publish to NPM
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           tar -xzf streamdrop-cli-npm.tar.gz
           cd cli-pkg
           npm version $VERSION --allow-same-version --no-git-tag-version
-          npm publish --access public
+          npm publish --provenance --access public
 
       - name: Update Package Managers (Homebrew & Scoop)
         uses: actions/checkout@v6
