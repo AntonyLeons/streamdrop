@@ -516,7 +516,7 @@ async function startTransfer(file) {
     item.setState("Falling back to relay…")
     await sleep(500)
 
-    let activeUploads = 0
+      let activeUploads = 0
     const inFlight = new Set()
 
     const startChannelUpload = async (channelId) => {
@@ -524,6 +524,7 @@ async function startTransfer(file) {
       globalActiveUploads++
       item.setState(activeUploads > 1 ? `Uploading (${activeUploads})` : "Uploading")
       let startTime = Date.now()
+      let lastStateUpdate = 0
       
       try {
         let res
@@ -544,7 +545,11 @@ async function startTransfer(file) {
                       const speed = done / elapsed
                       const eta = Math.round((total - done) / speed)
                       const etaStr = eta > 0 ? ` · ${eta}s left` : ""
-                      item.setState(`Uploading · ${formatSpeed(speed)}${etaStr}`)
+                      const now = Date.now()
+                      if (now - lastStateUpdate > 200) {
+                        lastStateUpdate = now
+                        item.setState(`Uploading · ${formatSpeed(speed)}${etaStr}`)
+                      }
                     }
                   }
                   
@@ -578,7 +583,11 @@ async function startTransfer(file) {
                       const speed = done / elapsed
                       const eta = Math.round((total - done) / speed)
                       const etaStr = eta > 0 ? ` · ${eta}s left` : ""
-                      item.setState(`Uploading · ${formatSpeed(speed)}${etaStr}`)
+                      const now = Date.now()
+                      if (now - lastStateUpdate > 200) {
+                        lastStateUpdate = now
+                        item.setState(`Uploading · ${formatSpeed(speed)}${etaStr}`)
+                      }
                     }
                   }
                   
