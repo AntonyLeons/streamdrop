@@ -57,13 +57,22 @@ func resolvePartials(html string, depth int) string {
 		if idx < 0 {
 			break
 		}
-		end := strings.Index(html[idx:], "\"-->")
-		if end < 0 {
+		nameStart := idx + 22
+		nameEnd := strings.Index(html[nameStart:], "\"")
+		if nameEnd < 0 {
 			break
 		}
-		name := html[idx+22 : idx+end]
+		nameEnd += nameStart
+		name := html[nameStart:nameEnd]
+
+		tagEnd := strings.Index(html[idx:], "-->")
+		if tagEnd < 0 {
+			break
+		}
+		tagEnd += idx + 3
+
 		partial := readTemplate(filepath.Join("partials", name))
-		html = html[:idx] + partial + html[idx+end+4:]
+		html = html[:idx] + partial + html[tagEnd:]
 	}
 	if strings.Contains(html, "<!--#include") {
 		return resolvePartials(html, depth+1)
