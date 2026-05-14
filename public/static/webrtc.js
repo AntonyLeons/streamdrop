@@ -90,8 +90,13 @@ export async function establishP2P(sessionId, role, signal) {
     await postSignal(sessionId, { from: "sender", type: "offer", data: { sdp: pc.localDescription } }, signal)
 
     const answers = await pollSignal(sessionId, "sender", signal)
-    const sdp = answers.find((m) => m.type === "answer")
-    if (sdp) await pc.setRemoteDescription(new RTCSessionDescription(sdp.data.sdp))
+    for (const msg of answers) {
+      if (msg.type === "answer") {
+        await pc.setRemoteDescription(new RTCSessionDescription(msg.data.sdp))
+      } else if (msg.type === "ice" && msg.data.candidate) {
+        try { await pc.addIceCandidate(new RTCIceCandidate(msg.data.candidate)) } catch {}
+      }
+    }
 
     iceExchange(pc, sessionId, "sender", signal)
     await settledP
@@ -100,6 +105,13 @@ export async function establishP2P(sessionId, role, signal) {
     const sdp = offers.find((m) => m.type === "offer")
     if (sdp) {
       await pc.setRemoteDescription(new RTCSessionDescription(sdp.data.sdp))
+
+      for (const msg of offers) {
+        if (msg.type === "ice" && msg.data.candidate) {
+          try { await pc.addIceCandidate(new RTCIceCandidate(msg.data.candidate)) } catch {}
+        }
+      }
+
       const answer = await pc.createAnswer()
       await pc.setLocalDescription(answer)
       await postSignal(sessionId, { from: "receiver", type: "answer", data: { sdp: pc.localDescription } }, signal)
@@ -173,6 +185,10 @@ export async function sendViaP2P(stream, sessionId, signal) {
         await new Promise((r) => dc.addEventListener("bufferedamountlow", r, { once: true }))
       }
       dc.send(value)
+    }
+    // Wait for SCTP buffer to drain before closing
+    while (dc.bufferedAmount > 0) {
+      await new Promise((r) => dc.addEventListener("bufferedamountlow", r, { once: true }))
     }
   } finally {
     reader.cancel().catch(() => {})
