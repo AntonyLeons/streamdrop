@@ -90,6 +90,11 @@ func main() {
 		page.Upload(w, s.ID, config, serverURL, r.Header.Get("X-CSP-Nonce"))
 	})
 
+	// Explicit favicon redirect
+	mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/static/favicon/favicon.ico", http.StatusMovedPermanently)
+	})
+
 	// Download page (also supports JSON via Accept header)
 	mux.HandleFunc("GET /{id}", func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
