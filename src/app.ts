@@ -331,24 +331,25 @@ export function createApp() {
 
     const channelId = randomChannelId()
     let ctrl: ReadableStreamDefaultController<Uint8Array> | null = null
-    const readable = new ReadableStream<Uint8Array>({
-      start(c) {
-        ctrl = c
-      },
-    })
-    if (!ctrl) return c.json({ error: "internal" }, 500, { "cache-control": "no-store" })
-    session.channels.set(channelId, { id: channelId, controller: ctrl, claimed: false, sending: false, createdAt: Date.now() })
-    notifyReceiverAvailable(session)
-
     let counted = false
     const count = () => {
       if (counted) return
       counted = true
       session.channels.delete(channelId)
     }
+    const readable = new ReadableStream<Uint8Array>({
+      start(c) {
+        ctrl = c
+      },
+      cancel() {
+        count()
+      },
+    })
+    if (!ctrl) return c.json({ error: "internal" }, 500, { "cache-control": "no-store" })
+    session.channels.set(channelId, { id: channelId, controller: ctrl, claimed: false, sending: false, createdAt: Date.now() })
+    notifyReceiverAvailable(session)
 
     const onAbort = () => {
-      session.channels.delete(channelId)
       try {
         ctrl?.error(new Error("aborted"))
       } catch {}
@@ -365,7 +366,7 @@ export function createApp() {
     setAttachmentContentDisposition(headers, "streamdrop.enc")
     headers.set("x-streamdrop-channel", channelId)
 
-    return new Response(wrapReadableWithDone(readable, count), { status: 200, headers })
+    return new Response(readable, { status: 200, headers })
   })
 
   app.get("/raw/d/:downloadToken", async (c) => {
@@ -377,24 +378,25 @@ export function createApp() {
 
     const channelId = randomChannelId()
     let ctrl: ReadableStreamDefaultController<Uint8Array> | null = null
-    const readable = new ReadableStream<Uint8Array>({
-      start(c) {
-        ctrl = c
-      },
-    })
-    if (!ctrl) return c.json({ error: "internal" }, 500, { "cache-control": "no-store" })
-    session.channels.set(channelId, { id: channelId, controller: ctrl, claimed: false, sending: false, createdAt: Date.now() })
-    notifyReceiverAvailable(session)
-
     let counted = false
     const count = () => {
       if (counted) return
       counted = true
       session.channels.delete(channelId)
     }
+    const readable = new ReadableStream<Uint8Array>({
+      start(c) {
+        ctrl = c
+      },
+      cancel() {
+        count()
+      },
+    })
+    if (!ctrl) return c.json({ error: "internal" }, 500, { "cache-control": "no-store" })
+    session.channels.set(channelId, { id: channelId, controller: ctrl, claimed: false, sending: false, createdAt: Date.now() })
+    notifyReceiverAvailable(session)
 
     const onAbort = () => {
-      session.channels.delete(channelId)
       try {
         ctrl?.error(new Error("aborted"))
       } catch {}
@@ -411,7 +413,7 @@ export function createApp() {
     setAttachmentContentDisposition(headers, safeFileName(session.fileName) || "streamdrop.bin")
     headers.set("x-streamdrop-channel", channelId)
 
-    return new Response(wrapReadableWithDone(readable, count), { status: 200, headers })
+    return new Response(readable, { status: 200, headers })
   })
 
   return app
@@ -491,32 +493,6 @@ function randomNonce() {
 
 function base64url(bytes: Uint8Array) {
   return Buffer.from(bytes).toString("base64").replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "")
-}
-
-function wrapReadableWithDone(readable: ReadableStream<Uint8Array>, done: () => void) {
-  const reader = readable.getReader()
-  let doneCalled = false
-  const callDone = () => {
-    if (doneCalled) return
-    doneCalled = true
-    done()
-  }
-
-  return new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      const { value, done: isDone } = await reader.read()
-      if (isDone) {
-        callDone()
-        controller.close()
-        return
-      }
-      if (value) controller.enqueue(value)
-    },
-    async cancel() {
-      callDone()
-      await reader.cancel().catch(() => {})
-    },
-  })
 }
 
 function randomChannelId() {

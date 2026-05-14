@@ -5,15 +5,22 @@ export const serverStats = {
 }
 
 export const monthlyStats = {
-  month: new Date().toISOString().slice(0, 7), // e.g. "2026-05"
+  month: new Date().toISOString().slice(0, 7),
   totalSessions: 0,
   totalBytes: 0n,
   totalFiles: 0,
 }
 
+let cachedMonth = monthlyStats.month
+let cachedMonthTimestamp = Date.now()
+
 function checkMonth() {
+  const now = Date.now()
+  if (now - cachedMonthTimestamp < 60_000) return
+  cachedMonthTimestamp = now
   const currentMonth = new Date().toISOString().slice(0, 7)
-  if (monthlyStats.month !== currentMonth) {
+  if (cachedMonth !== currentMonth) {
+    cachedMonth = currentMonth
     monthlyStats.month = currentMonth
     monthlyStats.totalSessions = 0
     monthlyStats.totalBytes = 0n
@@ -21,25 +28,44 @@ function checkMonth() {
   }
 }
 
+let pendingBytes = 0
+
+export function incrementBytes(bytes: number) {
+  pendingBytes += bytes
+  if (pendingBytes >= 1_048_576) {
+    const flush = BigInt(pendingBytes)
+    serverStats.totalBytes += flush
+    monthlyStats.totalBytes += flush
+    pendingBytes = 0
+    checkMonth()
+  }
+}
+
+function flushBytes() {
+  if (pendingBytes > 0) {
+    const flush = BigInt(pendingBytes)
+    serverStats.totalBytes += flush
+    monthlyStats.totalBytes += flush
+    pendingBytes = 0
+  }
+}
+
 export function incrementSessions() {
+  flushBytes()
   checkMonth()
   serverStats.totalSessions++
   monthlyStats.totalSessions++
 }
 
-export function incrementBytes(bytes: number) {
-  checkMonth()
-  serverStats.totalBytes += BigInt(bytes)
-  monthlyStats.totalBytes += BigInt(bytes)
-}
-
 export function incrementFiles() {
+  flushBytes()
   checkMonth()
   serverStats.totalFiles++
   monthlyStats.totalFiles++
 }
 
 export function getStats(activeSessions: number, activeTransfers: number) {
+  flushBytes()
   checkMonth()
   return {
     totalSessions: serverStats.totalSessions,
