@@ -16,7 +16,7 @@ Files are encrypted in the sender's browser and streamed through the server in r
 ## Quick start (local)
 
 ```bash
-go run ./go/cmd/streamdrop/
+go run ./cmd/streamdrop/
 ```
 
 Open http://localhost:3000.
@@ -55,7 +55,7 @@ Release binaries: GitHub Releases include prebuilt CLI binaries for macOS, Linux
 ### Run in production
 
 ```bash
-go build -o streamdrop ./go/cmd/streamdrop/
+go build -o streamdrop ./cmd/streamdrop/
 PORT=3000 STREAMDROP_SERVER=https://streamdrop.app ./streamdrop
 ```
 

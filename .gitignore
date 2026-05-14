@@ -139,3 +139,6 @@ test-results/
 playwright-report/
 .DS_Store
 cli-pkg/
+
+# Go compiled binary
+streamdrop

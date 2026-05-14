@@ -11,7 +11,6 @@ export default defineConfig({
   },
   webServer: {
     command: "PORT=4000 go run ./cmd/streamdrop/",
-    cwd: "go",
     port: 4000,
     reuseExistingServer: !process.env.CI,
     timeout: 10_000,

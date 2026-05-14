@@ -17,15 +17,13 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26'
-          cache-dependency-path: go/go.sum
+          cache-dependency-path: go.sum
 
       - name: Build Go server
         run: go build ./cmd/streamdrop/
-        working-directory: go
 
       - name: Run Go vet
         run: go vet ./...
-        working-directory: go
 
       - uses: oven-sh/setup-bun@v2
         with:
