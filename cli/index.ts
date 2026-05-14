@@ -6,6 +6,7 @@ import { stat as statFs } from "node:fs/promises"
 import { homedir } from "node:os"
 import { spawn } from "node:child_process"
 import { Readable, Writable } from "node:stream"
+import { sendViaP2P, receiveViaP2P } from "./webrtc.js"
 
 type SessionRes = { id: string; uploadToken: string; downloadToken: string }
 
@@ -193,26 +194,47 @@ async function runSend(serverRaw: string, filePath: string) {
   const ok = await waitForReceiver(server, sess.id)
   if (!ok) throw new Error("receiver_not_available")
 
-  console.log(`\x1b[32mReceiver connected. Starting upload...\x1b[0m`)
-  startTime = 0 // reset progress timer
+  console.log(`\x1b[32mReceiver connected.\x1b[0m`)
+  startTime = 0
 
-  let streamToRead: ReadableStream<Uint8Array>
-  if (stat.isDirectory()) {
-    const tar = spawn("tar", ["-cf", "-", basename(filePath)], {
-      cwd: dirname(filePath),
-      stdio: ["ignore", "pipe", "ignore"],
-    })
-    streamToRead = Readable.toWeb(tar.stdout) as ReadableStream<Uint8Array>
-  } else {
-    streamToRead = Readable.toWeb(createReadStream(filePath)) as ReadableStream<Uint8Array>
+  function createSourceStream() {
+    if (stat.isDirectory()) {
+      const tar = spawn("tar", ["-cf", "-", basename(filePath)], {
+        cwd: dirname(filePath),
+        stdio: ["ignore", "pipe", "ignore"],
+      })
+      return Readable.toWeb(tar.stdout) as ReadableStream<Uint8Array>
+    }
+    return Readable.toWeb(createReadStream(filePath)) as ReadableStream<Uint8Array>
   }
 
-  const enc = createEncryptStream({ 
-    stream: streamToRead, 
+  console.log(`\x1b[36mConnecting P2P...\x1b[0m`)
+  const p2pOk = await sendViaP2P(
+    server,
+    createEncryptStream({
+      stream: createSourceStream(),
+      size: totalSize,
+      key,
+      sessionId: sess.id,
+      onProgress: (sent: number, total: number) => printProgress("Sending via P2P", sent, total),
+    }),
+    sess.id,
+  )
+
+  if (p2pOk) {
+    console.log(`\n\x1b[32mSent via P2P.\x1b[0m\n`)
+    return
+  }
+
+  console.log(`\n\x1b[33mP2P failed. Falling back to relay...\x1b[0m`)
+  startTime = 0
+
+  const enc = createEncryptStream({
+    stream: createSourceStream(),
     size: totalSize,
-    key, 
-    sessionId: sess.id, 
-    onProgress: (sent: number, total: number) => printProgress("Uploading", sent, total)
+    key,
+    sessionId: sess.id,
+    onProgress: (sent: number, total: number) => printProgress("Uploading", sent, total),
   })
 
   const res = await fetch(`${server}/upload/${sess.uploadToken}`, {
@@ -222,7 +244,7 @@ async function runSend(serverRaw: string, filePath: string) {
     duplex: "half",
   } as any)
 
-  console.log() // New line after progress
+  console.log()
   if (!res.ok) {
     const t = await safeText(res)
     throw new Error(t || `upload_failed_${res.status}`)
@@ -268,18 +290,48 @@ async function runReceive(input: string, overrideServer?: string | null) {
   }
 
   console.log(`\x1b[36mConnecting to ${server}...\x1b[0m`)
-  const res = await fetch(`${server}/d/${downloadToken}`, { method: "GET", headers: { accept: "application/octet-stream" } })
-  if (!res.ok || !res.body) throw new Error(`download_failed_${res.status}`)
+
+  fetch(`${server}/ready/${parsed.id}`, { method: "POST" }).catch(() => {})
+
+  console.log(`\x1b[36mConnecting P2P...\x1b[0m`)
+
+  let body: ReadableStream<Uint8Array> | null = null
+  try {
+    const p2pStream = receiveViaP2P(server, parsed.id)
+    const p2pReader = p2pStream.getReader()
+    const first = await p2pReader.read()
+    if (!first.done) {
+      body = new ReadableStream({
+        async start(ctrl) {
+          ctrl.enqueue(first.value)
+          while (true) {
+            const { value, done } = await p2pReader.read()
+            if (done) { ctrl.close(); break }
+            ctrl.enqueue(value)
+          }
+        },
+        cancel() { p2pReader.cancel().catch(() => {}) },
+      })
+      console.log(`\x1b[32mConnected via P2P.\x1b[0m`)
+    }
+  } catch {}
+
+  if (!body) {
+    console.log(`\x1b[33mP2P failed. Falling back to relay...\x1b[0m`)
+    const res = await fetch(`${server}/d/${downloadToken}`, { method: "GET", headers: { accept: "application/octet-stream" } })
+    if (!res.ok || !res.body) throw new Error(`download_failed_${res.status}`)
+    body = res.body
+  }
 
   console.log(`\x1b[36mDownloading to ${outPath}...\x1b[0m`)
-  startTime = 0 // reset progress timer
+  startTime = 0
   const decrypt = createDecryptTransform({ 
     key, 
     sessionId: parsed.id, 
     onProgress: (received: number) => printProgress("Downloading", received) 
   })
   
-  const plain = res.body.pipeThrough(decrypt)
+  const plain = body.pipeThrough(decrypt)
   
   if (shouldExtract) {
     console.log(`Folder archive detected. Extracting on the fly...`)
@@ -298,12 +350,12 @@ async function runReceive(input: string, overrideServer?: string | null) {
       tarProc.on("error", reject)
     })
 
-    console.log() // New line after progress
+    console.log()
     console.log(`\x1b[32mExtracted successfully.\x1b[0m\n`)
   } else {
     await writeToFile(outPath, plain)
     
-    console.log() // New line after progress
+    console.log()
     console.log(`\x1b[32mSaved: ${outPath}\x1b[0m\n`)
   }
 }

@@ -9,7 +9,8 @@
   },
   "dependencies": {
     "@noble/curves": "^2.2.0",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "werift": "^0.23.0"
   },
   "devDependencies": {
     "@types/bun": "latest",
