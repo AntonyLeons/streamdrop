@@ -141,4 +141,4 @@ playwright-report/
 cli-pkg/
 
 # Go compiled binary
-streamdrop
+/streamdrop
