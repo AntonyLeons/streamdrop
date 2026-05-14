@@ -523,8 +523,43 @@ async function startTransfer(file) {
       activeUploads++
       globalActiveUploads++
       item.setState(activeUploads > 1 ? `Uploading (${activeUploads})` : "Uploading")
-      let startTime = Date.now()
       let lastStateUpdate = 0
+      let speedSamples = []
+      let barPct = 0
+      let barRaf = null
+      
+      const reportProgress = (done, total) => {
+        if (activeUploads !== 1) return
+        const pct = total ? Math.min(1, done / total) : 0
+        if (pct !== barPct) {
+          barPct = pct
+          if (!barRaf) {
+            barRaf = requestAnimationFrame(() => {
+              barRaf = null
+              item.setBar(barPct)
+            })
+          }
+        }
+        if (done > 0) { setStep("stream", true); markStepDone("stream") }
+        if (!done || !total) return
+
+        const now = Date.now()
+        speedSamples.push({ time: now, bytes: done })
+        while (speedSamples.length > 1 && speedSamples[0].time < now - 3000) speedSamples.shift()
+
+        if (done < total * 0.01 || now - speedSamples[0].time < 1000) return
+        if (now - lastStateUpdate < 200) return
+        lastStateUpdate = now
+
+        const first = speedSamples[0]
+        const elapsed = (now - first.time) / 1000
+        const bytesInWindow = done - first.bytes
+        const speed = bytesInWindow / elapsed
+
+        const eta = Math.round((total - done) / speed)
+        const etaStr = eta > 0 ? ` · ${eta}s left` : ""
+        item.setState(`Uploading · ${formatSpeed(speed)}${etaStr}`)
+      }
       
       try {
         let res
@@ -534,30 +569,7 @@ async function startTransfer(file) {
                 stream: cipherBlob.stream(),
                 total: cipherBlob.size,
                 signal: abortController.signal,
-                onProgress: (done, total) => {
-                  if (activeUploads !== 1) return
-                  const pct = total ? Math.min(1, done / total) : 0
-                  item.setBar(pct)
-                  
-                  if (done > 0 && total) {
-                    const elapsed = (Date.now() - startTime) / 1000
-                    if (elapsed > 0.5) {
-                      const speed = done / elapsed
-                      const eta = Math.round((total - done) / speed)
-                      const etaStr = eta > 0 ? ` · ${eta}s left` : ""
-                      const now = Date.now()
-                      if (now - lastStateUpdate > 200) {
-                        lastStateUpdate = now
-                        item.setState(`Uploading · ${formatSpeed(speed)}${etaStr}`)
-                      }
-                    }
-                  }
-                  
-                  if (done > 0) {
-                    setStep("stream", true)
-                    markStepDone("stream")
-                  }
-                },
+                onProgress: reportProgress,
               })
 
               res = await fetch(`/upload/${session.uploadToken}/${encodeURIComponent(channelId)}`, {
@@ -572,30 +584,7 @@ async function startTransfer(file) {
                 `/upload/${session.uploadToken}/${encodeURIComponent(channelId)}`,
                 cipherBlob,
                 abortController.signal,
-                (done, total) => {
-                  if (activeUploads !== 1) return
-                  const pct = total ? Math.min(1, done / total) : 0
-                  item.setBar(pct)
-                  
-                  if (done > 0 && total) {
-                    const elapsed = (Date.now() - startTime) / 1000
-                    if (elapsed > 0.5) {
-                      const speed = done / elapsed
-                      const eta = Math.round((total - done) / speed)
-                      const etaStr = eta > 0 ? ` · ${eta}s left` : ""
-                      const now = Date.now()
-                      if (now - lastStateUpdate > 200) {
-                        lastStateUpdate = now
-                        item.setState(`Uploading · ${formatSpeed(speed)}${etaStr}`)
-                      }
-                    }
-                  }
-                  
-                  if (done > 0) {
-                    setStep("stream", true)
-                    markStepDone("stream")
-                  }
-                }
+                reportProgress
               )
             }
           } catch (e) {

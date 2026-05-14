@@ -512,7 +512,7 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.sd-file-state { font-size: 11px; margin-top: 2px; }
+.sd-file-state { font-size: 11px; margin-top: 2px; font-variant-numeric: tabular-nums; }
 .sd-file-badges { margin-top: 8px; }
 .sd-file-badge {
   display: inline-flex;
