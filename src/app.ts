@@ -344,7 +344,7 @@ export function createApp() {
       cancel() {
         count()
       },
-    })
+    }, { highWaterMark: 16 })
     if (!ctrl) return c.json({ error: "internal" }, 500, { "cache-control": "no-store" })
     session.channels.set(channelId, { id: channelId, controller: ctrl, claimed: false, sending: false, createdAt: Date.now() })
     notifyReceiverAvailable(session)
@@ -391,7 +391,7 @@ export function createApp() {
       cancel() {
         count()
       },
-    })
+    }, { highWaterMark: 16 })
     if (!ctrl) return c.json({ error: "internal" }, 500, { "cache-control": "no-store" })
     session.channels.set(channelId, { id: channelId, controller: ctrl, claimed: false, sending: false, createdAt: Date.now() })
     notifyReceiverAvailable(session)
