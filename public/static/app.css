@@ -722,6 +722,10 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
   background: var(--good);
   box-shadow: 0 0 0 2px var(--good-glow);
 }
+.badge-green {
+  border-color: var(--good);
+  color: var(--good);
+}
 
 .hidden { display: none; }
 

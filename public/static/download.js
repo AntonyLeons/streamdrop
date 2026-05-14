@@ -86,6 +86,7 @@ async function run({ raw }) {
       setStep("download")
       if (elMeter) elMeter.classList.remove("hidden")
       setBar(0)
+      setTransport(null)
 
       let body
       try {
@@ -108,6 +109,7 @@ async function run({ raw }) {
             },
             cancel() { p2pReader.cancel().catch(() => {}) },
           })
+          setTransport("P2P")
         }
       } catch {}
 
@@ -146,6 +148,7 @@ async function run({ raw }) {
           continue
         }
         body = res.body
+        setTransport("Relayed")
       }
 
       let plainBytes = 0
@@ -242,6 +245,16 @@ function startOnce(raw) {
   if (started) return
   started = true
   run({ raw }).catch((e) => showError(String(e?.message ?? e ?? "error")))
+}
+
+function setTransport(label) {
+  const badge = document.getElementById("transport-badge")
+  const lbl = document.getElementById("transport-label")
+  if (!badge || !lbl) return
+  if (!label) { badge.classList.add("hidden"); return }
+  lbl.textContent = label
+  badge.className = "badge"
+  if (label === "P2P") badge.classList.add("badge-green")
 }
 
 function setBar(pct) {
