@@ -343,7 +343,7 @@ func getDuration(key, def string) time.Duration {
 
 func acceptsJSON(r *http.Request) bool {
 	accept := r.Header.Get("Accept")
-	return strings.Contains(accept, "application/json") || strings.Contains(accept, "*/*")
+	return strings.Contains(accept, "application/json")
 }
 
 func isSameOrigin(r *http.Request) bool {
