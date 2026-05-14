@@ -61,7 +61,7 @@ func resolvePartials(html string, depth int) string {
 		if end < 0 {
 			break
 		}
-		name := html[idx+23 : idx+end]
+		name := html[idx+22 : idx+end]
 		partial := readTemplate(filepath.Join("partials", name))
 		html = html[:idx] + partial + html[idx+end+4:]
 	}
