@@ -14,29 +14,42 @@ env:
 
 jobs:
   test:
-    name: Typecheck & Test
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.release.tag_name }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache-dependency-path: go/go.sum
+
+      - name: Build Go server
+        run: go build ./cmd/streamdrop/
+        working-directory: go
+
+      - name: Run Go vet
+        run: go vet ./...
+        working-directory: go
+
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - name: Install dependencies
+
+      - name: Install CLI dependencies
         run: bun install
-      - name: Run linter/typecheck
-        run: bun run check
-      - name: Run unit tests
-        run: bun run test
+
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium
-      - name: Run Playwright E2E tests
-        run: bun run test:e2e
 
-  build:
+      - name: Run Playwright E2E tests
+        run: npx playwright test
+
+  build-cli:
     needs: test
-    name: ${{ matrix.name }}
+    name: CLI ${{ matrix.name }}
     runs-on: ${{ matrix.runs_on }}
     strategy:
       fail-fast: false
@@ -74,9 +87,6 @@ jobs:
       - name: Build CLI
         run: bun build cli/index.ts --compile --target bun-${{ matrix.name }} --outfile dist/streamdrop-cli${{ matrix.ext }}
 
-      - name: Build Server
-        run: bun build src/server.ts --compile --target bun-${{ matrix.name }} --outfile dist/streamdrop-server${{ matrix.ext }}
-
       - name: Build NPM Package
         if: matrix.name == 'linux-x64'
         run: bun run cli:build-npm
@@ -87,20 +97,15 @@ jobs:
         run: |
           cd dist
           mv "streamdrop-cli${{ matrix.ext }}" "streamdrop-cli-${{ matrix.name }}${{ matrix.ext }}"
-          mv "streamdrop-server${{ matrix.ext }}" "streamdrop-server-${{ matrix.name }}${{ matrix.ext }}"
           
           if command -v sha256sum >/dev/null 2>&1; then
             sha256sum "streamdrop-cli-${{ matrix.name }}${{ matrix.ext }}" | awk '{print $1}' > "streamdrop-cli-${{ matrix.name }}${{ matrix.ext }}.sha256"
-            sha256sum "streamdrop-server-${{ matrix.name }}${{ matrix.ext }}" | awk '{print $1}' > "streamdrop-server-${{ matrix.name }}${{ matrix.ext }}.sha256"
           else
             shasum -a 256 "streamdrop-cli-${{ matrix.name }}${{ matrix.ext }}" | awk '{print $1}' > "streamdrop-cli-${{ matrix.name }}${{ matrix.ext }}.sha256"
-            shasum -a 256 "streamdrop-server-${{ matrix.name }}${{ matrix.ext }}" | awk '{print $1}' > "streamdrop-server-${{ matrix.name }}${{ matrix.ext }}.sha256"
           fi
           
           echo "file1=dist/streamdrop-cli-${{ matrix.name }}${{ matrix.ext }}" >> "$GITHUB_OUTPUT"
           echo "sha1=dist/streamdrop-cli-${{ matrix.name }}${{ matrix.ext }}.sha256" >> "$GITHUB_OUTPUT"
-          echo "file2=dist/streamdrop-server-${{ matrix.name }}${{ matrix.ext }}" >> "$GITHUB_OUTPUT"
-          echo "sha2=dist/streamdrop-server-${{ matrix.name }}${{ matrix.ext }}.sha256" >> "$GITHUB_OUTPUT"
           
           if [ "${{ matrix.name }}" == "linux-x64" ]; then
             cd ..
@@ -115,13 +120,11 @@ jobs:
           files: |
             ${{ steps.prepare_bin.outputs.file1 }}
             ${{ steps.prepare_bin.outputs.sha1 }}
-            ${{ steps.prepare_bin.outputs.file2 }}
-            ${{ steps.prepare_bin.outputs.sha2 }}
             ${{ steps.prepare_bin.outputs.npm_pkg }}
 
   publish-managers:
     name: Publish to Package Managers
-    needs: build
+    needs: build-cli
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -137,11 +140,9 @@ jobs:
         run: |
           echo "VERSION=${TAG#v}" >> $GITHUB_ENV
           
-          # Download all the .sha256 files and the NPM package from the current release
           gh release download $TAG -p "*.sha256"
           gh release download $TAG -p "streamdrop-cli-npm.tar.gz"
           
-          # Read SHAs into environment variables
           echo "MAC_INTEL_SHA=$(cat streamdrop-cli-macos-x64.sha256)" >> $GITHUB_ENV
           echo "MAC_ARM_SHA=$(cat streamdrop-cli-macos-arm64.sha256)" >> $GITHUB_ENV
           echo "LINUX_INTEL_SHA=$(cat streamdrop-cli-linux-x64.sha256)" >> $GITHUB_ENV
@@ -171,13 +172,11 @@ jobs:
         run: |
           cd pkg-repo
           
-          # Process Homebrew Template
           if [ -f Formula/streamdrop-cli.rb.template ]; then
             envsubst < Formula/streamdrop-cli.rb.template > Formula/streamdrop-cli.rb
             git add Formula/streamdrop-cli.rb
           fi
           
-          # Process Scoop Template
           if [ -f bucket/streamdrop-cli.json.template ]; then
             envsubst < bucket/streamdrop-cli.json.template > bucket/streamdrop-cli.json
             git add bucket/streamdrop-cli.json
@@ -187,6 +186,80 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git commit -m "Bump streamdrop-cli to ${{ github.event.release.tag_name }}" || echo "No changes to commit"
           git push
+
+  build-server:
+    needs: test
+    name: Server ${{ matrix.name }}
+    runs-on: ${{ matrix.runs_on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x64
+            runs_on: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            ext: ""
+          - name: linux-arm64
+            runs_on: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            ext: ""
+          - name: macos-x64
+            runs_on: macos-26-intel
+            goos: darwin
+            goarch: amd64
+            ext: ""
+          - name: macos-arm64
+            runs_on: macos-latest
+            goos: darwin
+            goarch: arm64
+            ext: ""
+          - name: windows-x64
+            runs_on: windows-latest
+            goos: windows
+            goarch: amd64
+            ext: ".exe"
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache-dependency-path: go/go.sum
+
+      - name: Build Server
+        run: |
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o dist/streamdrop-server${{ matrix.ext }} ./cmd/streamdrop/
+        working-directory: go
+
+      - name: Prepare Binary
+        id: prepare_bin
+        shell: bash
+        run: |
+          cd dist
+          mv "streamdrop-server${{ matrix.ext }}" "streamdrop-server-${{ matrix.name }}${{ matrix.ext }}"
+          
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "streamdrop-server-${{ matrix.name }}${{ matrix.ext }}" | awk '{print $1}' > "streamdrop-server-${{ matrix.name }}${{ matrix.ext }}.sha256"
+          else
+            shasum -a 256 "streamdrop-server-${{ matrix.name }}${{ matrix.ext }}" | awk '{print $1}' > "streamdrop-server-${{ matrix.name }}${{ matrix.ext }}.sha256"
+          fi
+          
+          echo "file=dist/streamdrop-server-${{ matrix.name }}${{ matrix.ext }}" >> "$GITHUB_OUTPUT"
+          echo "sha=dist/streamdrop-server-${{ matrix.name }}${{ matrix.ext }}.sha256" >> "$GITHUB_OUTPUT"
+        working-directory: go
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: |
+            ${{ steps.prepare_bin.outputs.file }}
+            ${{ steps.prepare_bin.outputs.sha }}
 
   publish-docker:
     name: Publish Docker Image

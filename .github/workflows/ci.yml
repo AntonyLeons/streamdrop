@@ -14,27 +14,31 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache-dependency-path: go/go.sum
+
+      - name: Build Go server
+        run: go build ./cmd/streamdrop/
+        working-directory: go
+
+      - name: Run Go vet
+        run: go vet ./...
+        working-directory: go
+
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
-      - name: Install dependencies
+      - name: Install CLI dependencies
         run: bun install
 
-      - name: Run linter/typecheck
-        run: bunx tsc -p tsconfig.json --noEmit
-
-      - name: Run tests
-        run: bun test tests/cli.test.ts src/
+      - name: Build CLI (Dry Run)
+        run: bun build cli/index.ts --compile --outfile dist/streamdrop-cli
 
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium
 
       - name: Run Playwright E2E tests
         run: npx playwright test
-
-      - name: Build CLI (Dry Run)
-        run: bun build cli/index.ts --compile --outfile dist/streamdrop-cli
-
-      - name: Build Server (Dry Run)
-        run: bun build src/server.ts --compile --outfile dist/streamdrop-server

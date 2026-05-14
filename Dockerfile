@@ -1,25 +1,16 @@
-# Use the official Bun image
-FROM oven/bun:alpine
+FROM golang:1.26-alpine AS build
+WORKDIR /src
+COPY go/go.mod go/go.sum ./
+RUN go mod download
+COPY go/ .
+RUN CGO_ENABLED=0 go build -o /streamdrop ./cmd/streamdrop
 
-WORKDIR /app
-
-# Set production environment
-ENV NODE_ENV="production"
-ENV PORT=3000
-
-# Copy package files
-COPY package.json bun.lock ./
-
-# Install production dependencies
-RUN bun install --frozen-lockfile --production
-
-# Copy application code
-COPY src ./src
-COPY public ./public
-COPY templates ./templates
-
-# Expose the application port
+FROM alpine:3.19
+RUN apk add --no-cache ca-certificates
+COPY --from=build /streamdrop /streamdrop
+COPY public /public
+COPY templates /templates
 EXPOSE 3000
-
-# Start the server
-CMD ["bun", "run", "src/server.ts"]
+ENV PORT=3000
+ENV STREAMDROP_SERVER=https://streamdrop.app
+CMD ["/streamdrop"]

@@ -7,12 +7,11 @@ export default defineConfig({
   retries: 1,
   use: {
     baseURL: "http://localhost:4000",
-    // Chromium's headless shell doesn't support File System Access API,
-    // so downloads fall back to blob URL → anchor click → browser download event.
     headless: true,
   },
   webServer: {
-    command: "PORT=4000 ~/.bun/bin/bun src/server.ts",
+    command: "PORT=4000 go run ./cmd/streamdrop/",
+    cwd: "go",
     port: 4000,
     reuseExistingServer: !process.env.CI,
     timeout: 10_000,

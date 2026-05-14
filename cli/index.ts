@@ -189,52 +189,45 @@ async function runSend(serverRaw: string, filePath: string) {
 
   const key = await crypto.subtle.importKey("raw", rawKey, { name: "AES-GCM" }, false, ["encrypt"])
 
-  while (true) {
-    const ok = await waitForReceiver(server, sess.id)
-    if (!ok) continue
-    while (true) {
-      const channelId = await claim(server, sess.uploadToken)
-      if (!channelId) break
-      
-      console.log(`\x1b[32mReceiver connected. Starting upload...\x1b[0m`)
-      startTime = 0 // reset progress timer
-      
-      let streamToRead: ReadableStream<Uint8Array>
-      if (stat.isDirectory()) {
-        const tar = spawn("tar", ["-cf", "-", basename(filePath)], {
-          cwd: dirname(filePath),
-          stdio: ["ignore", "pipe", "ignore"],
-        })
-        streamToRead = Readable.toWeb(tar.stdout) as ReadableStream<Uint8Array>
-      } else {
-        streamToRead = Readable.toWeb(createReadStream(filePath)) as ReadableStream<Uint8Array>
-      }
+  console.log(`\x1b[36mWaiting for receiver...\x1b[0m`)
+  const ok = await waitForReceiver(server, sess.id)
+  if (!ok) throw new Error("receiver_not_available")
 
-      const enc = createEncryptStream({ 
-        stream: streamToRead, 
-        size: totalSize,
-        key, 
-        sessionId: sess.id, 
-        onProgress: (sent: number, total: number) => printProgress("Uploading", sent, total)
-      })
-      
-      const res = await fetch(`${server}/upload/${sess.uploadToken}/${encodeURIComponent(channelId)}`, {
-        method: "PUT",
-        headers: { "content-type": "application/octet-stream" },
-        body: enc,
-        duplex: "half",
-      } as any)
-      
-      console.log() // New line after progress
-      if (!res.ok) {
-        const t = await safeText(res)
-        console.error(`\x1b[31mUpload failed: ${t || res.status}\x1b[0m\n`)
-      } else {
-        console.log(`\x1b[32mUpload complete.\x1b[0m\n`)
-      }
-    }
-    await sleep(250)
+  console.log(`\x1b[32mReceiver connected. Starting upload...\x1b[0m`)
+  startTime = 0 // reset progress timer
+
+  let streamToRead: ReadableStream<Uint8Array>
+  if (stat.isDirectory()) {
+    const tar = spawn("tar", ["-cf", "-", basename(filePath)], {
+      cwd: dirname(filePath),
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+    streamToRead = Readable.toWeb(tar.stdout) as ReadableStream<Uint8Array>
+  } else {
+    streamToRead = Readable.toWeb(createReadStream(filePath)) as ReadableStream<Uint8Array>
   }
+
+  const enc = createEncryptStream({ 
+    stream: streamToRead, 
+    size: totalSize,
+    key, 
+    sessionId: sess.id, 
+    onProgress: (sent: number, total: number) => printProgress("Uploading", sent, total)
+  })
+
+  const res = await fetch(`${server}/upload/${sess.uploadToken}`, {
+    method: "PUT",
+    headers: { "content-type": "application/octet-stream" },
+    body: enc,
+    duplex: "half",
+  } as any)
+
+  console.log() // New line after progress
+  if (!res.ok) {
+    const t = await safeText(res)
+    throw new Error(t || `upload_failed_${res.status}`)
+  }
+  console.log(`\x1b[32mUpload complete.\x1b[0m\n`)
 }
 
 async function runReceive(input: string, overrideServer?: string | null) {
@@ -417,23 +410,7 @@ async function waitForReceiver(server: string, sessionId: string) {
   }
 }
 
-async function claim(server: string, uploadToken: string) {
-  try {
-    const res = await fetch(`${server}/claim/${uploadToken}`, { method: "POST", headers: { accept: "application/json" } })
-    if (res.status === 204) return null
-    if (!res.ok) return null
-    const body = (await res.json().catch(() => null)) as any
-    return typeof body?.channelId === "string" ? body.channelId : null
-  } catch {
-    return null
-  }
-}
-
 async function writeToFile(path: string, stream: ReadableStream<Uint8Array>) {
   const w = createWriteStream(path)
   await stream.pipeTo(Writable.toWeb(w))
-}
-
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms))
 }

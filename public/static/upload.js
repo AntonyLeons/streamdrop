@@ -516,128 +516,97 @@ async function startTransfer(file) {
     item.setState("Falling back to relay…")
     await sleep(500)
 
-      let activeUploads = 0
-    const inFlight = new Set()
+    let speedSamples = []
+    let barPct = 0
+    let barRaf = null
+    let lastStateUpdate = 0
 
-    const startChannelUpload = async (channelId) => {
-      activeUploads++
-      globalActiveUploads++
-      item.setState(activeUploads > 1 ? `Uploading (${activeUploads})` : "Uploading")
-      let lastStateUpdate = 0
-      let speedSamples = []
-      let barPct = 0
-      let barRaf = null
-      
-      const reportProgress = (done, total) => {
-        if (activeUploads !== 1) return
-        const pct = total ? Math.min(1, done / total) : 0
-        if (pct !== barPct) {
-          barPct = pct
-          if (!barRaf) {
-            barRaf = requestAnimationFrame(() => {
-              barRaf = null
-              item.setBar(barPct)
-            })
-          }
-        }
-        if (done > 0) { setStep("stream", true); markStepDone("stream") }
-        if (!done || !total) return
-
-        const now = Date.now()
-        speedSamples.push({ time: now, bytes: done })
-        while (speedSamples.length > 1 && speedSamples[0].time < now - 3000) speedSamples.shift()
-
-        if (done < total * 0.01 || now - speedSamples[0].time < 1000) return
-        if (now - lastStateUpdate < 200) return
-        lastStateUpdate = now
-
-        const first = speedSamples[0]
-        const elapsed = (now - first.time) / 1000
-        const bytesInWindow = done - first.bytes
-        const speed = bytesInWindow / elapsed
-
-        const eta = Math.round((total - done) / speed)
-        const etaStr = eta > 0 ? ` · ${eta}s left` : ""
-        item.setState(`Uploading · ${formatSpeed(speed)}${etaStr}`)
-      }
-      
-      try {
-        let res
-        try {
-            if (supportsDuplex && !window._forceXhr) {
-              const uploadStream = wrapStreamWithProgress({
-                stream: cipherBlob.stream(),
-                total: cipherBlob.size,
-                signal: abortController.signal,
-                onProgress: reportProgress,
-              })
-
-              res = await fetch(`/upload/${session.uploadToken}/${encodeURIComponent(channelId)}`, {
-                method: "PUT",
-                headers: { "content-type": "application/octet-stream" },
-                body: uploadStream,
-                duplex: "half",
-                signal: abortController.signal,
-              })
-            } else {
-              res = await uploadBlobWithXhr(
-                `/upload/${session.uploadToken}/${encodeURIComponent(channelId)}`,
-                cipherBlob,
-                abortController.signal,
-                reportProgress
-              )
-            }
-          } catch (e) {
-            if (abortController.signal.aborted) return
-            throw new Error(e?.message ?? "upload_failed")
-          }
-
-          if (!res.ok) {
-            let err = ""
-            try {
-              const ct = res.headers.get("content-type") || ""
-              if (ct.includes("application/json")) {
-                const body = await res.json()
-                if (body && typeof body.error === "string") err = body.error
-              } else {
-                err = await res.text()
-              }
-            } catch {}
-
-          if (err === "receivers_lost" || err === "aborted" || err === "channel_not_found") return
-          throw new Error(err || `upload_failed_${res.status}`)
-        }
-        
-        item.incrementDownloads()
-      } finally {
-        activeUploads--
-        globalActiveUploads--
-        if (!abortController.signal.aborted) {
-          item.setState(activeUploads > 0 ? `Uploading (${activeUploads})` : "Ready")
-          if (activeUploads === 0) {
-            item.setBar(1)
-            setStep("wait", true)
-            markStepDone("stream") // Stream is technically over when it drops back to wait
-          }
+    const reportProgress = (done, total) => {
+      const pct = total ? Math.min(1, done / total) : 0
+      if (pct !== barPct) {
+        barPct = pct
+        if (!barRaf) {
+          barRaf = requestAnimationFrame(() => {
+            barRaf = null
+            item.setBar(barPct)
+          })
         }
       }
+      if (done > 0) { setStep("stream", true); markStepDone("stream") }
+      if (!done || !total) return
+
+      const now = Date.now()
+      speedSamples.push({ time: now, bytes: done })
+      while (speedSamples.length > 1 && speedSamples[0].time < now - 3000) speedSamples.shift()
+
+      if (done < total * 0.01 || now - speedSamples[0].time < 1000) return
+      if (now - lastStateUpdate < 200) return
+      lastStateUpdate = now
+
+      const first = speedSamples[0]
+      const elapsed = (now - first.time) / 1000
+      const bytesInWindow = done - first.bytes
+      const speed = bytesInWindow / elapsed
+
+      const eta = Math.round((total - done) / speed)
+      const etaStr = eta > 0 ? ` · ${eta}s left` : ""
+      item.setState(`Uploading · ${formatSpeed(speed)}${etaStr}`)
     }
 
-    while (true) {
-      item.setState(activeUploads > 0 ? `Uploading (${activeUploads})` : "Waiting for receiver")
-      await waitForReceiverOnline(session.id, abortController.signal)
+    item.setState("Waiting for receiver")
+    await waitForReceiverOnline(session.id, abortController.signal)
+    if (abortController.signal.aborted) return
+
+    item.setState("Uploading")
+    let res
+    try {
+      if (supportsDuplex && !window._forceXhr) {
+        const uploadStream = wrapStreamWithProgress({
+          stream: cipherBlob.stream(),
+          total: cipherBlob.size,
+          signal: abortController.signal,
+          onProgress: reportProgress,
+        })
+
+        res = await fetch(`/upload/${session.uploadToken}`, {
+          method: "PUT",
+          headers: { "content-type": "application/octet-stream" },
+          body: uploadStream,
+          duplex: "half",
+          signal: abortController.signal,
+        })
+      } else {
+        res = await uploadBlobWithXhr(
+          `/upload/${session.uploadToken}`,
+          cipherBlob,
+          abortController.signal,
+          reportProgress
+        )
+      }
+    } catch (e) {
       if (abortController.signal.aborted) return
-
-      while (true) {
-        const channelId = await claimChannel(session.uploadToken, abortController.signal)
-        if (!channelId) break
-        const p = startChannelUpload(channelId)
-        inFlight.add(p)
-        p.finally(() => inFlight.delete(p))
-      }
-
-      await sleep(250)
+      throw new Error(e?.message ?? "upload_failed")
     }
+
+    if (!res.ok) {
+      let err = ""
+      try {
+        const ct = res.headers.get("content-type") || ""
+        if (ct.includes("application/json")) {
+          const body = await res.json()
+          if (body && typeof body.error === "string") err = body.error
+        } else {
+          err = await res.text()
+        }
+      } catch {}
+      throw new Error(err || `upload_failed_${res.status}`)
+    }
+
+    item.incrementDownloads()
+    item.setState("Done")
+    item.setBar(1)
+    setStep("wait", true)
+    markStepDone("stream")
   } finally {
     abortControllersBySessionId.delete(session.id)
   }
