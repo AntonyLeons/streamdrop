@@ -38,40 +38,32 @@ async function postSignal(server: string, sessionId: string, msg: any, signal?: 
   } catch {}
 }
 
-async function iceExchange(pc: RTCPeerConnection, server: string, sessionId: string, role: string, signal?: AbortSignal) {
-  const other = role === "sender" ? "receiver" : "sender"
-  let polling = true
-
-  pc.onIceCandidate.subscribe((candidate) => {
-    if (candidate) {
-      postSignal(server, sessionId, { from: role, type: "ice", data: { candidate } }, signal).catch(() => {})
-    }
-  })
-
-  while (polling && !signal?.aborted) {
-    const msgs = await pollSignal(server, sessionId, role, signal)
-    for (const msg of msgs) {
-      if (msg.type === "ice" && msg.data?.candidate) {
-        try {
-          await pc.addIceCandidate(msg.data.candidate)
-        } catch {}
-      }
-    }
-  }
-
-  pc.onConnectionStateChange.subscribe((state) => {
-    if (state === "connected" || state === "failed" || state === "disconnected") {
-      polling = false
-    }
-  })
-}
-
 async function establishP2P(server: string, sessionId: string, role: "sender" | "receiver", signal?: AbortSignal) {
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
   const dc = role === "sender" ? pc.createDataChannel("streamdrop", { ordered: true }) : null
 
   dc?.addEventListener("close", () => closeP2P(pc))
   dc?.addEventListener("error", () => closeP2P(pc))
+
+  // Send local ICE candidates as they trickle in — must be before setLocalDescription
+  pc.onIceCandidate.subscribe((candidate) => {
+    if (candidate) {
+      postSignal(server, sessionId, { from: role, type: "ice", data: { candidate } }, signal).catch(() => {})
+    }
+  })
+
+  let polling = true
+  // Poll for remote ICE candidates in the background
+  ;(async () => {
+    while (polling && !signal?.aborted) {
+      const msgs = await pollSignal(server, sessionId, role, signal)
+      for (const msg of msgs) {
+        if (msg.type === "ice" && msg.data?.candidate) {
+          try { await pc.addIceCandidate(msg.data.candidate) } catch {}
+        }
+      }
+    }
+  })()
 
   let settled = false
   const settledP = new Promise<void>((resolve, reject) => {
@@ -92,6 +84,12 @@ async function establishP2P(server: string, sessionId: string, role: "sender" | 
       else if (s === "failed") onFail(new Error("p2p_ice_failed"))
     })
 
+    pc.onConnectionStateChange.subscribe((state) => {
+      if (state === "connected" || state === "failed" || state === "disconnected") {
+        polling = false
+      }
+    })
+
     if (role === "receiver") {
       pc.onDataChannel.subscribe(() => onDone())
     }
@@ -100,7 +98,6 @@ async function establishP2P(server: string, sessionId: string, role: "sender" | 
   let remoteDc: any
   const dcPromise = role === "receiver"
     ? new Promise<any>((r) => {
-        const orig = pc.onDataChannel
         pc.onDataChannel.subscribe((ch) => {
           remoteDc = ch
           ch.addEventListener("close", () => closeP2P(pc))
@@ -125,7 +122,6 @@ async function establishP2P(server: string, sessionId: string, role: "sender" | 
       }
     }
 
-    iceExchange(pc, server, sessionId, "sender", signal)
     await settledP
   } else {
     const offers = await pollSignal(server, sessionId, "receiver", signal)
@@ -144,7 +140,6 @@ async function establishP2P(server: string, sessionId: string, role: "sender" | 
       const localSdp = pc.localDescription
       await postSignal(server, sessionId, { from: "receiver", type: "answer", data: { sdp: { type: localSdp?.type, sdp: localSdp?.sdp } } }, signal)
     }
-    iceExchange(pc, server, sessionId, "receiver", signal)
     await settledP
   }
 
