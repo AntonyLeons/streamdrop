@@ -42,7 +42,7 @@ func main() {
 	// Static files
 	staticDir := findStaticDir()
 	if staticDir != "" {
-		fs := http.FileServer(http.Dir(staticDir))
+		fs := http.FileServer(http.Dir(filepath.Join(staticDir, "static")))
 		mux.Handle("GET /static/", http.StripPrefix("/static/", fs))
 	}
 	// webrtc.js needs no-cache
