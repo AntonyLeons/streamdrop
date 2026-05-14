@@ -1,4 +1,5 @@
 import { base64urlDecode, createDecryptTransform } from "./crypto.js"
+import { receiveViaP2P } from "./webrtc.js"
 
 window.addEventListener("unhandledrejection", (e) => showError(String(e.reason?.message ?? e.reason ?? "error")))
 window.addEventListener("error", (e) => showError(String(e.error?.message ?? e.message ?? "error")))
@@ -86,38 +87,65 @@ async function run({ raw }) {
       if (elMeter) elMeter.classList.remove("hidden")
       setBar(0)
 
-      let res
+      let body
       try {
-        res = await fetch(`/d/${cfg.downloadToken}`, {
-          method: "GET",
-          headers: { accept: "application/octet-stream" },
-          signal: abortController.signal,
-        })
-      } catch {
-        if (abortController.signal.aborted) return
-        await sleep(backoffMs(attempt))
-        continue
-      }
+        // Signal that we're ready so the sender proceeds
+        fetch(`/ready/${cfg.id}`, { method: "POST" }).catch(() => {})
 
-      if (!res.ok) {
-        const err = await parseError(res)
-        if (err === "done") {
-          throw new Error("Transfer is finished. Ask the sender to start the transfer again.")
+        elHint.textContent = attempt > 1 ? `Connecting P2P… (${attempt})` : "Connecting P2P…"
+        const p2pStream = receiveViaP2P(cfg.id, abortController.signal)
+        const p2pReader = p2pStream.getReader()
+        const first = await p2pReader.read()
+        if (!first.done) {
+          body = new ReadableStream({
+            async start(ctrl) {
+              ctrl.enqueue(first.value)
+              while (true) {
+                const { value, done } = await p2pReader.read()
+                if (done) { ctrl.close(); break }
+                ctrl.enqueue(value)
+              }
+            },
+            cancel() { p2pReader.cancel().catch(() => {}) },
+          })
         }
-        if (err === "not_found") {
-          throw new Error("Session not found.")
-        }
-        // Retry on transient proxy/gateway errors (Cloudflare 524/502/503, etc.) and back-pressure
-        if (err === "too_many_receivers" || res.status >= 500) {
+      } catch {}
+
+      if (!body) {
+        elHint.textContent = attempt > 1 ? `Reconnecting via relay… (${attempt})` : "Connecting via relay…"
+        let res
+        try {
+          res = await fetch(`/d/${cfg.downloadToken}`, {
+            method: "GET",
+            headers: { accept: "application/octet-stream" },
+            signal: abortController.signal,
+          })
+        } catch {
+          if (abortController.signal.aborted) return
           await sleep(backoffMs(attempt))
           continue
         }
-        throw new Error(err || `download_failed_${res.status}`)
-      }
 
-      if (!res.body) {
-        await sleep(backoffMs(attempt))
-        continue
+        if (!res.ok) {
+          const err = await parseError(res)
+          if (err === "done") {
+            throw new Error("Transfer is finished. Ask the sender to start the transfer again.")
+          }
+          if (err === "not_found") {
+            throw new Error("Session not found.")
+          }
+          if (err === "too_many_receivers" || res.status >= 500) {
+            await sleep(backoffMs(attempt))
+            continue
+          }
+          throw new Error(err || `download_failed_${res.status}`)
+        }
+
+        if (!res.body) {
+          await sleep(backoffMs(attempt))
+          continue
+        }
+        body = res.body
       }
 
       let plainBytes = 0
@@ -148,7 +176,7 @@ async function run({ raw }) {
 
       setStep("decrypt")
 
-      const plaintext = res.body.pipeThrough(decrypt)
+      const plaintext = body.pipeThrough(decrypt)
 
       setStep("save")
 

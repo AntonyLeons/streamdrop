@@ -4,6 +4,12 @@ export type SessionStatus = "waiting" | "active" | "done"
 
 export type Waiter = { resolve: () => void; reject: (err: Error) => void }
 
+export type SignalingMessage = {
+  from: "sender" | "receiver"
+  type: "offer" | "answer" | "ice"
+  data: Record<string, unknown>
+}
+
 export type Channel = {
   id: string
   controller: ReadableStreamDefaultController<Uint8Array>
@@ -25,6 +31,8 @@ export type Session = {
   receivers: Set<WritableStreamDefaultWriter<Uint8Array>>
   channels: Map<string, Channel>
   receiverWaiters: Set<Waiter>
+  signals: SignalingMessage[]
+  signalWaiters: Set<() => void>
 }
 
 const DEFAULT_MAX_RECEIVERS = 2000
@@ -74,6 +82,8 @@ export function createSession(now = Date.now()): Session | null {
     receivers: new Set(),
     channels: new Map(),
     receiverWaiters: new Set(),
+    signals: [],
+    signalWaiters: new Set(),
   }
 
   sessionsById.set(id, session)
@@ -197,4 +207,47 @@ function base64url(bytes: Uint8Array) {
     .replaceAll("+", "-")
     .replaceAll("/", "_")
     .replaceAll("=", "")
+}
+
+export function postSignal(session: Session, msg: SignalingMessage) {
+  session.signals.push(msg)
+  for (const w of session.signalWaiters) w()
+  session.signalWaiters.clear()
+}
+
+export function waitForSignal(session: Session, from: "sender" | "receiver", timeoutMs: number, signal?: AbortSignal): Promise<SignalingMessage[]> {
+  const matching = session.signals.filter((m) => m.from === from)
+  if (matching.length > 0) {
+    session.signals = session.signals.filter((m) => m.from !== from)
+    return Promise.resolve(matching)
+  }
+
+  return new Promise<SignalingMessage[]>((resolve) => {
+    const onSignal = () => {
+      cleanup()
+      const msgs = session.signals.filter((m) => m.from === from)
+      session.signals = session.signals.filter((m) => m.from !== from)
+      resolve(msgs)
+    }
+
+    const cleanup = () => {
+      session.signalWaiters.delete(onSignal)
+      clearTimeout(t)
+      if (signal) signal.removeEventListener("abort", onAbort)
+    }
+
+    const onAbort = () => {
+      cleanup()
+      resolve([])
+    }
+
+    session.signalWaiters.add(onSignal)
+
+    const t = setTimeout(() => {
+      cleanup()
+      resolve([])
+    }, timeoutMs)
+
+    if (signal) signal.addEventListener("abort", onAbort, { once: true })
+  })
 }

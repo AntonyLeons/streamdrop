@@ -1,4 +1,5 @@
 import { base64urlEncode, createEncryptStream } from "./crypto.js"
+import { sendViaP2P } from "./webrtc.js"
 
 const seedCfg = window.__STREAMDROP__ || {}
 let seedUsed = false
@@ -482,6 +483,38 @@ async function startTransfer(file) {
     item.setBar(1)
     transferStats.set(session.id, { done: 1, total: 1, name: file.name })
     setMeta("Ready. Share the links below.")
+
+    // ─── P2P first ──────────────────────────────────────────────
+    let p2pUploaded = false
+    item.setState("Connecting…")
+    try {
+      await waitForReceiverOnline(session.id, abortController.signal)
+      if (!abortController.signal.aborted) {
+        item.setState("Connecting P2P…")
+        const p2pStream = wrapStreamWithProgress({
+          stream: cipherBlob.stream(),
+          total: cipherBlob.size,
+          signal: abortController.signal,
+          onProgress: (done, total) => {
+            const pct = total ? Math.min(1, done / total) : 0
+            item.setBar(pct)
+            if (done > 0) { setStep("stream", true); markStepDone("stream") }
+          },
+        })
+        p2pUploaded = await sendViaP2P(p2pStream, session.id, abortController.signal)
+      }
+    } catch {}
+    
+    if (p2pUploaded) {
+      item.incrementDownloads()
+      item.setState("Done")
+      item.setBar(1)
+      return
+    }
+
+    // ─── Fallback to relay ──────────────────────────────────────
+    item.setState("Falling back to relay…")
+    await sleep(500)
 
     let activeUploads = 0
     const inFlight = new Set()

@@ -12,6 +12,8 @@ import {
   waitForReceiverWithTimeout,
   getSessionCount,
   getActiveTransferCount,
+  postSignal,
+  waitForSignal,
 } from "./sessions"
 import { renderDownloadPage, renderNotFoundPage, renderUploadPage, renderServiceUnavailablePage, renderPrivacyPage, renderTermsPage } from "./pages"
 import { getQRCodeVendorJS } from "./vendor/qrcode"
@@ -73,6 +75,16 @@ export function createApp() {
 
   app.get("/static/upload.js", async () => {
     const file = Bun.file(new URL("../public/static/upload.js", import.meta.url))
+    return new Response(file, {
+      headers: {
+        "content-type": "text/javascript; charset=utf-8",
+        "cache-control": "no-store",
+      },
+    })
+  })
+
+  app.get("/static/webrtc.js", async () => {
+    const file = Bun.file(new URL("../public/static/webrtc.js", import.meta.url))
     return new Response(file, {
       headers: {
         "content-type": "text/javascript; charset=utf-8",
@@ -414,6 +426,34 @@ export function createApp() {
     headers.set("x-streamdrop-channel", channelId)
 
     return new Response(readable, { status: 200, headers })
+  })
+
+  app.post("/ready/:id", async (c) => {
+    const id = c.req.param("id")
+    const session = getSessionById(id)
+    if (!session) return c.json({ error: "not_found" }, 404)
+    notifyReceiverAvailable(session)
+    return c.json({ ok: true })
+  })
+
+  app.post("/signal/:id", async (c) => {
+    const id = c.req.param("id")
+    const session = getSessionById(id)
+    if (!session) return c.json({ error: "not_found" }, 404)
+    const body = await c.req.json()
+    if (!body || !body.from || !body.type || !body.data) return c.json({ error: "bad_request" }, 400)
+    postSignal(session, { from: body.from, type: body.type, data: body.data })
+    return c.json({ ok: true })
+  })
+
+  app.get("/signal/:id/:role", async (c) => {
+    const id = c.req.param("id")
+    const role = c.req.param("role")
+    if (role !== "sender" && role !== "receiver") return c.json({ error: "bad_role" }, 400)
+    const session = getSessionById(id)
+    if (!session) return c.json({ error: "not_found" }, 404)
+    const msgs = await waitForSignal(session, role === "sender" ? "receiver" : "sender", 25_000, c.req.raw.signal)
+    return c.json(msgs)
   })
 
   return app
