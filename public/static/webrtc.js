@@ -47,19 +47,6 @@ export async function establishP2P(sessionId, role, signal) {
     }
   }
 
-  let polling = true
-  // Poll for remote ICE candidates in the background
-  ;(async () => {
-    while (polling && !signal?.aborted) {
-      const msgs = await pollSignal(sessionId, role, signal)
-      for (const msg of msgs) {
-        if (msg.type === "ice" && msg.data.candidate) {
-          try { await pc.addIceCandidate(new RTCIceCandidate(msg.data.candidate)) } catch {}
-        }
-      }
-    }
-  })()
-
   let settled = false
   const settledP = new Promise((resolve, reject) => {
     const t = setTimeout(() => {
@@ -83,12 +70,6 @@ export async function establishP2P(sessionId, role, signal) {
       if (s === "connected" || s === "completed") onDone()
       else if (s === "failed") onFail(new Error("p2p_ice_failed"))
     }
-
-    pc.addEventListener("connectionstatechange", () => {
-      if (pc.connectionState === "connected" || pc.connectionState === "failed" || pc.connectionState === "disconnected") {
-        polling = false
-      }
-    })
 
     if (role === "receiver") {
       pc.ondatachannel = () => onDone()
@@ -120,8 +101,6 @@ export async function establishP2P(sessionId, role, signal) {
         try { await pc.addIceCandidate(new RTCIceCandidate(msg.data.candidate)) } catch {}
       }
     }
-
-    await settledP
   } else {
     const offers = await pollSignal(sessionId, "receiver", signal)
     const sdp = offers.find((m) => m.type === "offer")
@@ -138,8 +117,28 @@ export async function establishP2P(sessionId, role, signal) {
       await pc.setLocalDescription(answer)
       await postSignal(sessionId, { from: "receiver", type: "answer", data: { sdp: pc.localDescription } }, signal)
     }
-    await settledP
   }
+
+  // Start background ICE polling AFTER offer/answer exchange — avoids racing with main flow
+  let polling = true
+  ;(async () => {
+    while (polling && !signal?.aborted) {
+      const msgs = await pollSignal(sessionId, role, signal)
+      for (const msg of msgs) {
+        if (msg.type === "ice" && msg.data.candidate) {
+          try { await pc.addIceCandidate(new RTCIceCandidate(msg.data.candidate)) } catch {}
+        }
+      }
+    }
+  })()
+
+  pc.addEventListener("connectionstatechange", () => {
+    if (pc.connectionState === "connected" || pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+      polling = false
+    }
+  })
+
+  await settledP
 
   const dataChannel = role === "sender" ? dc : await dcPromise
   return { pc, dc: dataChannel, close: () => closeP2P(pc) }
