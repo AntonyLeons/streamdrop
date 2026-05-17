@@ -265,6 +265,7 @@ export function createApp() {
     try {
       await body.pipeTo(ch.writable, { signal: c.req.raw.signal })
       incrementFiles()
+      if (session.fileSize) incrementBytes(session.fileSize)
     } catch (e) {
       const isAbort =
         (e instanceof DOMException && e.name === "AbortError") ||
@@ -276,6 +277,7 @@ export function createApp() {
       session.activeSenders = Math.max(0, session.activeSenders - 1)
       session.status = session.activeSenders > 0 ? "active" : "waiting"
       ch.sending = false
+      session.channels.delete(channelId)
     }
 
     return c.json({ ok: true }, 200, { "cache-control": "no-store" })
@@ -303,6 +305,7 @@ export function createApp() {
     try {
       await body.pipeTo(ch.writable, { signal: c.req.raw.signal })
       incrementFiles()
+      if (session.fileSize) incrementBytes(session.fileSize)
     } catch (e) {
       const isAbort =
         (e instanceof DOMException && e.name === "AbortError") ||
@@ -314,6 +317,7 @@ export function createApp() {
       session.activeSenders = Math.max(0, session.activeSenders - 1)
       session.status = session.activeSenders > 0 ? "active" : "waiting"
       ch.sending = false
+      session.channels.delete(channelId)
     }
 
     return c.json({ ok: true }, 200, { "cache-control": "no-store" })
@@ -327,28 +331,15 @@ export function createApp() {
       return c.json({ error: "too_many_receivers" }, 429, { "cache-control": "no-store" })
 
     const channelId = randomChannelId()
-    const { readable, writable } = new TransformStream({
-      transform(chunk, controller) {
-        incrementBytes(chunk.byteLength)
-        controller.enqueue(chunk)
-      }
-    })
+    const { readable, writable } = new TransformStream()
     session.channels.set(channelId, { id: channelId, writable, claimed: false, sending: false, createdAt: Date.now() })
     notifyReceiverAvailable(session)
-
-    let counted = false
-    const count = () => {
-      if (counted) return
-      counted = true
-      session.channels.delete(channelId)
-    }
 
     const onAbort = () => {
       session.channels.delete(channelId)
       try {
         writable.abort(new Error("aborted")).catch(() => {})
       } catch {}
-      count()
     }
 
     c.req.raw.signal.addEventListener("abort", onAbort, { once: true })
@@ -361,7 +352,7 @@ export function createApp() {
     setAttachmentContentDisposition(headers, "streamdrop.enc")
     headers.set("x-streamdrop-channel", channelId)
 
-    return new Response(wrapReadableWithDone(readable, count), { status: 200, headers })
+    return new Response(readable, { status: 200, headers })
   })
 
   app.get("/raw/d/:downloadToken", async (c) => {
@@ -372,28 +363,15 @@ export function createApp() {
       return c.json({ error: "too_many_receivers" }, 429, { "cache-control": "no-store" })
 
     const channelId = randomChannelId()
-    const { readable, writable } = new TransformStream({
-      transform(chunk, controller) {
-        incrementBytes(chunk.byteLength)
-        controller.enqueue(chunk)
-      }
-    })
+    const { readable, writable } = new TransformStream()
     session.channels.set(channelId, { id: channelId, writable, claimed: false, sending: false, createdAt: Date.now() })
     notifyReceiverAvailable(session)
-
-    let counted = false
-    const count = () => {
-      if (counted) return
-      counted = true
-      session.channels.delete(channelId)
-    }
 
     const onAbort = () => {
       session.channels.delete(channelId)
       try {
         writable.abort(new Error("aborted")).catch(() => {})
       } catch {}
-      count()
     }
 
     c.req.raw.signal.addEventListener("abort", onAbort, { once: true })
@@ -406,7 +384,7 @@ export function createApp() {
     setAttachmentContentDisposition(headers, safeFileName(session.fileName) || "streamdrop.bin")
     headers.set("x-streamdrop-channel", channelId)
 
-    return new Response(wrapReadableWithDone(readable, count), { status: 200, headers })
+    return new Response(readable, { status: 200, headers })
   })
 
   return app
@@ -488,31 +466,7 @@ function base64url(bytes: Uint8Array) {
   return Buffer.from(bytes).toString("base64").replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "")
 }
 
-function wrapReadableWithDone(readable: ReadableStream<Uint8Array>, done: () => void) {
-  const reader = readable.getReader()
-  let doneCalled = false
-  const callDone = () => {
-    if (doneCalled) return
-    doneCalled = true
-    done()
-  }
 
-  return new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      const { value, done: isDone } = await reader.read()
-      if (isDone) {
-        callDone()
-        controller.close()
-        return
-      }
-      if (value) controller.enqueue(value)
-    },
-    async cancel() {
-      callDone()
-      await reader.cancel().catch(() => {})
-    },
-  })
-}
 
 function randomChannelId() {
   return base64url(crypto.getRandomValues(new Uint8Array(12))).slice(0, 16)
