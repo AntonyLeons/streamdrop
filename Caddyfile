@@ -1,5 +1,5 @@
 # Caddyfile for StreamDrop
-# This configuration optimizes for streaming file transfers with minimal buffering
+# This configuration is optimized for high-throughput streaming bulk file transfers
 
 www.streamdrop.app {
     redir https://streamdrop.app{uri} permanent
@@ -9,22 +9,22 @@ streamdrop.app {
     encode gzip zstd
 
     reverse_proxy localhost:3000 {
-        # Critical for streaming: flush immediately, don't buffer
-        flush_interval 0
-        
-        # Optional: Increase buffer sizes for high-throughput transfers
-        # buffer_requests 64KB
-        # buffer_responses 64KB
+        # Critical for streaming bulk transfers: Disable periodic flushing.
+        # This allows Caddy to batch writes to the network, massively reducing
+        # CPU usage and TLS encryption overhead for high-speed transfers.
+        flush_interval -1
     }
 
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
         # Disable caching for dynamic/streaming endpoints
         Cache-Control "no-store, no-cache, must-revalidate" {
-            /upload/
-            /download/
-            /d/
-            /raw/
+            /upload/*
+            /download/*
+            /d/*
+            /raw/*
+            /stats
+            /health
         }
     }
 
@@ -38,6 +38,6 @@ streamdrop.app {
 :3001 {
     encode gzip
     reverse_proxy localhost:3000 {
-        flush_interval 0
+        flush_interval -1
     }
 }
