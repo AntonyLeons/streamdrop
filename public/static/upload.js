@@ -451,36 +451,43 @@ async function startTransfer(file) {
   transferStats.set(session.id, { done: 0, total: file.size, name: file.name })
 
   try {
-    setStep("encrypt", true)
-    item.setState("Encrypting")
+    let cipherBlob = null
+    let cleanup = null
 
-    let lastPct = 0
-    const encStream = createEncryptStream({
-      stream: file.stream(),
-      size: file.size,
-      key,
-      sessionId: session.id,
-      onProgress: (done, total) => {
-        if (!total) return
-        const pct = Math.min(1, done / total)
-        if (pct - lastPct < 0.002 && pct < 1) return
-        lastPct = pct
-        item.setBar(pct)
-        transferStats.set(session.id, { done, total, name: file.name })
-      },
-    })
+    if (!supportsDuplex || window._forceXhr) {
+      setStep("encrypt", true)
+      item.setState("Encrypting")
 
-    const { blob: cipherBlob, cleanup } = await streamToTempFileOrBlob(encStream, abortController.signal)
-    cleanupBySessionId.set(session.id, cleanup)
+      let lastPct = 0
+      const encStream = createEncryptStream({
+        stream: file.stream(),
+        size: file.size,
+        key,
+        sessionId: session.id,
+        onProgress: (done, total) => {
+          if (!total) return
+          const pct = Math.min(1, done / total)
+          if (pct - lastPct < 0.002 && pct < 1) return
+          lastPct = pct
+          item.setBar(pct)
+          transferStats.set(session.id, { done, total, name: file.name })
+        },
+      })
 
-    if (abortController.signal.aborted) return
+      const res = await streamToTempFileOrBlob(encStream, abortController.signal)
+      cipherBlob = res.blob
+      cleanup = res.cleanup
+      cleanupBySessionId.set(session.id, cleanup)
+
+      if (abortController.signal.aborted) return
+    }
 
     item.setEncrypted(true)
     item.setBar(0)
     setStep("wait", true)
     item.setState("Ready")
     item.setBar(1)
-    transferStats.set(session.id, { done: 1, total: 1, name: file.name })
+    if (!cipherBlob) transferStats.set(session.id, { done: 1, total: 1, name: file.name })
     setMeta("Ready. Share the links below.")
 
     let activeUploads = 0
@@ -496,14 +503,16 @@ async function startTransfer(file) {
         let res
         try {
             if (supportsDuplex && !window._forceXhr) {
-              const uploadStream = wrapStreamWithProgress({
-                stream: cipherBlob.stream(),
-                total: cipherBlob.size,
-                signal: abortController.signal,
+              const encStream = createEncryptStream({
+                stream: file.stream(),
+                size: file.size,
+                key,
+                sessionId: session.id,
                 onProgress: (done, total) => {
                   if (activeUploads !== 1) return
                   const pct = total ? Math.min(1, done / total) : 0
                   item.setBar(pct)
+                  transferStats.set(session.id, { done, total, name: file.name })
                   
                   if (done > 0 && total) {
                     const elapsed = (Date.now() - startTime) / 1000
@@ -520,6 +529,11 @@ async function startTransfer(file) {
                     markStepDone("stream")
                   }
                 },
+              })
+
+              const uploadStream = wrapStreamWithProgress({
+                stream: encStream,
+                signal: abortController.signal,
               })
 
               res = await fetch(`/upload/${session.uploadToken}/${encodeURIComponent(channelId)}`, {
