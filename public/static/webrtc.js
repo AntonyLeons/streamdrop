@@ -47,6 +47,38 @@ export async function establishP2P(sessionId, role, signal) {
     }
   }
 
+  if (role === "sender") {
+    const offer = await pc.createOffer()
+    await pc.setLocalDescription(offer)
+    await postSignal(sessionId, { from: "sender", type: "offer", data: { sdp: pc.localDescription } }, signal)
+
+    const answers = await pollSignal(sessionId, "sender", signal)
+    for (const msg of answers) {
+      if (msg.type === "answer") {
+        await pc.setRemoteDescription(new RTCSessionDescription(msg.data.sdp))
+      } else if (msg.type === "ice" && msg.data.candidate) {
+        try { await pc.addIceCandidate(new RTCIceCandidate(msg.data.candidate)) } catch {}
+      }
+    }
+  } else {
+    const offers = await pollSignal(sessionId, "receiver", signal)
+    const sdp = offers.find((m) => m.type === "offer")
+    if (sdp) {
+      await pc.setRemoteDescription(new RTCSessionDescription(sdp.data.sdp))
+
+      for (const msg of offers) {
+        if (msg.type === "ice" && msg.data.candidate) {
+          try { await pc.addIceCandidate(new RTCIceCandidate(msg.data.candidate)) } catch {}
+        }
+      }
+
+      const answer = await pc.createAnswer()
+      await pc.setLocalDescription(answer)
+      await postSignal(sessionId, { from: "receiver", type: "answer", data: { sdp: pc.localDescription } }, signal)
+    }
+  }
+
+  // Now that signaling is done, start ICE timeout and connection watchers
   let settled = false
   const settledP = new Promise((resolve, reject) => {
     const t = setTimeout(() => {
@@ -88,38 +120,7 @@ export async function establishP2P(sessionId, role, signal) {
       })
     : Promise.resolve(dc)
 
-  if (role === "sender") {
-    const offer = await pc.createOffer()
-    await pc.setLocalDescription(offer)
-    await postSignal(sessionId, { from: "sender", type: "offer", data: { sdp: pc.localDescription } }, signal)
-
-    const answers = await pollSignal(sessionId, "sender", signal)
-    for (const msg of answers) {
-      if (msg.type === "answer") {
-        await pc.setRemoteDescription(new RTCSessionDescription(msg.data.sdp))
-      } else if (msg.type === "ice" && msg.data.candidate) {
-        try { await pc.addIceCandidate(new RTCIceCandidate(msg.data.candidate)) } catch {}
-      }
-    }
-  } else {
-    const offers = await pollSignal(sessionId, "receiver", signal)
-    const sdp = offers.find((m) => m.type === "offer")
-    if (sdp) {
-      await pc.setRemoteDescription(new RTCSessionDescription(sdp.data.sdp))
-
-      for (const msg of offers) {
-        if (msg.type === "ice" && msg.data.candidate) {
-          try { await pc.addIceCandidate(new RTCIceCandidate(msg.data.candidate)) } catch {}
-        }
-      }
-
-      const answer = await pc.createAnswer()
-      await pc.setLocalDescription(answer)
-      await postSignal(sessionId, { from: "receiver", type: "answer", data: { sdp: pc.localDescription } }, signal)
-    }
-  }
-
-  // Start background ICE polling AFTER offer/answer exchange — avoids racing with main flow
+  // Start background ICE polling AFTER offer/answer exchange
   let polling = true
   ;(async () => {
     while (polling && !signal?.aborted) {

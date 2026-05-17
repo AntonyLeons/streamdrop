@@ -52,6 +52,40 @@ async function establishP2P(server: string, sessionId: string, role: "sender" | 
     }
   })
 
+  if (role === "sender") {
+    const offer = await pc.createOffer()
+    await pc.setLocalDescription(offer)
+    const sdp = pc.localDescription
+    await postSignal(server, sessionId, { from: "sender", type: "offer", data: { sdp: { type: sdp?.type, sdp: sdp?.sdp } } }, signal)
+
+    const answers = await pollSignal(server, sessionId, "sender", signal)
+    for (const msg of answers) {
+      if (msg.type === "answer") {
+        await pc.setRemoteDescription(msg.data.sdp)
+      } else if (msg.type === "ice" && msg.data?.candidate) {
+        try { await pc.addIceCandidate(msg.data.candidate) } catch {}
+      }
+    }
+  } else {
+    const offers = await pollSignal(server, sessionId, "receiver", signal)
+    const sdp = offers.find((m: any) => m.type === "offer")
+    if (sdp) {
+      await pc.setRemoteDescription(sdp.data.sdp)
+
+      for (const msg of offers) {
+        if (msg.type === "ice" && msg.data?.candidate) {
+          try { await pc.addIceCandidate(msg.data.candidate) } catch {}
+        }
+      }
+
+      const answer = await pc.createAnswer()
+      await pc.setLocalDescription(answer)
+      const localSdp = pc.localDescription
+      await postSignal(server, sessionId, { from: "receiver", type: "answer", data: { sdp: { type: localSdp?.type, sdp: localSdp?.sdp } } }, signal)
+    }
+  }
+
+  // Now that signaling is done, start ICE timeout and connection watchers
   let settled = false
   const settledP = new Promise<void>((resolve, reject) => {
     const t = setTimeout(() => {
@@ -88,40 +122,7 @@ async function establishP2P(server: string, sessionId: string, role: "sender" | 
       })
     : Promise.resolve(dc)
 
-  if (role === "sender") {
-    const offer = await pc.createOffer()
-    await pc.setLocalDescription(offer)
-    const sdp = pc.localDescription
-    await postSignal(server, sessionId, { from: "sender", type: "offer", data: { sdp: { type: sdp?.type, sdp: sdp?.sdp } } }, signal)
-
-    const answers = await pollSignal(server, sessionId, "sender", signal)
-    for (const msg of answers) {
-      if (msg.type === "answer") {
-        await pc.setRemoteDescription(msg.data.sdp)
-      } else if (msg.type === "ice" && msg.data?.candidate) {
-        try { await pc.addIceCandidate(msg.data.candidate) } catch {}
-      }
-    }
-  } else {
-    const offers = await pollSignal(server, sessionId, "receiver", signal)
-    const sdp = offers.find((m: any) => m.type === "offer")
-    if (sdp) {
-      await pc.setRemoteDescription(sdp.data.sdp)
-
-      for (const msg of offers) {
-        if (msg.type === "ice" && msg.data?.candidate) {
-          try { await pc.addIceCandidate(msg.data.candidate) } catch {}
-        }
-      }
-
-      const answer = await pc.createAnswer()
-      await pc.setLocalDescription(answer)
-      const localSdp = pc.localDescription
-      await postSignal(server, sessionId, { from: "receiver", type: "answer", data: { sdp: { type: localSdp?.type, sdp: localSdp?.sdp } } }, signal)
-    }
-  }
-
-  // Start background ICE polling AFTER offer/answer exchange — avoids racing with main flow
+  // Start background ICE polling AFTER offer/answer exchange
   let polling = true
   ;(async () => {
     while (polling && !signal?.aborted) {

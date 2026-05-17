@@ -24,7 +24,7 @@ func Security(next http.Handler) http.Handler {
 		w.Header().Set("Content-Security-Policy",
 			"default-src 'self'; "+
 				"script-src 'self' 'nonce-"+nonce+"'; "+
-				"style-src 'self' 'unsafe-inline'; "+
+				"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "+
 				"connect-src 'self' https: wss:; "+
 				"img-src 'self' data: blob:; "+
 				"form-action 'self';")
