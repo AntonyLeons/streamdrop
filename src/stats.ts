@@ -11,8 +11,14 @@ export const monthlyStats = {
   totalFiles: 0,
 }
 
+let nextMonthCheck = 0
+
 function checkMonth() {
-  const currentMonth = new Date().toISOString().slice(0, 7)
+  const now = Date.now()
+  if (now < nextMonthCheck) return
+  nextMonthCheck = now + 60000 // Check every minute instead of every function call
+
+  const currentMonth = new Date(now).toISOString().slice(0, 7)
   if (monthlyStats.month !== currentMonth) {
     monthlyStats.month = currentMonth
     monthlyStats.totalSessions = 0

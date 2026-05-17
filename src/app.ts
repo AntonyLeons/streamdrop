@@ -185,7 +185,7 @@ export function createApp() {
     for (const writer of session.receivers) writer.abort().catch(() => {})
     for (const ch of session.channels.values()) {
       try {
-        ch.controller.error(new Error("session_deleted"))
+        ch.writable.abort(new Error("session_deleted")).catch(() => {})
       } catch {}
     }
     session.channels.clear()
@@ -263,7 +263,7 @@ export function createApp() {
     session.status = "active"
 
     try {
-      await pipeToController(ch.controller, body, c.req.raw.signal)
+      await body.pipeTo(ch.writable, { signal: c.req.raw.signal })
       incrementFiles()
     } catch (e) {
       const isAbort =
@@ -301,11 +301,8 @@ export function createApp() {
     session.status = "active"
 
     try {
-      await pipeToController(ch.controller, body, c.req.raw.signal)
+      await body.pipeTo(ch.writable, { signal: c.req.raw.signal })
       incrementFiles()
-      try {
-        ch.controller.close()
-      } catch {}
     } catch (e) {
       const isAbort =
         (e instanceof DOMException && e.name === "AbortError") ||
@@ -330,14 +327,13 @@ export function createApp() {
       return c.json({ error: "too_many_receivers" }, 429, { "cache-control": "no-store" })
 
     const channelId = randomChannelId()
-    let ctrl: ReadableStreamDefaultController<Uint8Array> | null = null
-    const readable = new ReadableStream<Uint8Array>({
-      start(c) {
-        ctrl = c
-      },
+    const { readable, writable } = new TransformStream({
+      transform(chunk, controller) {
+        incrementBytes(chunk.byteLength)
+        controller.enqueue(chunk)
+      }
     })
-    if (!ctrl) return c.json({ error: "internal" }, 500, { "cache-control": "no-store" })
-    session.channels.set(channelId, { id: channelId, controller: ctrl, claimed: false, sending: false, createdAt: Date.now() })
+    session.channels.set(channelId, { id: channelId, writable, claimed: false, sending: false, createdAt: Date.now() })
     notifyReceiverAvailable(session)
 
     let counted = false
@@ -350,7 +346,7 @@ export function createApp() {
     const onAbort = () => {
       session.channels.delete(channelId)
       try {
-        ctrl?.error(new Error("aborted"))
+        writable.abort(new Error("aborted")).catch(() => {})
       } catch {}
       count()
     }
@@ -376,14 +372,13 @@ export function createApp() {
       return c.json({ error: "too_many_receivers" }, 429, { "cache-control": "no-store" })
 
     const channelId = randomChannelId()
-    let ctrl: ReadableStreamDefaultController<Uint8Array> | null = null
-    const readable = new ReadableStream<Uint8Array>({
-      start(c) {
-        ctrl = c
-      },
+    const { readable, writable } = new TransformStream({
+      transform(chunk, controller) {
+        incrementBytes(chunk.byteLength)
+        controller.enqueue(chunk)
+      }
     })
-    if (!ctrl) return c.json({ error: "internal" }, 500, { "cache-control": "no-store" })
-    session.channels.set(channelId, { id: channelId, controller: ctrl, claimed: false, sending: false, createdAt: Date.now() })
+    session.channels.set(channelId, { id: channelId, writable, claimed: false, sending: false, createdAt: Date.now() })
     notifyReceiverAvailable(session)
 
     let counted = false
@@ -396,7 +391,7 @@ export function createApp() {
     const onAbort = () => {
       session.channels.delete(channelId)
       try {
-        ctrl?.error(new Error("aborted"))
+        writable.abort(new Error("aborted")).catch(() => {})
       } catch {}
       count()
     }
@@ -523,40 +518,6 @@ function randomChannelId() {
   return base64url(crypto.getRandomValues(new Uint8Array(12))).slice(0, 16)
 }
 
-async function pipeToController(
-  controller: ReadableStreamDefaultController<Uint8Array>,
-  body: ReadableStream<Uint8Array>,
-  signal?: AbortSignal,
-) {
-  const reader = body.getReader()
-  try {
-    while (true) {
-      if (signal?.aborted) throw new DOMException("Aborted", "AbortError")
-      const { value, done } = await reader.read()
-      if (done) break
-      if (!value || value.byteLength === 0) continue
-      
-      incrementBytes(value.byteLength)
-      
-      for (let i = 0; i < 200; i++) {
-        if (signal?.aborted) throw new DOMException("Aborted", "AbortError")
-        const desired = controller.desiredSize
-        if (desired === null || desired > 0) break
-        await new Promise((r) => setTimeout(r, 0))
-      }
-      try {
-        controller.enqueue(value)
-      } catch {
-        throw new Error("receivers_lost")
-      }
-    }
-    controller.close()
-  } catch (e) {
-    throw e instanceof Error ? new Error("pipe_failed") : e
-  } finally {
-    reader.cancel().catch(() => {})
-  }
-}
 
 
 function jsonResponse(obj: unknown, status: number) {

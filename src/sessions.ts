@@ -6,7 +6,7 @@ export type Waiter = { resolve: () => void; reject: (err: Error) => void }
 
 export type Channel = {
   id: string
-  controller: ReadableStreamDefaultController<Uint8Array>
+  writable: WritableStream<Uint8Array>
   claimed: boolean
   sending: boolean
   createdAt: number
