@@ -43,6 +43,9 @@ export async function establishP2P(sessionId, role, signal) {
         pc.onicecandidate = null
         pc.ondatachannel = null
         pc.onconnectionstatechange = null
+        pc.oniceconnectionstatechange = null
+        pc.onicegatheringstatechange = null
+        pc.onsignalingstatechange = null
         pc.close()
       }
       if (signal) signal.removeEventListener("abort", onAbort)
@@ -63,7 +66,6 @@ export async function establishP2P(sessionId, role, signal) {
     pc.onconnectionstatechange = () => {
       console.log("[WebRTC] connectionState:", pc.connectionState, "dc state:", dc?.readyState)
       if (pc.connectionState === "connected") {
-        // Workaround for Chrome bug: data channel onopen sometimes never fires
         if (dc && dc.readyState === "open") {
           console.log("[WebRTC] ✅ P2P CONNECTION SUCCESSFUL")
           isPolling = false
@@ -168,7 +170,6 @@ export async function establishP2P(sessionId, role, signal) {
     if (role === "sender") {
       dc = pc.createDataChannel("streamdrop-transfer", {
         ordered: true,
-        // Using high bufferedAmountLowThreshold to allow efficient queueing
         bufferedAmountLowThreshold: 1024 * 1024
       })
 
@@ -194,7 +195,6 @@ export async function establishP2P(sessionId, role, signal) {
           reject(err)
         })
 
-      // Workaround: poll for data channel open state (Chrome bug)
       const openPoll = setInterval(() => {
         checkOpen()
         if (!isPolling) clearInterval(openPoll)
@@ -218,36 +218,10 @@ export async function establishP2P(sessionId, role, signal) {
           reject(e instanceof Error ? e : new Error(e?.message || "Data channel error"))
         }
 
-        // Workaround: poll for data channel open state (Chrome bug)
         const openPoll = setInterval(() => {
           checkOpen()
           if (!isPolling) clearInterval(openPoll)
         }, 100)
-      }
-    }
-      
-      dc.onerror = (e) => {
-        doCleanup()
-        reject(e instanceof Error ? e : new Error(e?.message || "Data channel error"))
-      }
-
-      pc.createOffer()
-        .then(offer => pc.setLocalDescription(offer))
-        .catch(err => {
-          doCleanup()
-          reject(err)
-        })
-    } else {
-      pc.ondatachannel = (event) => {
-        dc = event.channel
-        dc.onopen = () => {
-          isPolling = false
-          resolve({ dc, pc, cleanup })
-        }
-        dc.onerror = (e) => {
-          doCleanup()
-          reject(e)
-        }
       }
     }
 
@@ -289,7 +263,6 @@ export function sendViaP2P(dc, stream, signal) {
           const { done, value } = await reader.read()
           if (done) {
             isDone = true
-            // Wait for all buffered data to be sent before resolving
             if (dc.bufferedAmount > 0) {
               await new Promise(r => {
                 const check = setInterval(() => {
