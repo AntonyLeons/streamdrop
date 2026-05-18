@@ -124,6 +124,7 @@ async function run({ raw }) {
         isP2P = true
         sourceStream = receiveViaP2P(p2pResult.dc, abortController.signal)
         p2pCleanup = p2pResult.cleanup
+        elHint.textContent = "P2P connected, receiving…"
       } catch (err) {
         if (err && err.name === "AbortError") return
         console.log("P2P connection failed, falling back to relay", err)
@@ -171,6 +172,8 @@ async function run({ raw }) {
       let plainBytes = 0
       let startTime = Date.now()
       
+      console.log("[Download] Starting transfer, isP2P:", isP2P)
+      
       // Show connection type badge
       const badge = document.createElement("span")
       badge.style.cssText = "display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;margin-left:8px;vertical-align:middle;color:#fff;"
@@ -184,6 +187,7 @@ async function run({ raw }) {
         key,
         sessionId: cfg.id,
         onProgress: (n) => {
+          console.log("[Download] Progress:", n, "bytes")
           plainBytes = n
           setMeta(fileSize ? `${prettyBytes(n)} of ${prettyBytes(fileSize)}` : `${prettyBytes(n)} decrypted`)
           const elapsed = (Date.now() - startTime) / 1000
@@ -227,6 +231,7 @@ async function run({ raw }) {
         if (elMeter) elMeter.classList.add("hidden")
         return
       } catch (e) {
+        console.log("[Download] Stream error:", e)
         if (abortController.signal.aborted) return
         const msg = String(e?.message ?? e ?? "")
         if (msg.includes("bad_magic") || msg.includes("bad_chunk_index") || msg.includes("OperationError")) {
