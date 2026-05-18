@@ -309,11 +309,12 @@ export function createApp() {
       if (session.fileSize) incrementBytes(session.fileSize)
     } catch (e) {
       const isAbort =
+        e == null ||
         (e instanceof DOMException && e.name === "AbortError") ||
-        (e instanceof Error && /abort|cancel|closed/i.test(e.message))
+        (e instanceof Error && /abort|cancel|closed|reset|broken/i.test(e.message))
       const isReceiverLost = e instanceof Error && /receivers_lost|pipe_failed/i.test(e.message)
       if (isReceiverLost) return c.json({ error: "receivers_lost" }, 409, { "cache-control": "no-store" })
-      if (!isAbort) throw e
+      if (!isAbort) console.error("Upload pipe error:", e)
     } finally {
       session.activeSenders = Math.max(0, session.activeSenders - 1)
       session.status = session.activeSenders > 0 ? "active" : "waiting"
@@ -349,11 +350,12 @@ export function createApp() {
       if (session.fileSize) incrementBytes(session.fileSize)
     } catch (e) {
       const isAbort =
+        e == null ||
         (e instanceof DOMException && e.name === "AbortError") ||
-        (e instanceof Error && /abort|cancel|closed/i.test(e.message))
+        (e instanceof Error && /abort|cancel|closed|reset|broken/i.test(e.message))
       const isReceiverLost = e instanceof Error && /receivers_lost|pipe_failed/i.test(e.message)
       if (isReceiverLost) return c.json({ error: "receivers_lost" }, 409, { "cache-control": "no-store" })
-      if (!isAbort) throw e
+      if (!isAbort) console.error("Upload pipe error:", e)
     } finally {
       session.activeSenders = Math.max(0, session.activeSenders - 1)
       session.status = session.activeSenders > 0 ? "active" : "waiting"

@@ -638,6 +638,7 @@ async function startTransfer(file) {
           }
 
           if (!res.ok) {
+            if (abortController.signal.aborted) return
             let err = ""
             try {
               const ct = res.headers.get("content-type") || ""
@@ -649,8 +650,8 @@ async function startTransfer(file) {
               }
             } catch {}
 
-          if (err === "receivers_lost" || err === "aborted" || err === "channel_not_found") return
-          throw new Error(err || `upload_failed_${res.status}`)
+            if (err === "receivers_lost" || err === "aborted" || err === "channel_not_found" || res.status >= 500) return
+            throw new Error(err || `upload_failed_${res.status}`)
         }
         
         item.incrementDownloads()
