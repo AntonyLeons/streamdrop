@@ -69,6 +69,9 @@ PORT=3000 NODE_ENV=production bun run start
 - `MAX_RECEIVERS` (default: `2000`)
 - `SESSION_TTL_MS` (default: `86400000`)
 - `REAPER_INTERVAL_MS` (default: `60000`)
+- `REDIS_URL` (optional: `redis://localhost:6379`)
+- `BANDWIDTH_LIMIT_GB` (default: `100` - GB per month before IP ban)
+- `BAN_DURATION_HOURS` (default: `24` - hours an IP stays banned)
 
 ### TURN server (P2P support)
 

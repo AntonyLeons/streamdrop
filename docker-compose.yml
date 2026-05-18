@@ -17,13 +17,24 @@ services:
     build: .
     container_name: streamdrop
     restart: unless-stopped
-    # Use host networking so Caddy can reach it via localhost:3000
     network_mode: "host"
+    depends_on:
+      - redis
 
     environment:
       - TURN_SERVER=${TURN_SERVER:-}
       - TURN_SECRET=${TURN_SECRET:-}
       - MAX_RECEIVERS=${MAX_RECEIVERS:-2000}
+      - REDIS_URL=${REDIS_URL:-redis://localhost:6379}
+      - BANDWIDTH_LIMIT_GB=${BANDWIDTH_LIMIT_GB:-10}
+      - BAN_DURATION_HOURS=${BAN_DURATION_HOURS:-24}
+
+  redis:
+    image: redis:8-alpine
+    container_name: redis
+    restart: unless-stopped
+    network_mode: "host"
+    command: redis-server --save 60 1 --maxmemory 256mb --maxmemory-policy allkeys-lru
 
   coturn:
     image: coturn/coturn

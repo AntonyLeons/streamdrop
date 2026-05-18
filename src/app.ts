@@ -19,6 +19,81 @@ import { renderDownloadPage, renderNotFoundPage, renderUploadPage, renderService
 import { getQRCodeVendorJS } from "./vendor/qrcode"
 import { incrementBytes, incrementFiles, getStats } from "./stats"
 
+// Redis client for IP bans and bandwidth tracking
+let redis: any = null
+let redisConnecting = false
+
+async function getRedis() {
+  if (redis) return redis
+  if (redisConnecting) return null
+  
+  const redisUrl = Bun.env.REDIS_URL
+  if (!redisUrl) return null
+  
+  redisConnecting = true
+  try {
+    const { Redis } = await import("ioredis")
+    redis = new Redis(redisUrl, { 
+      lazyConnect: true, 
+      retryStrategy: () => null,
+      maxRetriesPerRequest: 1,
+      connectTimeout: 2000
+    })
+    await redis.connect()
+    console.log("[Redis] Connected to", redisUrl)
+  } catch (e) {
+    console.warn("[Redis] Failed to connect:", e)
+    redis = null
+  } finally {
+    redisConnecting = false
+  }
+  return redis
+}
+
+async function isIpBanned(ip: string): Promise<boolean> {
+  const r = await getRedis()
+  if (!r) return false
+  const banned = await r.get(`ban:ip:${ip}`)
+  return banned === "1"
+}
+
+async function banIp(ip: string, hours: number) {
+  const r = await getRedis()
+  if (!r) return
+  await r.set(`ban:ip:${ip}`, "1", "EX", hours * 3600)
+  console.log("[Ban] Banned IP:", ip, "for", hours, "hours")
+}
+
+async function trackBandwidth(ip: string, bytes: number) {
+  const r = await getRedis()
+  if (!r) return
+  const monthKey = `bw:${ip}:${new Date().toISOString().slice(0, 7)}` // Monthly key (YYYY-MM)
+  await r.incrby(monthKey, bytes)
+  await r.expire(monthKey, 7776000) // Expire after 90 days
+}
+
+async function checkBandwidthAndBan(ip: string) {
+  const r = await getRedis()
+  if (!r) return false
+  
+  const limitBytes = (Number(Bun.env.BANDWIDTH_LIMIT_GB) || 100) * 1024 * 1024 * 1024
+  const banHours = Number(Bun.env.BAN_DURATION_HOURS) || 24
+  
+  // Check current month bandwidth
+  const monthKey = `bw:${ip}:${new Date().toISOString().slice(0, 7)}`
+  const totalBytes = parseInt(await r.get(monthKey)) || 0
+  
+  if (totalBytes > limitBytes) {
+    await banIp(ip, banHours)
+    return true
+  }
+  return false
+}
+
+function getIp(c: any): string {
+  return c.req.header("x-forwarded-for") || c.req.header("x-real-ip") || "unknown"
+}
+
 type AppEnv = {
   Variables: {
     cspNonce: string
@@ -34,6 +109,21 @@ export function createApp() {
     await next()
     setSecurityHeaders(c.res.headers, nonce)
     return c.res
+  })
+
+  // IP ban check middleware (non-blocking)
+  app.use("*", async (c, next) => {
+    const ip = getIp(c)
+    try {
+      const r = await getRedis()
+      if (r) {
+        const banned = await r.get(`ban:ip:${ip}`)
+        if (banned === "1") {
+          return c.json({ error: "ip_banned" }, 403)
+        }
+      }
+    } catch {}
+    await next()
   })
 
   function setSecurityHeaders(headers: Headers, nonce: string) {
@@ -356,7 +446,22 @@ export function createApp() {
     session.status = "active"
 
     try {
-      await body.pipeTo(ch.writable, { signal: c.req.raw.signal })
+      const ip = getIp(c)
+      let bytesTransferred = 0
+      
+      // Create a counting stream to track bandwidth
+      const countingStream = new TransformStream({
+        transform(chunk, controller) {
+          bytesTransferred += chunk.byteLength
+          controller.enqueue(chunk)
+        },
+        flush() {
+          trackBandwidth(ip, bytesTransferred)
+          checkBandwidthAndBan(ip)
+        }
+      })
+      
+      await body.pipeThrough(countingStream).pipeTo(ch.writable, { signal: c.req.raw.signal })
       incrementFiles()
       if (session.fileSize) incrementBytes(session.fileSize)
     } catch (e) {
@@ -397,7 +502,21 @@ export function createApp() {
     session.status = "active"
 
     try {
-      await body.pipeTo(ch.writable, { signal: c.req.raw.signal })
+      const ip = getIp(c)
+      let bytesTransferred = 0
+      
+      const countingStream = new TransformStream({
+        transform(chunk, controller) {
+          bytesTransferred += chunk.byteLength
+          controller.enqueue(chunk)
+        },
+        flush() {
+          trackBandwidth(ip, bytesTransferred)
+          checkBandwidthAndBan(ip)
+        }
+      })
+      
+      await body.pipeThrough(countingStream).pipeTo(ch.writable, { signal: c.req.raw.signal })
       incrementFiles()
       if (session.fileSize) incrementBytes(session.fileSize)
     } catch (e) {
