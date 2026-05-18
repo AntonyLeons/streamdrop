@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    restart: unless-stopped
+    # Use host networking to bypass the massive CPU overhead of docker-proxy
+    network_mode: "host"
+
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+
+  bun:
+    build: .
+    container_name: streamdrop
+    restart: unless-stopped
+    # Use host networking so Caddy can reach it via localhost:3000
+    network_mode: "host"
+
+volumes:
+  caddy_data:
+  caddy_config:

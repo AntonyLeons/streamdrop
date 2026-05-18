@@ -14,7 +14,7 @@ www.streamdrop.app {
 streamdrop.app {
     encode gzip zstd
 
-    reverse_proxy bun:3000 {
+    reverse_proxy localhost:3000 {
         # Critical for streaming bulk transfers: Disable periodic flushing.
         # This allows Caddy to batch writes to the network, massively reducing
         # CPU usage and TLS encryption overhead for high-speed transfers.
