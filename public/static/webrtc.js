@@ -1,6 +1,8 @@
 const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
+  // Add TURN servers here for improved connectivity (required for symmetric NATs)
+  // Example: { urls: "turn:your-turn-server:3478", username: "user", credential: "pass" }
 ]
 
 async function postSignal(sessionId, msg) {
@@ -18,7 +20,12 @@ async function postSignal(sessionId, msg) {
 export async function establishP2P(sessionId, role, signal) {
   return new Promise((resolve, reject) => {
     let cleanup = null
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
+    const pc = new RTCPeerConnection({ 
+      iceServers: ICE_SERVERS,
+      iceTransportPolicy: "all",
+      rtcpMuxPolicy: "require",
+      bundlePolicy: "max-bundle"
+    })
     let dc = null
     let cursor = 0
     let isPolling = true
@@ -57,6 +64,21 @@ export async function establishP2P(sessionId, role, signal) {
       if (pc.connectionState === "failed" || pc.connectionState === "closed" || pc.connectionState === "disconnected") {
         doCleanup()
         reject(new Error(`WebRTC connection ${pc.connectionState}`))
+      }
+    }
+
+    // Handle ICE connection state for better failure detection
+    pc.oniceconnectionstatechange = () => {
+      if (pc.iceConnectionState === "failed" || pc.iceConnectionState === "closed") {
+        doCleanup()
+        reject(new Error(`WebRTC ICE connection ${pc.iceConnectionState}`))
+      }
+    }
+
+    // Wait for ICE gathering to complete before signaling
+    pc.onicegatheringstatechange = () => {
+      if (pc.iceGatheringState === "complete" && pc.localDescription) {
+        postSignal(sessionId, { from: role, type: pc.localDescription.type, data: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } })
       }
     }
 

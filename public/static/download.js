@@ -100,7 +100,7 @@ async function run({ raw }) {
         const p2pTimeout = new Promise((_, rej) => setTimeout(() => {
           p2pAbort.abort()
           rej(new Error("p2p_timeout"))
-        }, 3000))
+        }, 8000))
 
         const { dc, cleanup } = await Promise.race([
           establishP2P(cfg.id, "receiver", p2pAbort.signal),
