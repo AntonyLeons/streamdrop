@@ -221,7 +221,7 @@ export async function establishP2P(sessionId, role, signal) {
       console.log("[WebRTC] Creating data channel as sender")
       dc = pc.createDataChannel("streamdrop-transfer", {
         ordered: true,
-        bufferedAmountLowThreshold: 1024 * 1024
+        bufferedAmountLowThreshold: 64 * 1024 // 64KB for better flow control
       })
 
       console.log("[WebRTC] Data channel created, initial state:", dc.readyState)
@@ -233,6 +233,7 @@ export async function establishP2P(sessionId, role, signal) {
       
       dc.onerror = (e) => {
         console.log("[WebRTC] dc.onerror:", e)
+        console.log("[WebRTC] dc.error detail:", e.error)
         if (!resolved) {
           doCleanup()
           reject(e instanceof Error ? e : new Error(e?.message || "Data channel error"))
@@ -375,6 +376,37 @@ export function receiveViaP2P(dc, signal) {
       const onAbort = () => {
         controller.error(new DOMException("Aborted", "AbortError"))
       }
+      
+      if (signal) {
+        if (signal.aborted) return onAbort()
+        signal.addEventListener("abort", onAbort, { once: true })
+      }
+
+      dc.onmessage = (event) => {
+        const data = new Uint8Array(event.data)
+        console.log("[WebRTC] receiveViaP2P got", data.length, "bytes, total so far:", controller._total || 0)
+        controller._total = (controller._total || 0) + data.length
+        controller.enqueue(data)
+      }
+
+      dc.onclose = () => {
+        console.log("[WebRTC] receiveViaP2P dc.onclose, total received:", controller._total || 0)
+        if (signal) signal.removeEventListener("abort", onAbort)
+        try { controller.close() } catch (e) {}
+      }
+
+      dc.onerror = (e) => {
+        console.log("[WebRTC] receiveViaP2P dc.onerror:", e)
+        if (signal) signal.removeEventListener("abort", onAbort)
+        controller.error(e)
+      }
+    },
+    cancel() {
+      console.log("[WebRTC] receiveViaP2P cancel")
+      try { dc.close() } catch (e) {}
+    }
+  })
+}
       
       if (signal) {
         if (signal.aborted) return onAbort()

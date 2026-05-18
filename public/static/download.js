@@ -210,12 +210,15 @@ async function run({ raw }) {
 
       setStep("decrypt")
 
+      console.log("[Download] Piping through decrypt transform")
       const plaintext = sourceStream.pipeThrough(decrypt)
 
       setStep("save")
 
       try {
+        console.log("[Download] Starting streamToOPFS")
         const file = await streamToOPFS(plaintext, abortController.signal)
+        console.log("[Download] streamToOPFS complete, file size:", file.size)
         const url = URL.createObjectURL(file)
         const a = document.createElement("a")
         a.href = url
