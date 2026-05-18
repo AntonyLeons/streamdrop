@@ -97,16 +97,20 @@ async function run({ raw }) {
         const onParentAbort = () => p2pAbort.abort()
         abortController.signal.addEventListener("abort", onParentAbort)
         
-        const p2pTimeout = new Promise((_, rej) => setTimeout(() => {
-          p2pAbort.abort()
-          rej(new Error("p2p_timeout"))
-        }, 8000))
+        let timeoutId
+        const p2pTimeout = new Promise((_, rej) => {
+          timeoutId = setTimeout(() => {
+            p2pAbort.abort()
+            rej(new Error("p2p_timeout"))
+          }, 12000)
+        })
 
         const { dc, cleanup } = await Promise.race([
           establishP2P(cfg.id, "receiver", p2pAbort.signal),
           p2pTimeout
         ])
         
+        clearTimeout(timeoutId)
         abortController.signal.removeEventListener("abort", onParentAbort)
         sourceStream = receiveViaP2P(dc, abortController.signal)
         p2pCleanup = cleanup
