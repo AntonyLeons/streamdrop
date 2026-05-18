@@ -90,7 +90,8 @@ export async function establishP2P(sessionId, role, signal) {
 
     const handleSignal = async (msg) => {
       if (msg.from === role) return // Ignore own signals
-
+      if (!isPolling || !pc || pc.signalingState === "closed") return // Already cleaned up
+      
       try {
         if (msg.type === "offer" && role === "receiver") {
           await pc.setRemoteDescription(new RTCSessionDescription(msg.data))
@@ -100,21 +101,26 @@ export async function establishP2P(sessionId, role, signal) {
 
           // Add any buffered ICE candidates now that remote description is set
           for (const cand of bufferedIceCandidates) {
-            await pc.addIceCandidate(cand).catch(console.error)
+            if (pc && pc.signalingState !== "closed") {
+              await pc.addIceCandidate(cand).catch(console.error)
+            }
           }
           bufferedIceCandidates.length = 0
         } else if (msg.type === "answer" && role === "sender") {
           await pc.setRemoteDescription(new RTCSessionDescription(msg.data))
         } else if (msg.type === "ice") {
           const cand = new RTCIceCandidate(msg.data)
-          if (pc.remoteDescription) {
+          if (pc && pc.remoteDescription && pc.signalingState !== "closed") {
             await pc.addIceCandidate(cand).catch(console.error)
           } else {
             bufferedIceCandidates.push(cand)
           }
         }
       } catch (err) {
-        console.error("Error handling signal:", err)
+        // Ignore closed state errors as they are expected on cleanup
+        if (!err.message?.includes("closed")) {
+          console.error("Error handling signal:", err)
+        }
       }
     }
 
@@ -158,7 +164,6 @@ export async function establishP2P(sessionId, role, signal) {
 
       pc.createOffer()
         .then(offer => pc.setLocalDescription(offer))
-        .then(() => postSignal(sessionId, { from: role, type: "offer", data: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } }))
         .catch(err => {
           doCleanup()
           reject(err)
