@@ -494,61 +494,73 @@ async function startTransfer(file) {
     let activeUploads = 0
     const inFlight = new Set()
 
-    let p2pActive = false
     const startP2PBackground = async () => {
-      try {
-        const { dc, cleanup } = await establishP2P(session.id, "sender", abortController.signal)
-        p2pActive = true
-        activeUploads++
-        globalActiveUploads++
-        item.setState(activeUploads > 1 ? `Uploading P2P (${activeUploads})` : "Uploading P2P")
-        let startTime = Date.now()
-        
-        const encStream = createEncryptStream({
-          stream: file.stream(),
-          size: file.size,
-          key,
-          sessionId: session.id,
-          onProgress: (done, total) => {
-            if (!p2pActive) return
-            const pct = total ? Math.min(1, done / total) : 0
-            item.setBar(pct)
-            transferStats.set(session.id, { done, total, name: file.name })
-            
-            if (done > 0 && total) {
-              const elapsed = (Date.now() - startTime) / 1000
-              if (elapsed > 0.5) {
-                const speed = done / elapsed
-                const eta = Math.round((total - done) / speed)
-                const etaStr = eta > 0 ? ` · ${eta}s left` : ""
-                item.setState(`Uploading P2P · ${formatSpeed(speed)}${etaStr}`)
+      let attempt = 0
+      while (!abortController.signal.aborted) {
+        attempt++
+        let p2pActive = false
+        let p2pCleanup = null
+        try {
+          const { dc, cleanup } = await establishP2P(session.id, "sender", abortController.signal)
+          p2pCleanup = cleanup
+          p2pActive = true
+          activeUploads++
+          globalActiveUploads++
+          item.setState(activeUploads > 1 ? `Uploading P2P (${activeUploads})` : "Uploading P2P")
+          let startTime = Date.now()
+          
+          const encStream = createEncryptStream({
+            stream: file.stream(),
+            size: file.size,
+            key,
+            sessionId: session.id,
+            onProgress: (done, total) => {
+              if (!p2pActive) return
+              const pct = total ? Math.min(1, done / total) : 0
+              item.setBar(pct)
+              transferStats.set(session.id, { done, total, name: file.name })
+              
+              if (done > 0 && total) {
+                const elapsed = (Date.now() - startTime) / 1000
+                if (elapsed > 0.5) {
+                  const speed = done / elapsed
+                  const eta = Math.round((total - done) / speed)
+                  const etaStr = eta > 0 ? ` · ${eta}s left` : ""
+                  item.setState(`Uploading P2P · ${formatSpeed(speed)}${etaStr}`)
+                }
+              }
+              if (done > 0) {
+                setStep("stream", true)
+                markStepDone("stream")
+              }
+            },
+          })
+
+          await sendViaP2P(dc, encStream, abortController.signal)
+          p2pCleanup()
+          
+          item.incrementDownloads()
+          attempt = 0
+        } catch (err) {
+          if (err && err.name === "AbortError") return
+          console.log("P2P sender attempt", attempt, "failed:", err)
+        } finally {
+          if (p2pActive) {
+            activeUploads--
+            globalActiveUploads--
+            if (!abortController.signal.aborted) {
+              item.setState(activeUploads > 0 ? `Uploading (${activeUploads})` : "Ready")
+              if (activeUploads === 0) {
+                item.setBar(1)
+                setStep("wait", true)
+                markStepDone("stream")
               }
             }
-            if (done > 0) {
-              setStep("stream", true)
-              markStepDone("stream")
-            }
-          },
-        })
-
-        await sendViaP2P(dc, encStream, abortController.signal)
-        cleanup()
-      } catch (err) {
-        if (err && err.name === "AbortError") return
-        console.log("P2P background sender stopped", err)
-      } finally {
-        if (p2pActive) {
-          activeUploads--
-          globalActiveUploads--
-          item.incrementDownloads()
-          if (!abortController.signal.aborted) {
-            item.setState(activeUploads > 0 ? `Uploading (${activeUploads})` : "Ready")
-            if (activeUploads === 0) {
-              item.setBar(1)
-              setStep("wait", true)
-              markStepDone("stream")
-            }
           }
+        }
+        
+        if (!abortController.signal.aborted) {
+          await new Promise(r => setTimeout(r, Math.min(3000, 250 * Math.pow(1.6, Math.max(0, attempt - 1)))))
         }
       }
     }
