@@ -287,9 +287,11 @@ export async function establishP2P(sessionId, role, signal) {
 }
 
 export function sendViaP2P(dc, stream, signal) {
-  console.log("[WebRTC] sendViaP2P starting")
+  console.log("[WebRTC] sendViaP2P starting, dc.readyState:", dc.readyState)
   return new Promise(async (resolve, reject) => {
     let isDone = false
+    let chunksSent = 0
+    let bytesSent = 0
     const reader = stream.getReader()
     
     const onAbort = () => {
@@ -305,10 +307,9 @@ export function sendViaP2P(dc, stream, signal) {
 
     const doSend = async () => {
       try {
-        console.log("[WebRTC] sendViaP2P doSend starting, dc.readyState:", dc.readyState)
         while (!isDone) {
           if (dc.bufferedAmount > dc.bufferedAmountLowThreshold) {
-            console.log("[WebRTC] Waiting for buffered amount to drain:", dc.bufferedAmount)
+            console.log("[WebRTC] sendViaP2P waiting for buffer drain:", dc.bufferedAmount)
             await new Promise(r => {
               const handler = () => {
                 dc.removeEventListener("bufferedamountlow", handler)
@@ -322,7 +323,7 @@ export function sendViaP2P(dc, stream, signal) {
 
           const { done, value } = await reader.read()
           if (done) {
-            console.log("[WebRTC] sendViaP2P read done, waiting for buffer")
+            console.log("[WebRTC] sendViaP2P stream complete, chunks:", chunksSent, "bytes:", bytesSent)
             isDone = true
             if (dc.bufferedAmount > 0) {
               await new Promise(r => {
@@ -334,20 +335,25 @@ export function sendViaP2P(dc, stream, signal) {
                 }, 50)
               })
             }
-            console.log("[WebRTC] sendViaP2P complete")
+            console.log("[WebRTC] sendViaP2P resolve")
             resolve()
             break
           }
           
           if (dc.readyState !== "open") {
-            console.log("[WebRTC] sendViaP2P error: dc not open")
+            console.log("[WebRTC] sendViaP2P error: dc not open, state:", dc.readyState)
             throw new Error("Data channel is not open")
           }
           
           dc.send(value)
+          chunksSent++
+          bytesSent += value.byteLength
+          if (chunksSent % 100 === 0) {
+            console.log("[WebRTC] sendViaP2P progress: chunks:", chunksSent, "bytes:", bytesSent)
+          }
         }
       } catch (err) {
-        console.log("[WebRTC] sendViaP2P error:", err)
+        console.log("[WebRTC] sendViaP2P error:", err, "chunks:", chunksSent, "bytes:", bytesSent)
         if (!isDone) {
           isDone = true
           reader.cancel().catch(() => {})
