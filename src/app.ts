@@ -380,9 +380,7 @@ export function createApp() {
 
     const onAbort = () => {
       session.channels.delete(channelId)
-      try {
-        writable.abort(new Error("aborted")).catch(() => {})
-      } catch {}
+
     }
 
     c.req.raw.signal.addEventListener("abort", onAbort, { once: true })
@@ -412,9 +410,7 @@ export function createApp() {
 
     const onAbort = () => {
       session.channels.delete(channelId)
-      try {
-        writable.abort(new Error("aborted")).catch(() => {})
-      } catch {}
+
     }
 
     c.req.raw.signal.addEventListener("abort", onAbort, { once: true })
