@@ -27,11 +27,11 @@ test("GET /config returns ICE servers", async () => {
   const app = createApp()
   const res = await app.request("/config")
   expect(res.status).toBe(200)
-  const data = await res.json()
+  const data = await res.json() as { iceServers: { urls: string }[] }
   expect(data.iceServers).toBeDefined()
   expect(Array.isArray(data.iceServers)).toBe(true)
   expect(data.iceServers.length).toBeGreaterThanOrEqual(2)
-  expect(data.iceServers[0].urls).toContain("stun")
+  expect(data.iceServers[0]?.urls).toContain("stun")
 })
 
 test("GET /config generates TURN credentials when TURN_SECRET is set", async () => {
@@ -44,20 +44,20 @@ test("GET /config generates TURN credentials when TURN_SECRET is set", async () 
     const app = createApp()
     const res = await app.request("/config?session=test-session-abc")
     expect(res.status).toBe(200)
-    const data = await res.json()
+    const data = await res.json() as { iceServers: { urls: string; username?: string; credential?: string }[] }
     
     // Should have STUN + 2 TURN (UDP + TCP)
     expect(data.iceServers.length).toBe(4)
     
-    const turnUdp = data.iceServers.find((s: any) => s.urls.startsWith("turn:"))
-    const turnTcp = data.iceServers.find((s: any) => s.urls.startsWith("turns:"))
+    const turnUdp = data.iceServers.find((s) => s.urls.startsWith("turn:"))
+    const turnTcp = data.iceServers.find((s) => s.urls.startsWith("turns:"))
     
     expect(turnUdp).toBeDefined()
     expect(turnTcp).toBeDefined()
-    expect(turnUdp.username).toMatch(/^\d+:test-session-abc$/)
-    expect(turnUdp.credential).toBeTruthy()
-    expect(turnTcp.username).toBe(turnUdp.username)
-    expect(turnTcp.credential).toBe(turnUdp.credential)
+    expect(turnUdp!.username).toMatch(/^\d+:test-session-abc$/)
+    expect(turnUdp!.credential).toBeTruthy()
+    expect(turnTcp!.username).toBe(turnUdp!.username)
+    expect(turnTcp!.credential).toBe(turnUdp!.credential)
   } finally {
     Bun.env.TURN_SECRET = oldSecret
     Bun.env.TURN_SERVER = oldServer

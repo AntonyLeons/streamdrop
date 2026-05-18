@@ -137,7 +137,7 @@ export function createApp() {
     const turnSecret = Bun.env.TURN_SECRET
     const sessionId = c.req.query("session") || ""
 
-    const iceServers = [
+    const iceServers: { urls: string; username?: string; credential?: string }[] = [
       { urls: "stun:stun.l.google.com:19302" },
       { urls: "stun:stun1.l.google.com:19302" },
     ]
