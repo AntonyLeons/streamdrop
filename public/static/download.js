@@ -90,6 +90,7 @@ async function run({ raw }) {
       let res
       let sourceStream = null
       let p2pCleanup = null
+      let isP2P = false
 
       try {
         elHint.textContent = attempt > 1 ? `Reconnecting P2P… (${attempt})` : "Connecting P2P…"
@@ -105,7 +106,7 @@ async function run({ raw }) {
           timer = setTimeout(() => {
             p2pAbort.abort()
             reject(new Error("p2p_timeout"))
-          }, 15000)
+          }, 5000)
           
           establishP2P(cfg.id, "receiver", p2pAbort.signal)
             .then(result => {
@@ -120,6 +121,7 @@ async function run({ raw }) {
             })
         })
 
+        isP2P = true
         sourceStream = receiveViaP2P(p2pResult.dc, abortController.signal)
         p2pCleanup = p2pResult.cleanup
       } catch (err) {
@@ -129,6 +131,7 @@ async function run({ raw }) {
       }
 
       if (!sourceStream) {
+        isP2P = false
         elHint.textContent = attempt > 1 ? `Reconnecting Relay… (${attempt})` : "Connecting Relay…"
         try {
           res = await fetch(`/d/${cfg.downloadToken}`, {
@@ -167,6 +170,16 @@ async function run({ raw }) {
 
       let plainBytes = 0
       let startTime = Date.now()
+      
+      // Show connection type badge
+      const badge = document.createElement("span")
+      badge.style.cssText = "display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;margin-left:8px;vertical-align:middle;color:#fff;"
+      badge.textContent = isP2P ? "P2P" : "Relay"
+      badge.style.background = isP2P ? "#10b981" : "#f59e0b"
+      
+      // Insert badge after elMeta
+      elMeta.parentNode.insertBefore(badge, elMeta.nextSibling)
+
       const decrypt = createDecryptTransform({
         key,
         sessionId: cfg.id,

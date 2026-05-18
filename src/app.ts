@@ -132,10 +132,31 @@ export function createApp() {
 
   app.get("/health", (c) => c.json({ ok: true }))
 
+  // Simple in-memory rate limiter for /config
+  const configRateLimit = new Map<string, { count: number; reset: number }>()
+
+  function checkRateLimit(ip: string): boolean {
+    const now = Date.now()
+    const entry = configRateLimit.get(ip)
+    if (!entry || now > entry.reset) {
+      configRateLimit.set(ip, { count: 1, reset: now + 60000 }) // 1 min window
+      return true
+    }
+    if (entry.count >= 20) return false // 20 requests per minute
+    entry.count++
+    return true
+  }
+
   app.get("/config", async (c) => {
+    const ip = c.req.header("x-forwarded-for") || c.req.header("x-real-ip") || "unknown"
+    if (!checkRateLimit(ip)) {
+      return c.json({ error: "rate_limited" }, 429)
+    }
+
     const turnServer = Bun.env.TURN_SERVER
     const turnSecret = Bun.env.TURN_SECRET
     const sessionId = c.req.query("session") || ""
+    const turnTtlHours = Number(Bun.env.TURN_TTL_HOURS) || 24
 
     const iceServers: { urls: string; username?: string; credential?: string }[] = [
       { urls: "stun:stun.l.google.com:19302" },
@@ -144,9 +165,7 @@ export function createApp() {
 
     if (turnServer && turnSecret && sessionId) {
       // Generate time-limited TURN credentials linked to session TTL
-      // Coturn static-auth-secret format: username = "timestamp:username", password = HMAC-SHA1(secret, username)
-      const sessionTtlMs = Number(Bun.env.SESSION_TTL_MS) || 86400000 // Default 24h
-      const turnLifetimeSeconds = Math.floor(sessionTtlMs / 1000)
+      const turnLifetimeSeconds = turnTtlHours * 3600
       const timestamp = Math.floor(Date.now() / 1000) + turnLifetimeSeconds
       const turnUsername = `${timestamp}:${sessionId}`
       

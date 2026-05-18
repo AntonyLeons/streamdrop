@@ -23,6 +23,7 @@ services:
     environment:
       - TURN_SERVER=${TURN_SERVER:-}
       - TURN_SECRET=${TURN_SECRET:-}
+      - MAX_RECEIVERS=${MAX_RECEIVERS:-2000}
 
   coturn:
     image: coturn/coturn
@@ -38,7 +39,9 @@ services:
       --lt-cred-mech
       --realm=${TURN_REALM:-streamdrop}
       --static-auth-secret=${TURN_SECRET:-}
-      --total-quota=1000
+      --total-quota=${MAX_RECEIVERS:-2000}
+      --user-quota=${TURN_USER_QUOTA:-50}
+      --max-bps=${TURN_MAX_BPS:-100000000}
       --stale-nonce=600
       --min-port=49152
       --max-port=65535

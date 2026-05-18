@@ -82,6 +82,10 @@ The included `docker-compose.yml` bundles a Coturn TURN server. Configure these 
 # .env file
 TURN_SERVER=your-server-ip          # Public IP of your server
 TURN_SECRET=your-long-random-secret  # Shared secret (never exposed to browser)
+TURN_TTL_HOURS=24                   # TURN credential lifetime (default: 24)
+TURN_TOTAL_QUOTA=2000               # Max concurrent TURN allocations (matches MAX_RECEIVERS)
+TURN_USER_QUOTA=50                  # Max concurrent allocations per user
+TURN_MAX_BPS=100000000    # Max bandwidth per user (default: 100 Mbps)
 ```
 
 Start everything:
@@ -90,7 +94,18 @@ Start everything:
 docker compose up -d
 ```
 
-**How it works:** The server generates time-limited TURN credentials (24h expiry) using HMAC-SHA1. The secret never reaches the browser. Even if someone extracts credentials, they expire and can't be reused.
+**How it works:** The server generates time-limited TURN credentials using HMAC-SHA1. The secret never reaches the browser. Credentials are bound to the session ID and expire automatically.
+
+**Abuse Prevention:**
+- **Rate Limiting:** `/config` is limited to 20 requests/minute per IP.
+- **Quotas:** Coturn limits are configurable via `TURN_TOTAL_QUOTA` and `TURN_USER_QUOTA`.
+- **Expiration:** Credentials expire after `TURN_TTL_HOURS`.
+- **Bandwidth:** Set `TURN_MAX_BPS` to limit transfer speed per user (e.g., `100000000` for 100 Mbps).
+- **Bandwidth:** Optionally set `--max-bps` in `docker-compose.yml` to limit transfer speed per user.
+- **Bandwidth:** Optionally set `--max-bps` in `docker-compose.yml` to limit transfer speed per user.
+- **Bandwidth:** Optionally set `--max-bps` in `docker-compose.yml` to limit transfer speed per user.
+- **Bandwidth:** Optionally set `--max-bps` in `docker-compose.yml` to limit transfer speed per user.
+- **Bandwidth:** Optionally set `--max-bps` in `docker-compose.yml` to limit transfer speed per user.
 
 #### Required firewall ports
 
