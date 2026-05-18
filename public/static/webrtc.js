@@ -171,10 +171,59 @@ export async function establishP2P(sessionId, role, signal) {
         bufferedAmountLowThreshold: 1024 * 1024
       })
 
-      dc.onopen = () => {
-        isPolling = false // Stop polling once connected
-        resolve({ dc, pc, cleanup })
+      const checkOpen = () => {
+        if (dc && dc.readyState === "open" && isPolling) {
+          console.log("[WebRTC] Data channel open")
+          isPolling = false
+          resolve({ dc, pc, cleanup })
+        }
       }
+
+      dc.onopen = checkOpen
+      
+      dc.onerror = (e) => {
+        doCleanup()
+        reject(e instanceof Error ? e : new Error(e?.message || "Data channel error"))
+      }
+
+      pc.createOffer()
+        .then(offer => pc.setLocalDescription(offer))
+        .catch(err => {
+          doCleanup()
+          reject(err)
+        })
+
+      // Workaround: poll for data channel open state (Chrome bug)
+      const openPoll = setInterval(() => {
+        checkOpen()
+        if (!isPolling) clearInterval(openPoll)
+      }, 100)
+
+    } else {
+      pc.ondatachannel = (event) => {
+        dc = event.channel
+
+        const checkOpen = () => {
+          if (dc && dc.readyState === "open" && isPolling) {
+            console.log("[WebRTC] Data channel open")
+            isPolling = false
+            resolve({ dc, pc, cleanup })
+          }
+        }
+
+        dc.onopen = checkOpen
+        dc.onerror = (e) => {
+          doCleanup()
+          reject(e instanceof Error ? e : new Error(e?.message || "Data channel error"))
+        }
+
+        // Workaround: poll for data channel open state (Chrome bug)
+        const openPoll = setInterval(() => {
+          checkOpen()
+          if (!isPolling) clearInterval(openPoll)
+        }, 100)
+      }
+    }
       
       dc.onerror = (e) => {
         doCleanup()
