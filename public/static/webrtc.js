@@ -61,6 +61,7 @@ export async function establishP2P(sessionId, role, signal) {
     cleanup = () => doCleanup()
 
     pc.onconnectionstatechange = () => {
+      console.log("[WebRTC] connectionState:", pc.connectionState)
       if (pc.connectionState === "failed" || pc.connectionState === "closed" || pc.connectionState === "disconnected") {
         doCleanup()
         reject(new Error(`WebRTC connection ${pc.connectionState}`))
@@ -69,6 +70,7 @@ export async function establishP2P(sessionId, role, signal) {
 
     // Handle ICE connection state for better failure detection
     pc.oniceconnectionstatechange = () => {
+      console.log("[WebRTC] iceConnectionState:", pc.iceConnectionState)
       if (pc.iceConnectionState === "failed" || pc.iceConnectionState === "closed") {
         doCleanup()
         reject(new Error(`WebRTC ICE connection ${pc.iceConnectionState}`))
@@ -77,14 +79,22 @@ export async function establishP2P(sessionId, role, signal) {
 
     // Wait for ICE gathering to complete before signaling
     pc.onicegatheringstatechange = () => {
+      console.log("[WebRTC] iceGatheringState:", pc.iceGatheringState)
       if (pc.iceGatheringState === "complete" && pc.localDescription) {
         postSignal(sessionId, { from: role, type: pc.localDescription.type, data: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } })
       }
     }
 
+    pc.onsignalingstatechange = () => {
+      console.log("[WebRTC] signalingState:", pc.signalingState)
+    }
+
     pc.onicecandidate = (e) => {
       if (e.candidate) {
+        console.log("[WebRTC] Local ICE candidate:", e.candidate.candidate)
         postSignal(sessionId, { from: role, type: "ice", data: e.candidate.toJSON() })
+      } else {
+        console.log("[WebRTC] ICE candidate gathering complete")
       }
     }
 
@@ -93,6 +103,7 @@ export async function establishP2P(sessionId, role, signal) {
       if (!isPolling || !pc || pc.signalingState === "closed") return // Already cleaned up
       
       try {
+        console.log("[WebRTC] Received signal:", msg.type, "from", msg.from)
         if (msg.type === "offer" && role === "receiver") {
           await pc.setRemoteDescription(new RTCSessionDescription(msg.data))
           const answer = await pc.createAnswer()
@@ -159,7 +170,7 @@ export async function establishP2P(sessionId, role, signal) {
       
       dc.onerror = (e) => {
         doCleanup()
-        reject(e)
+        reject(e instanceof Error ? e : new Error(e?.message || "Data channel error"))
       }
 
       pc.createOffer()

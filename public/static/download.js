@@ -113,6 +113,7 @@ async function run({ raw }) {
       } catch (err) {
         if (err && err.name === "AbortError") return
         console.log("P2P connection failed, falling back to relay", err)
+        // Ignore RTC errors - they are expected and will trigger relay fallback
       }
 
       if (!sourceStream) {

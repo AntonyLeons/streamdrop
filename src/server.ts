@@ -20,7 +20,9 @@ try {
     fetch: app.fetch, 
     idleTimeout: 0, 
     error(err) {
-      console.error("Server Error:", err)
+      if (err !== undefined) {
+        console.error("Server Error:", err)
+      }
       return new Response("Internal Server Error", { status: 500 })
     }
   })
