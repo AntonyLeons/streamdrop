@@ -143,9 +143,11 @@ export function createApp() {
     ]
 
     if (turnServer && turnSecret && sessionId) {
-      // Generate time-limited TURN credentials (expires in 24h)
+      // Generate time-limited TURN credentials linked to session TTL
       // Coturn static-auth-secret format: username = "timestamp:username", password = HMAC-SHA1(secret, username)
-      const timestamp = Math.floor(Date.now() / 1000) + 86400 // 24 hours from now
+      const sessionTtlMs = Number(Bun.env.SESSION_TTL_MS) || 86400000 // Default 24h
+      const turnLifetimeSeconds = Math.floor(sessionTtlMs / 1000)
+      const timestamp = Math.floor(Date.now() / 1000) + turnLifetimeSeconds
       const turnUsername = `${timestamp}:${sessionId}`
       
       const encoder = new TextEncoder()
