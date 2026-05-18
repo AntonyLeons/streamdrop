@@ -1,4 +1,5 @@
 import { base64urlEncode, createEncryptStream } from "./crypto.js"
+import { establishP2P, sendViaP2P } from "./webrtc.js"
 
 const seedCfg = window.__STREAMDROP__ || {}
 let seedUsed = false
@@ -492,6 +493,67 @@ async function startTransfer(file) {
 
     let activeUploads = 0
     const inFlight = new Set()
+
+    let p2pActive = false
+    const startP2PBackground = async () => {
+      try {
+        const { dc, cleanup } = await establishP2P(session.id, "sender", abortController.signal)
+        p2pActive = true
+        activeUploads++
+        globalActiveUploads++
+        item.setState(activeUploads > 1 ? `Uploading P2P (${activeUploads})` : "Uploading P2P")
+        let startTime = Date.now()
+        
+        const encStream = createEncryptStream({
+          stream: file.stream(),
+          size: file.size,
+          key,
+          sessionId: session.id,
+          onProgress: (done, total) => {
+            if (!p2pActive) return
+            const pct = total ? Math.min(1, done / total) : 0
+            item.setBar(pct)
+            transferStats.set(session.id, { done, total, name: file.name })
+            
+            if (done > 0 && total) {
+              const elapsed = (Date.now() - startTime) / 1000
+              if (elapsed > 0.5) {
+                const speed = done / elapsed
+                const eta = Math.round((total - done) / speed)
+                const etaStr = eta > 0 ? ` · ${eta}s left` : ""
+                item.setState(`Uploading P2P · ${formatSpeed(speed)}${etaStr}`)
+              }
+            }
+            if (done > 0) {
+              setStep("stream", true)
+              markStepDone("stream")
+            }
+          },
+        })
+
+        await sendViaP2P(dc, encStream, abortController.signal)
+        cleanup()
+      } catch (err) {
+        if (err && err.name === "AbortError") return
+        console.log("P2P background sender stopped", err)
+      } finally {
+        if (p2pActive) {
+          activeUploads--
+          globalActiveUploads--
+          item.incrementDownloads()
+          if (!abortController.signal.aborted) {
+            item.setState(activeUploads > 0 ? `Uploading (${activeUploads})` : "Ready")
+            if (activeUploads === 0) {
+              item.setBar(1)
+              setStep("wait", true)
+              markStepDone("stream")
+            }
+          }
+        }
+      }
+    }
+    
+    startP2PBackground()
 
     const startChannelUpload = async (channelId) => {
       activeUploads++

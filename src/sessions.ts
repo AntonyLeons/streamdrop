@@ -25,6 +25,8 @@ export type Session = {
   receivers: Set<WritableStreamDefaultWriter<Uint8Array>>
   channels: Map<string, Channel>
   receiverWaiters: Set<Waiter>
+  signals: Array<{from: string, type: string, data: any}>
+  signalWaiters: Set<Waiter>
 }
 
 const DEFAULT_MAX_RECEIVERS = 2000
@@ -74,6 +76,8 @@ export function createSession(now = Date.now()): Session | null {
     receivers: new Set(),
     channels: new Map(),
     receiverWaiters: new Set(),
+    signals: [],
+    signalWaiters: new Set(),
   }
 
   sessionsById.set(id, session)
@@ -154,6 +158,52 @@ export function waitForReceiverWithTimeout(session: Session, timeoutMs: number, 
   })
 }
 
+export function pushSignal(session: Session, signalMsg: {from: string, type: string, data: any}) {
+  session.signals.push(signalMsg)
+  for (const w of session.signalWaiters) w.resolve()
+  session.signalWaiters.clear()
+}
+
+export function waitForSignals(session: Session, cursor: number, timeoutMs: number, signal?: AbortSignal) {
+  if (session.signals.length > cursor) return Promise.resolve(true)
+
+  return new Promise<boolean>((resolve) => {
+    const waiter: Waiter = {
+      resolve: () => {
+        cleanup()
+        resolve(true)
+      },
+      reject: () => {
+        cleanup()
+        resolve(false)
+      },
+    }
+
+    const onAbort = () => {
+      cleanup()
+      resolve(false)
+    }
+
+    const cleanup = () => {
+      session.signalWaiters.delete(waiter)
+      if (t) clearTimeout(t)
+      if (signal) signal.removeEventListener("abort", onAbort)
+    }
+
+    session.signalWaiters.add(waiter)
+
+    let t: Timer | undefined
+    if (timeoutMs > 0) {
+      t = setTimeout(() => {
+        cleanup()
+        resolve(false)
+      }, timeoutMs)
+    }
+
+    if (signal) signal.addEventListener("abort", onAbort, { once: true })
+  })
+}
+
 export function startSessionReaper() {
   const ttlMs = getEnvPositiveInt("SESSION_TTL_MS", DEFAULT_SESSION_TTL_MS)
   const intervalMs = getEnvPositiveInt("REAPER_INTERVAL_MS", DEFAULT_REAPER_INTERVAL_MS)
@@ -166,6 +216,7 @@ export function startSessionReaper() {
       if (session.receivers.size > 0) continue
       if (session.channels.size > 0) continue
       for (const w of session.receiverWaiters) w.reject(new Error("session_expired"))
+      for (const w of session.signalWaiters) w.reject(new Error("session_expired"))
       deleteSession(session)
     }
   }

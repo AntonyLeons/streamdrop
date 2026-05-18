@@ -1,4 +1,5 @@
 import { base64urlDecode, createDecryptTransform } from "./crypto.js"
+import { establishP2P, receiveViaP2P } from "./webrtc.js"
 
 window.addEventListener("unhandledrejection", (e) => showError(String(e.reason?.message ?? e.reason ?? "error")))
 window.addEventListener("error", (e) => showError(String(e.error?.message ?? e.message ?? "error")))
@@ -87,37 +88,68 @@ async function run({ raw }) {
       setBar(0)
 
       let res
+      let sourceStream = null
+      let p2pCleanup = null
+
       try {
-        res = await fetch(`/d/${cfg.downloadToken}`, {
-          method: "GET",
-          headers: { accept: "application/octet-stream" },
-          signal: abortController.signal,
-        })
-      } catch {
-        if (abortController.signal.aborted) return
-        await sleep(backoffMs(attempt))
-        continue
+        elHint.textContent = attempt > 1 ? `Reconnecting P2P… (${attempt})` : "Connecting P2P…"
+        const p2pAbort = new AbortController()
+        const onParentAbort = () => p2pAbort.abort()
+        abortController.signal.addEventListener("abort", onParentAbort)
+        
+        const p2pTimeout = new Promise((_, rej) => setTimeout(() => {
+          p2pAbort.abort()
+          rej(new Error("p2p_timeout"))
+        }, 3000))
+
+        const { dc, cleanup } = await Promise.race([
+          establishP2P(cfg.id, "receiver", p2pAbort.signal),
+          p2pTimeout
+        ])
+        
+        abortController.signal.removeEventListener("abort", onParentAbort)
+        sourceStream = receiveViaP2P(dc, abortController.signal)
+        p2pCleanup = cleanup
+      } catch (err) {
+        if (err && err.name === "AbortError") return
+        console.log("P2P connection failed, falling back to relay", err)
       }
 
-      if (!res.ok) {
-        const err = await parseError(res)
-        if (err === "done") {
-          throw new Error("Transfer is finished. Ask the sender to start the transfer again.")
-        }
-        if (err === "not_found") {
-          throw new Error("Session not found.")
-        }
-        // Retry on transient proxy/gateway errors (Cloudflare 524/502/503, etc.) and back-pressure
-        if (err === "too_many_receivers" || res.status >= 500) {
+      if (!sourceStream) {
+        elHint.textContent = attempt > 1 ? `Reconnecting Relay… (${attempt})` : "Connecting Relay…"
+        try {
+          res = await fetch(`/d/${cfg.downloadToken}`, {
+            method: "GET",
+            headers: { accept: "application/octet-stream" },
+            signal: abortController.signal,
+          })
+        } catch {
+          if (abortController.signal.aborted) return
           await sleep(backoffMs(attempt))
           continue
         }
-        throw new Error(err || `download_failed_${res.status}`)
-      }
 
-      if (!res.body) {
-        await sleep(backoffMs(attempt))
-        continue
+        if (!res.ok) {
+          const err = await parseError(res)
+          if (err === "done") {
+            throw new Error("Transfer is finished. Ask the sender to start the transfer again.")
+          }
+          if (err === "not_found") {
+            throw new Error("Session not found.")
+          }
+          // Retry on transient proxy/gateway errors (Cloudflare 524/502/503, etc.) and back-pressure
+          if (err === "too_many_receivers" || res.status >= 500) {
+            await sleep(backoffMs(attempt))
+            continue
+          }
+          throw new Error(err || `download_failed_${res.status}`)
+        }
+
+        if (!res.body) {
+          await sleep(backoffMs(attempt))
+          continue
+        }
+        sourceStream = res.body
       }
 
       let plainBytes = 0
@@ -148,7 +180,7 @@ async function run({ raw }) {
 
       setStep("decrypt")
 
-      const plaintext = res.body.pipeThrough(decrypt)
+      const plaintext = sourceStream.pipeThrough(decrypt)
 
       setStep("save")
 
@@ -175,6 +207,7 @@ async function run({ raw }) {
           await sleep(backoffMs(attempt))
           continue
         }
+        if (p2pCleanup) p2pCleanup()
         throw e
       }
     }

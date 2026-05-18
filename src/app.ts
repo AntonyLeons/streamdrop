@@ -12,6 +12,8 @@ import {
   waitForReceiverWithTimeout,
   getSessionCount,
   getActiveTransferCount,
+  pushSignal,
+  waitForSignals,
 } from "./sessions"
 import { renderDownloadPage, renderNotFoundPage, renderUploadPage, renderServiceUnavailablePage, renderPrivacyPage, renderTermsPage } from "./pages"
 import { getQRCodeVendorJS } from "./vendor/qrcode"
@@ -93,6 +95,16 @@ export function createApp() {
 
   app.get("/static/crypto.js", async () => {
     const file = Bun.file(new URL("../public/static/crypto.js", import.meta.url))
+    return new Response(file, {
+      headers: {
+        "content-type": "text/javascript; charset=utf-8",
+        "cache-control": "no-store",
+      },
+    })
+  })
+
+  app.get("/static/webrtc.js", async () => {
+    const file = Bun.file(new URL("../public/static/webrtc.js", import.meta.url))
     return new Response(file, {
       headers: {
         "content-type": "text/javascript; charset=utf-8",
@@ -204,6 +216,35 @@ export function createApp() {
 
     const ok = await waitForReceiverWithTimeout(session, 25_000, c.req.raw.signal)
     return c.json({ ok }, 200, { "cache-control": "no-store" })
+  })
+
+  app.post("/signal/:id", async (c) => {
+    const id = c.req.param("id")
+    const session = getSessionById(id)
+    if (!session) return c.json({ error: "not_found" }, 404, { "cache-control": "no-store" })
+
+    const body = await c.req.json().catch(() => null)
+    if (!body || !body.from || !body.type) return c.json({ error: "bad_request" }, 400, { "cache-control": "no-store" })
+
+    pushSignal(session, { from: body.from, type: body.type, data: body.data })
+    notifyReceiverAvailable(session)
+    return c.json({ ok: true }, 200, { "cache-control": "no-store" })
+  })
+
+  app.get("/signal/:id", async (c) => {
+    const id = c.req.param("id")
+    const session = getSessionById(id)
+    if (!session) return c.json({ error: "not_found" }, 404, { "cache-control": "no-store" })
+
+    let cursor = parseInt(c.req.query("cursor") || "0", 10)
+    if (isNaN(cursor) || cursor < 0) cursor = 0
+
+    if (session.signals.length <= cursor) {
+      await waitForSignals(session, cursor, 25_000, c.req.raw.signal)
+    }
+
+    const newSignals = session.signals.slice(cursor)
+    return c.json({ signals: newSignals, nextCursor: session.signals.length }, 200, { "cache-control": "no-store" })
   })
 
   app.post("/claim/:uploadToken", (c) => {
