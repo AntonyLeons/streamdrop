@@ -51,6 +51,7 @@ Release binaries: GitHub Releases include prebuilt CLI binaries for macOS, Linux
 ### Requirements
 
 - Bun (runtime)
+- Docker & Docker Compose (for production with TURN)
 
 ### Run in production
 
@@ -68,6 +69,60 @@ PORT=3000 NODE_ENV=production bun run start
 - `MAX_RECEIVERS` (default: `2000`)
 - `SESSION_TTL_MS` (default: `86400000`)
 - `REAPER_INTERVAL_MS` (default: `60000`)
+
+### TURN server (P2P support)
+
+P2P transfers require a TURN server for users behind symmetric NATs, CGNAT, or restrictive firewalls (~30-40% of users). Without TURN, P2P falls back to relay mode (server-mediated transfer).
+
+#### Docker Compose (recommended)
+
+The included `docker-compose.yml` bundles a Coturn TURN server. Configure these variables:
+
+```bash
+# .env file
+TURN_SERVER=your-server-ip          # Public IP of your server
+TURN_SECRET=your-long-random-secret  # Shared secret (never exposed to browser)
+```
+
+Start everything:
+
+```bash
+docker compose up -d
+```
+
+**How it works:** The server generates time-limited TURN credentials (24h expiry) using HMAC-SHA1. The secret never reaches the browser. Even if someone extracts credentials, they expire and can't be reused.
+
+#### Required firewall ports
+
+| Port | Protocol | Purpose |
+|------|----------|---------|
+| `3478` | UDP/TCP | TURN/STUN listening port |
+| `5349` | TCP | TURN over TLS (optional, for restrictive networks) |
+| `49152-65535` | UDP | TURN relay port range |
+| `80` | TCP | HTTP (Caddy auto-HTTPS) |
+| `443` | TCP | HTTPS (Caddy auto-HTTPS) |
+
+#### Standalone Coturn (no Docker)
+
+```bash
+sudo apt install coturn
+sudo systemctl enable coturn
+
+# Edit /etc/default/coturn: set TURNSERVER_ENABLED=1
+# Edit /etc/turnserver.conf:
+listening-port=3478
+tls-listening-port=5349
+fingerprint
+lt-cred-mech
+realm=streamdrop
+static-auth-secret=your-secret
+total-quota=1000
+stale-nonce=600
+min-port=49152
+max-port=65535
+
+sudo systemctl restart coturn
+```
 
 ### Reverse proxy notes
 

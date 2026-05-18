@@ -20,6 +20,30 @@ services:
     # Use host networking so Caddy can reach it via localhost:3000
     network_mode: "host"
 
+    environment:
+      - TURN_SERVER=${TURN_SERVER:-}
+      - TURN_SECRET=${TURN_SECRET:-}
+
+  coturn:
+    image: coturn/coturn
+    container_name: coturn
+    restart: unless-stopped
+    network_mode: "host"
+
+    command: >
+      -n
+      --listening-port=3478
+      --listening-ip=0.0.0.0
+      --fingerprint
+      --lt-cred-mech
+      --realm=${TURN_REALM:-streamdrop}
+      --static-auth-secret=${TURN_SECRET:-}
+      --total-quota=1000
+      --stale-nonce=600
+      --min-port=49152
+      --max-port=65535
+      --verbose
+
 volumes:
   caddy_data:
   caddy_config:

@@ -132,6 +132,37 @@ export function createApp() {
 
   app.get("/health", (c) => c.json({ ok: true }))
 
+  app.get("/config", async (c) => {
+    const turnServer = Bun.env.TURN_SERVER
+    const turnSecret = Bun.env.TURN_SECRET
+    const sessionId = c.req.query("session") || ""
+
+    const iceServers = [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun1.l.google.com:19302" },
+    ]
+
+    if (turnServer && turnSecret && sessionId) {
+      // Generate time-limited TURN credentials (expires in 24h)
+      // Coturn static-auth-secret format: username = "timestamp:username", password = HMAC-SHA1(secret, username)
+      const timestamp = Math.floor(Date.now() / 1000) + 86400 // 24 hours from now
+      const turnUsername = `${timestamp}:${sessionId}`
+      
+      const encoder = new TextEncoder()
+      const keyData = encoder.encode(turnSecret)
+      const msgData = encoder.encode(sessionId)
+      
+      const cryptoKey = await crypto.subtle.importKey("raw", keyData, { name: "HMAC", hash: "SHA-1" }, false, ["sign"])
+      const signature = await crypto.subtle.sign("HMAC", cryptoKey, msgData)
+      const turnCredential = btoa(String.fromCharCode(...new Uint8Array(signature)))
+
+      iceServers.push({ urls: `turn:${turnServer}:3478`, username: turnUsername, credential: turnCredential })
+      iceServers.push({ urls: `turns:${turnServer}:5349?transport=tcp`, username: turnUsername, credential: turnCredential })
+    }
+
+    return c.json({ iceServers }, 200, { "cache-control": "no-store" })
+  })
+
   app.get("/stats", (c) => c.json(getStats(getSessionCount(), getActiveTransferCount()), 200, { "cache-control": "no-store" }))
 
   app.get("/", async (c) => {

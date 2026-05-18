@@ -23,6 +23,47 @@ test("GET /health returns {ok: true}", async () => {
   expect(await res.json()).toEqual({ ok: true })
 })
 
+test("GET /config returns ICE servers", async () => {
+  const app = createApp()
+  const res = await app.request("/config")
+  expect(res.status).toBe(200)
+  const data = await res.json()
+  expect(data.iceServers).toBeDefined()
+  expect(Array.isArray(data.iceServers)).toBe(true)
+  expect(data.iceServers.length).toBeGreaterThanOrEqual(2)
+  expect(data.iceServers[0].urls).toContain("stun")
+})
+
+test("GET /config generates TURN credentials when TURN_SECRET is set", async () => {
+  const oldSecret = Bun.env.TURN_SECRET
+  const oldServer = Bun.env.TURN_SERVER
+  try {
+    Bun.env.TURN_SECRET = "test-secret-123"
+    Bun.env.TURN_SERVER = "turn.example.com"
+    
+    const app = createApp()
+    const res = await app.request("/config?session=test-session-abc")
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    
+    // Should have STUN + 2 TURN (UDP + TCP)
+    expect(data.iceServers.length).toBe(4)
+    
+    const turnUdp = data.iceServers.find((s: any) => s.urls.startsWith("turn:"))
+    const turnTcp = data.iceServers.find((s: any) => s.urls.startsWith("turns:"))
+    
+    expect(turnUdp).toBeDefined()
+    expect(turnTcp).toBeDefined()
+    expect(turnUdp.username).toMatch(/^\d+:test-session-abc$/)
+    expect(turnUdp.credential).toBeTruthy()
+    expect(turnTcp.username).toBe(turnUdp.username)
+    expect(turnTcp.credential).toBe(turnUdp.credential)
+  } finally {
+    Bun.env.TURN_SECRET = oldSecret
+    Bun.env.TURN_SERVER = oldServer
+  }
+})
+
 test("POST /session returns session tokens", async () => {
   const app = createApp()
   const res = await app.request("/session", { method: "POST" })

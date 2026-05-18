@@ -1,7 +1,24 @@
-const ICE_SERVERS = [
-  { urls: "stun:stun.l.google.com:19302" },
-  { urls: "stun:stun1.l.google.com:19302" },
-]
+let ICE_SERVERS = null
+
+async function loadIceServers(sessionId) {
+  if (ICE_SERVERS) return ICE_SERVERS
+  try {
+    const res = await fetch(`/config?session=${encodeURIComponent(sessionId)}`)
+    if (res.ok) {
+      const data = await res.json()
+      ICE_SERVERS = data.iceServers
+    }
+  } catch (e) {
+    console.warn("[WebRTC] Failed to load ICE config, using defaults")
+  }
+  if (!ICE_SERVERS) {
+    ICE_SERVERS = [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun1.l.google.com:19302" },
+    ]
+  }
+  return ICE_SERVERS
+}
 
 async function postSignal(sessionId, msg) {
   console.log("[WebRTC] Sending signal:", msg.type)
@@ -17,11 +34,12 @@ async function postSignal(sessionId, msg) {
 }
 
 export async function establishP2P(sessionId, role, signal) {
-  console.log("[WebRTC] Starting as", role, "session:", sessionId)
+  const iceServers = await loadIceServers(sessionId)
+  console.log("[WebRTC] Starting as", role, "session:", sessionId, "ICE servers:", iceServers.length)
   
   return new Promise((resolve, reject) => {
     let cleanup = null
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
+    const pc = new RTCPeerConnection({ iceServers })
     let dc = null
     let cursor = 0
     let isPolling = true
