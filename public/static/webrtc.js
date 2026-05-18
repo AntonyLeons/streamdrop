@@ -61,16 +61,17 @@ export async function establishP2P(sessionId, role, signal) {
     cleanup = () => doCleanup()
 
     pc.onconnectionstatechange = () => {
-      console.log("[WebRTC] connectionState:", pc.connectionState)
+      console.log("[WebRTC] connectionState:", pc.connectionState, "dc state:", dc?.readyState)
       if (pc.connectionState === "connected") {
         // Workaround for Chrome bug: data channel onopen sometimes never fires
         if (dc && dc.readyState === "open") {
-          console.log("[WebRTC] Connection established, data channel already open")
+          console.log("[WebRTC] ✅ P2P CONNECTION SUCCESSFUL")
           isPolling = false
           resolve({ dc, pc, cleanup })
         }
       }
       if (pc.connectionState === "failed" || pc.connectionState === "closed" || pc.connectionState === "disconnected") {
+        console.log("[WebRTC] ❌ P2P CONNECTION FAILED")
         doCleanup()
         reject(new Error(`WebRTC connection ${pc.connectionState}`))
       }
