@@ -93,31 +93,39 @@ async function run({ raw }) {
 
       try {
         elHint.textContent = attempt > 1 ? `Reconnecting P2P… (${attempt})` : "Connecting P2P…"
-        const p2pAbort = new AbortController()
-        const onParentAbort = () => p2pAbort.abort()
-        abortController.signal.addEventListener("abort", onParentAbort)
         
-        let timeoutId
-        const p2pTimeout = new Promise((_, rej) => {
-          timeoutId = setTimeout(() => {
+        const p2pResult = await new Promise((resolve, reject) => {
+          let timer = null
+          const p2pAbort = new AbortController()
+          const onParentAbort = () => {
             p2pAbort.abort()
-            rej(new Error("p2p_timeout"))
-          }, 12000)
+          }
+          abortController.signal.addEventListener("abort", onParentAbort)
+          
+          timer = setTimeout(() => {
+            p2pAbort.abort()
+            reject(new Error("p2p_timeout"))
+          }, 15000)
+          
+          establishP2P(cfg.id, "receiver", p2pAbort.signal)
+            .then(result => {
+              clearTimeout(timer)
+              abortController.signal.removeEventListener("abort", onParentAbort)
+              resolve(result)
+            })
+            .catch(err => {
+              clearTimeout(timer)
+              abortController.signal.removeEventListener("abort", onParentAbort)
+              reject(err)
+            })
         })
 
-        const { dc, cleanup } = await Promise.race([
-          establishP2P(cfg.id, "receiver", p2pAbort.signal),
-          p2pTimeout
-        ])
-        
-        clearTimeout(timeoutId)
-        abortController.signal.removeEventListener("abort", onParentAbort)
-        sourceStream = receiveViaP2P(dc, abortController.signal)
-        p2pCleanup = cleanup
+        sourceStream = receiveViaP2P(p2pResult.dc, abortController.signal)
+        p2pCleanup = p2pResult.cleanup
       } catch (err) {
         if (err && err.name === "AbortError") return
         console.log("P2P connection failed, falling back to relay", err)
-        // Ignore RTC errors - they are expected and will trigger relay fallback
+        // Silence all P2P errors - always fall back to relay transparently
       }
 
       if (!sourceStream) {

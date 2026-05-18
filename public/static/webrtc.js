@@ -1,8 +1,6 @@
 const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
-  // Add TURN servers here for improved connectivity (required for symmetric NATs)
-  // Example: { urls: "turn:your-turn-server:3478", username: "user", credential: "pass" }
 ]
 
 async function postSignal(sessionId, msg) {
@@ -20,16 +18,12 @@ async function postSignal(sessionId, msg) {
 export async function establishP2P(sessionId, role, signal) {
   return new Promise((resolve, reject) => {
     let cleanup = null
-    const pc = new RTCPeerConnection({ 
-      iceServers: ICE_SERVERS,
-      iceTransportPolicy: "all",
-      rtcpMuxPolicy: "require",
-      bundlePolicy: "max-bundle"
-    })
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
     let dc = null
     let cursor = 0
     let isPolling = true
     const bufferedIceCandidates = []
+    let resolved = false
 
     const doCleanup = () => {
       isPolling = false
@@ -43,12 +37,16 @@ export async function establishP2P(sessionId, role, signal) {
         pc.onicecandidate = null
         pc.ondatachannel = null
         pc.onconnectionstatechange = null
-        pc.oniceconnectionstatechange = null
-        pc.onicegatheringstatechange = null
-        pc.onsignalingstatechange = null
         pc.close()
       }
       if (signal) signal.removeEventListener("abort", onAbort)
+    }
+
+    const doResolve = (result) => {
+      if (resolved) return
+      resolved = true
+      isPolling = false
+      resolve(result)
     }
 
     const onAbort = () => {
@@ -63,86 +61,61 @@ export async function establishP2P(sessionId, role, signal) {
 
     cleanup = () => doCleanup()
 
+    const checkAndResolve = () => {
+      if (resolved) return
+      if (dc && dc.readyState === "open") {
+        doResolve({ dc, pc, cleanup })
+      }
+    }
+
     pc.onconnectionstatechange = () => {
-      console.log("[WebRTC] connectionState:", pc.connectionState, "dc state:", dc?.readyState)
-      if (pc.connectionState === "connected") {
-        if (dc && dc.readyState === "open") {
-          console.log("[WebRTC] ✅ P2P CONNECTION SUCCESSFUL")
-          isPolling = false
-          resolve({ dc, pc, cleanup })
+      if (pc.connectionState === "failed" || pc.connectionState === "closed" || pc.connectionState === "disconnected") {
+        if (!resolved) {
+          doCleanup()
+          reject(new Error(`WebRTC connection ${pc.connectionState}`))
         }
       }
-      if (pc.connectionState === "failed" || pc.connectionState === "closed" || pc.connectionState === "disconnected") {
-        console.log("[WebRTC] ❌ P2P CONNECTION FAILED")
-        doCleanup()
-        reject(new Error(`WebRTC connection ${pc.connectionState}`))
-      }
+      checkAndResolve()
     }
 
-    // Handle ICE connection state for better failure detection
-    pc.oniceconnectionstatechange = () => {
-      console.log("[WebRTC] iceConnectionState:", pc.iceConnectionState)
-      if (pc.iceConnectionState === "failed" || pc.iceConnectionState === "closed") {
-        doCleanup()
-        reject(new Error(`WebRTC ICE connection ${pc.iceConnectionState}`))
-      }
-    }
-
-    // Wait for ICE gathering to complete before signaling
     pc.onicegatheringstatechange = () => {
-      console.log("[WebRTC] iceGatheringState:", pc.iceGatheringState)
       if (pc.iceGatheringState === "complete" && pc.localDescription) {
         postSignal(sessionId, { from: role, type: pc.localDescription.type, data: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } })
       }
     }
 
-    pc.onsignalingstatechange = () => {
-      console.log("[WebRTC] signalingState:", pc.signalingState)
-    }
-
     pc.onicecandidate = (e) => {
       if (e.candidate) {
-        console.log("[WebRTC] Local ICE candidate:", e.candidate.candidate)
         postSignal(sessionId, { from: role, type: "ice", data: e.candidate.toJSON() })
-      } else {
-        console.log("[WebRTC] ICE candidate gathering complete")
       }
     }
 
     const handleSignal = async (msg) => {
-      if (msg.from === role) return // Ignore own signals
-      if (!isPolling || !pc || pc.signalingState === "closed") return // Already cleaned up
-      
+      if (msg.from === role || !isPolling) return
+
       try {
-        console.log("[WebRTC] Received signal:", msg.type, "from", msg.from)
         if (msg.type === "offer" && role === "receiver") {
           await pc.setRemoteDescription(new RTCSessionDescription(msg.data))
           const answer = await pc.createAnswer()
           await pc.setLocalDescription(answer)
           postSignal(sessionId, { from: role, type: "answer", data: { type: answer.type, sdp: answer.sdp } })
 
-          // Add any buffered ICE candidates now that remote description is set
           for (const cand of bufferedIceCandidates) {
-            if (pc && pc.signalingState !== "closed") {
-              await pc.addIceCandidate(cand).catch(console.error)
-            }
+            await pc.addIceCandidate(cand).catch(() => {})
           }
           bufferedIceCandidates.length = 0
         } else if (msg.type === "answer" && role === "sender") {
           await pc.setRemoteDescription(new RTCSessionDescription(msg.data))
         } else if (msg.type === "ice") {
           const cand = new RTCIceCandidate(msg.data)
-          if (pc && pc.remoteDescription && pc.signalingState !== "closed") {
-            await pc.addIceCandidate(cand).catch(console.error)
+          if (pc.remoteDescription) {
+            await pc.addIceCandidate(cand).catch(() => {})
           } else {
             bufferedIceCandidates.push(cand)
           }
         }
       } catch (err) {
-        // Ignore closed state errors as they are expected on cleanup
-        if (!err.message?.includes("closed")) {
-          console.error("Error handling signal:", err)
-        }
+        // Silently ignore errors - they happen on cleanup
       }
     }
 
@@ -167,61 +140,45 @@ export async function establishP2P(sessionId, role, signal) {
       }
     }
 
+    // Aggressive polling for data channel open state
+    const openCheckInterval = setInterval(() => {
+      checkAndResolve()
+      if (resolved) clearInterval(openCheckInterval)
+    }, 50)
+
     if (role === "sender") {
       dc = pc.createDataChannel("streamdrop-transfer", {
         ordered: true,
         bufferedAmountLowThreshold: 1024 * 1024
       })
 
-      const checkOpen = () => {
-        if (dc && dc.readyState === "open" && isPolling) {
-          console.log("[WebRTC] Data channel open")
-          isPolling = false
-          resolve({ dc, pc, cleanup })
-        }
-      }
-
-      dc.onopen = checkOpen
+      dc.onopen = checkAndResolve
       
       dc.onerror = (e) => {
-        doCleanup()
-        reject(e instanceof Error ? e : new Error(e?.message || "Data channel error"))
+        if (!resolved) {
+          doCleanup()
+          reject(e instanceof Error ? e : new Error(e?.message || "Data channel error"))
+        }
       }
 
       pc.createOffer()
         .then(offer => pc.setLocalDescription(offer))
         .catch(err => {
-          doCleanup()
-          reject(err)
+          if (!resolved) {
+            doCleanup()
+            reject(err)
+          }
         })
-
-      const openPoll = setInterval(() => {
-        checkOpen()
-        if (!isPolling) clearInterval(openPoll)
-      }, 100)
-
     } else {
       pc.ondatachannel = (event) => {
         dc = event.channel
-
-        const checkOpen = () => {
-          if (dc && dc.readyState === "open" && isPolling) {
-            console.log("[WebRTC] Data channel open")
-            isPolling = false
-            resolve({ dc, pc, cleanup })
+        dc.onopen = checkAndResolve
+        dc.onerror = (e) => {
+          if (!resolved) {
+            doCleanup()
+            reject(e instanceof Error ? e : new Error(e?.message || "Data channel error"))
           }
         }
-
-        dc.onopen = checkOpen
-        dc.onerror = (e) => {
-          doCleanup()
-          reject(e instanceof Error ? e : new Error(e?.message || "Data channel error"))
-        }
-
-        const openPoll = setInterval(() => {
-          checkOpen()
-          if (!isPolling) clearInterval(openPoll)
-        }, 100)
       }
     }
 
