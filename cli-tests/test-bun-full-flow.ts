@@ -10,7 +10,7 @@ serve({
     if (url.pathname === "/upload") {
       const { readable, writable } = new TransformStream();
       channels.set("test", { writable, readable });
-      await req.body.pipeTo(writable, { signal: req.signal });
+      await req.body!.pipeTo(writable, { signal: req.signal });
       return new Response("ok");
     }
     if (url.pathname === "/download") {
