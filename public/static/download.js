@@ -180,7 +180,7 @@ async function run({ raw }) {
     started = false
     elCancel.classList.add("hidden")
     elCancel.removeEventListener("click", onCancel)
-    if (abortController.signal.aborted) {
+    if (activeAbortController && activeAbortController.signal.aborted) {
       elHint.textContent = "Canceled"
       elStart.disabled = false
       elStart.textContent = "Start download"
