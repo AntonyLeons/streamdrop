@@ -77,7 +77,7 @@ async function run({ raw }) {
     let attempt = 0
     while (true) {
       attempt++
-      if (abortController.signal.aborted) return
+      if (activeAbortController.signal.aborted) return
 
       elHint.textContent = attempt > 1 ? `Reconnecting… (${attempt})` : "Connecting…"
       setStep("download")
@@ -151,7 +151,7 @@ async function run({ raw }) {
       setStep("save")
 
       try {
-        const file = await streamToOPFS(plaintext, abortController.signal)
+        const file = await streamToOPFS(plaintext, activeAbortController.signal)
         const url = URL.createObjectURL(file)
         const a = document.createElement("a")
         a.href = url
