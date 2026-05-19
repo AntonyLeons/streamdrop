@@ -29,7 +29,19 @@ export function createApp() {
   app.use("*", async (c, next) => {
     const nonce = randomNonce()
     c.set("cspNonce", nonce)
+    const start = performance.now()
+    const method = c.req.method
+    const url = c.req.url
+
     await next()
+
+    const status = c.res.status
+    const durationMs = performance.now() - start
+    if (method !== "OPTIONS") {
+      console.log(
+        `[HTTP] ${method} ${new URL(url).pathname} - ${status} - ${durationMs.toFixed(1)}ms`,
+      )
+    }
     setSecurityHeaders(c.res.headers, nonce)
     return c.res
   })
@@ -39,13 +51,15 @@ export function createApp() {
     headers.set("X-Content-Type-Options", "nosniff")
     headers.set("Referrer-Policy", "no-referrer")
     headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
-    
+    headers.set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+
     headers.set(
       "Content-Security-Policy",
       `default-src 'none'; ` +
         `script-src 'self' 'nonce-${nonce}'; ` +
         `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; ` +
-        `font-src 'self' https://fonts.gstatic.com; ` +
+        `style-src-elem 'self' https://fonts.googleapis.com; ` +
+        `font-src 'self' https://fonts.gstatic.com data:; ` +
         `img-src 'self' data:; ` +
         `connect-src 'self'; ` +
         `base-uri 'none'; ` +
@@ -411,29 +425,6 @@ function encodeRFC5987ValueChars(str: string) {
     .replaceAll("*", "%2A")
 }
 
-function setSecurityHeaders(headers: Headers, nonce: string) {
-  headers.set("x-content-type-options", "nosniff")
-  headers.set("referrer-policy", "strict-origin-when-cross-origin")
-  headers.set("permissions-policy", "geolocation=(), microphone=(), camera=()")
-  headers.set("x-frame-options", "DENY")
-  headers.set(
-    "content-security-policy",
-    [
-      "default-src 'self'",
-      "base-uri 'none'",
-      "object-src 'none'",
-      "frame-ancestors 'none'",
-      "form-action 'self'",
-      "img-src 'self' data:",
-      "font-src 'self' https://fonts.gstatic.com data:",
-      "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'",
-      "style-src-elem 'self' https://fonts.googleapis.com",
-      `script-src 'self' 'nonce-${nonce}'`,
-      "connect-src 'self'",
-    ].join("; "),
-  )
-}
-
 function enforceSameOriginIfBrowser(req: Request) {
   const secFetchSite = req.headers.get("sec-fetch-site")
   const origin = req.headers.get("origin")
@@ -470,13 +461,4 @@ function base64url(bytes: Uint8Array) {
 
 function randomChannelId() {
   return base64url(crypto.getRandomValues(new Uint8Array(12))).slice(0, 16)
-}
-
-
-
-function jsonResponse(obj: unknown, status: number) {
-  return new Response(JSON.stringify(obj), {
-    status,
-    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
-  })
 }

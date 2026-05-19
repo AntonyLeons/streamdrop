@@ -274,44 +274,113 @@ async function runReceive(input: string, overrideServer?: string | null) {
     }
   }
 
-  console.log(`\x1b[36mConnecting to ${server}...\x1b[0m`)
-  const res = await fetch(`${server}/d/${downloadToken}`, { method: "GET", headers: { accept: "application/octet-stream" } })
-  if (!res.ok || !res.body) throw new Error(`download_failed_${res.status}`)
+  let attempt = 0
+  while (true) {
+    attempt++
+    if (attempt > 1) {
+      console.log(`\x1b[36mReconnecting... (${attempt})\x1b[0m`)
+    } else {
+      console.log(`\x1b[36mConnecting to ${server}...\x1b[0m`)
+    }
 
-  console.log(`\x1b[36mDownloading to ${outPath}...\x1b[0m`)
-  startTime = 0 // reset progress timer
-  const decrypt = createDecryptTransform({ 
-    key, 
-    sessionId: parsed.id, 
-    onProgress: (received: number) => printProgress("Downloading", received) 
-  })
-  
-  const plain = res.body.pipeThrough(decrypt)
-  
-  if (shouldExtract) {
-    console.log(`Folder archive detected. Extracting on the fly...`)
-    const tarProc = spawn("tar", ["-xf", "-"], {
-      stdio: ["pipe", "inherit", "inherit"],
-    })
-
-    const writer = Writable.toWeb(tarProc.stdin)
-
-    await plain.pipeTo(writer)
-    await new Promise<void>((resolve, reject) => {
-      tarProc.on("close", (code) => {
-        if (code === 0) resolve()
-        else reject(new Error(`tar exited with code ${code}`))
+    const { timeoutSignal, cleanup } = createFetchTimeout()
+    let res: Response
+    try {
+      res = await fetch(`${server}/d/${downloadToken}`, {
+        method: "GET",
+        headers: { accept: "application/octet-stream" },
+        signal: timeoutSignal,
       })
-      tarProc.on("error", reject)
+    } catch (err: any) {
+      cleanup()
+      if (isFatalNetworkError(err)) throw new Error(`Connection failed: ${err.message || err}`)
+      await sleep(backoffMs(attempt))
+      continue
+    }
+
+    if (!res.ok) {
+      const errBody = await safeText(res)
+      let err = ""
+      try {
+        const parsed = JSON.parse(errBody)
+        if (parsed.error) err = parsed.error
+      } catch {}
+      if (!err) err = errBody
+
+      cleanup()
+
+      if (err === "done") {
+        throw new Error("Transfer is finished. Ask the sender to start the transfer again.")
+      }
+      if (err === "not_found") {
+        throw new Error("Session not found or has expired.")
+      }
+      if (err === "too_many_receivers" || isTransientHttpError(res.status)) {
+        if (err === "too_many_receivers") {
+          console.error(`\x1b[33mToo many receivers, waiting...\x1b[0m`)
+        } else {
+          console.error(`\x1b[33mServer ${res.status}, retrying...\x1b[0m`)
+        }
+        await sleep(backoffMs(attempt))
+        continue
+      }
+      throw new Error(err || `download_failed_${res.status}`)
+    }
+
+    if (!res.body) {
+      cleanup()
+      await sleep(backoffMs(attempt))
+      continue
+    }
+
+    console.log(`\x1b[36mDownloading to ${outPath}...\x1b[0m`)
+    startTime = 0
+    const decrypt = createDecryptTransform({
+      key,
+      sessionId: parsed.id,
+      onProgress: (received: number) => printProgress("Downloading", received),
     })
 
-    console.log() // New line after progress
-    console.log(`\x1b[32mExtracted successfully.\x1b[0m\n`)
-  } else {
-    await writeToFile(outPath, plain)
-    
-    console.log() // New line after progress
-    console.log(`\x1b[32mSaved: ${outPath}\x1b[0m\n`)
+    const plain = res.body.pipeThrough(decrypt)
+
+    try {
+      if (shouldExtract) {
+        console.log(`Folder archive detected. Extracting on the fly...`)
+        const tarProc = spawn("tar", ["-xf", "-"], {
+          stdio: ["pipe", "inherit", "inherit"],
+        })
+
+        const writer = Writable.toWeb(tarProc.stdin)
+
+        await plain.pipeTo(writer)
+        await new Promise<void>((resolve, reject) => {
+          tarProc.on("close", (code) => {
+            if (code === 0) resolve()
+            else reject(new Error(`tar exited with code ${code}`))
+          })
+          tarProc.on("error", reject)
+        })
+
+        console.log()
+        console.log(`\x1b[32mExtracted successfully.\x1b[0m\n`)
+      } else {
+        await writeToFile(outPath, plain)
+
+        console.log()
+        console.log(`\x1b[32mSaved: ${outPath}\x1b[0m\n`)
+      }
+      cleanup()
+      return
+    } catch (e: any) {
+      cleanup()
+      const msg = String(e?.message ?? e ?? "")
+      if (msg.includes("bad_magic") || msg.includes("bad_chunk_index") || msg.includes("OperationError")) {
+        console.error(`\x1b[33mStream interrupted, reconnecting...\x1b[0m`)
+        await sleep(backoffMs(attempt))
+        continue
+      }
+      throw e
+    }
   }
 }
 
@@ -389,13 +458,23 @@ async function fetchSessionCfg(server: string, id: string) {
   }
 }
 
-async function fetchJson(url: string, init: RequestInit) {
-  const res = await fetch(url, { ...init, headers: { ...(init.headers || {}), accept: "application/json" } })
-  if (!res.ok) {
-    const t = await safeText(res)
-    throw new Error(t || `http_${res.status}`)
+async function fetchJson(url: string, init: RequestInit & { timeout?: number } = {}) {
+  const userSignal = init.signal ?? undefined
+  const { timeoutSignal, cleanup } = createFetchTimeout(userSignal)
+  try {
+    const res = await fetch(url, {
+      ...init,
+      signal: timeoutSignal,
+      headers: { ...(init.headers || {}), accept: "application/json" },
+    })
+    if (!res.ok) {
+      const t = await safeText(res)
+      throw new Error(t || `http_${res.status}`)
+    }
+    return await res.json()
+  } finally {
+    cleanup()
   }
-  return await res.json()
 }
 
 async function safeText(res: Response) {
@@ -406,26 +485,70 @@ async function safeText(res: Response) {
   }
 }
 
-async function waitForReceiver(server: string, sessionId: string) {
-  try {
-    const res = await fetch(`${server}/wait-receiver/${sessionId}`, { method: "GET", headers: { accept: "application/json" } })
-    if (!res.ok) return false
-    const body = (await res.json().catch(() => null)) as any
-    return !!body?.ok
-  } catch {
-    return false
+async function waitForReceiver(server: string, sessionId: string): Promise<boolean> {
+  let attempt = 0
+  while (true) {
+    attempt++
+    const { timeoutSignal, cleanup } = createFetchTimeout()
+    try {
+      const res = await fetch(`${server}/wait-receiver/${sessionId}`, {
+        method: "GET",
+        headers: { accept: "application/json" },
+        signal: timeoutSignal,
+      })
+
+      if (res.status === 404) throw new Error("Session not found.")
+      if (res.status === 410) throw new Error("Session has expired.")
+      if (isTransientHttpError(res.status) || !res.ok) {
+        console.error(`\x1b[33mServer ${res.status}, retrying...\x1b[0m`)
+        await sleep(backoffMs(attempt))
+        continue
+      }
+
+      const body = (await res.json().catch(() => null)) as any
+      return !!body?.ok
+    } catch (err: any) {
+      if (err.message === "Session not found." || err.message === "Session has expired.") throw err
+      if (isFatalNetworkError(err)) {
+        throw new Error(`Connection failed: ${err.message || err}`)
+      }
+      await sleep(backoffMs(attempt))
+    } finally {
+      cleanup()
+    }
   }
 }
 
-async function claim(server: string, uploadToken: string) {
-  try {
-    const res = await fetch(`${server}/claim/${uploadToken}`, { method: "POST", headers: { accept: "application/json" } })
-    if (res.status === 204) return null
-    if (!res.ok) return null
-    const body = (await res.json().catch(() => null)) as any
-    return typeof body?.channelId === "string" ? body.channelId : null
-  } catch {
-    return null
+async function claim(server: string, uploadToken: string): Promise<string | null> {
+  let attempt = 0
+  while (true) {
+    attempt++
+    const { timeoutSignal, cleanup } = createFetchTimeout()
+    try {
+      const res = await fetch(`${server}/claim/${uploadToken}`, {
+        method: "POST",
+        headers: { accept: "application/json" },
+        signal: timeoutSignal,
+      })
+
+      if (res.status === 204) return null
+      if (res.status === 404) throw new Error("Session not found.")
+      if (isTransientHttpError(res.status) || !res.ok) {
+        await sleep(backoffMs(attempt))
+        continue
+      }
+
+      const body = (await res.json().catch(() => null)) as any
+      return typeof body?.channelId === "string" ? body.channelId : null
+    } catch (err: any) {
+      if (err.message === "Session not found.") throw err
+      if (isFatalNetworkError(err)) {
+        throw new Error(`Connection failed: ${err.message || err}`)
+      }
+      await sleep(backoffMs(attempt))
+    } finally {
+      cleanup()
+    }
   }
 }
 
@@ -436,4 +559,54 @@ async function writeToFile(path: string, stream: ReadableStream<Uint8Array>) {
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms))
+}
+
+function backoffMs(attempt: number) {
+  return Math.min(10000, 250 * Math.pow(1.6, Math.max(0, attempt - 1)))
+}
+
+function createFetchTimeout(signal?: AbortSignal): { timeoutSignal: AbortSignal; cleanup: () => void } {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 30000)
+
+  const onParentAbort = () => {
+    controller.abort()
+    clearTimeout(timeoutId)
+  }
+
+  if (signal) {
+    if (signal.aborted) {
+      controller.abort()
+      clearTimeout(timeoutId)
+    } else {
+      signal.addEventListener("abort", onParentAbort, { once: true })
+    }
+  }
+
+  return {
+    timeoutSignal: controller.signal,
+    cleanup: () => {
+      clearTimeout(timeoutId)
+      if (signal) signal.removeEventListener("abort", onParentAbort)
+    },
+  }
+}
+
+function isFatalNetworkError(err: unknown): boolean {
+  const msg = String(err).toLowerCase()
+  return (
+    msg.includes("enotfound") ||
+    msg.includes("econnrefused") ||
+    msg.includes("econnreset") ||
+    msg.includes("etimedout") ||
+    msg.includes("dns") ||
+    msg.includes("getaddrinfo") ||
+    msg.includes("protocol_error") ||
+    msg.includes("invalid url") ||
+    (msg.includes("abort") && !msg.includes("aborterror"))
+  )
+}
+
+function isTransientHttpError(status: number): boolean {
+  return status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504
 }

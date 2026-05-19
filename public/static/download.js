@@ -1,8 +1,5 @@
 import { base64urlDecode, createDecryptTransform } from "./crypto.js"
 
-window.addEventListener("unhandledrejection", (e) => showError(String(e.reason?.message ?? e.reason ?? "error")))
-window.addEventListener("error", (e) => showError(String(e.error?.message ?? e.message ?? "error")))
-
 const cfg = window.__STREAMDROP__
 
 const elStart = document.getElementById("start")
@@ -33,6 +30,7 @@ const fileSize = hasSize ? parseInt(lastPart, 10) : (cfg.size || 0)
 setMeta(`Waiting for ${suggestedName}${fileSize ? ` · ${prettyBytes(fileSize)}` : ""}. Click start when ready.`)
 
 let started = false
+let activeAbortController = null
 
 if (elThemeToggle) {
   const syncThemeToggle = () => {
@@ -71,8 +69,8 @@ async function run({ raw }) {
 
   const key = await crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, ["decrypt"])
 
-  const abortController = new AbortController()
-  const onCancel = () => abortController.abort()
+  activeAbortController = new AbortController()
+  const onCancel = () => activeAbortController.abort()
   elCancel.addEventListener("click", onCancel, { once: true })
 
   try {
@@ -91,10 +89,10 @@ async function run({ raw }) {
         res = await fetch(`/d/${cfg.downloadToken}`, {
           method: "GET",
           headers: { accept: "application/octet-stream" },
-          signal: abortController.signal,
+           signal: activeAbortController.signal,
         })
       } catch {
-        if (abortController.signal.aborted) return
+        if (activeAbortController.signal.aborted) return
         await sleep(backoffMs(attempt))
         continue
       }
@@ -169,7 +167,7 @@ async function run({ raw }) {
         if (elMeter) elMeter.classList.add("hidden")
         return
       } catch (e) {
-        if (abortController.signal.aborted) return
+        if (activeAbortController.signal.aborted) return
         const msg = String(e?.message ?? e ?? "")
         if (msg.includes("bad_magic") || msg.includes("bad_chunk_index") || msg.includes("OperationError")) {
           await sleep(backoffMs(attempt))
@@ -225,7 +223,7 @@ function setMeta(text) {
 }
 
 window.addEventListener("beforeunload", (e) => {
-  if (typeof started !== "undefined" && started && typeof abortController !== "undefined" && abortController && !abortController.signal.aborted) {
+  if (started && activeAbortController && !activeAbortController.signal.aborted) {
     e.preventDefault()
     e.returnValue = "You have an active download. Closing this page will stop it."
   }
@@ -308,12 +306,13 @@ async function parseError(res) {
 async function streamToOPFS(stream, signal) {
   let root = null;
   let handle = null;
+  let fileName = null;
   
   try {
     if (navigator.storage && navigator.storage.getDirectory) {
       root = await navigator.storage.getDirectory()
-      const name = `sd_${Date.now()}_${suggestedName}`
-      handle = await root.getFileHandle(name, { create: true })
+      fileName = `sd_${Date.now()}_${suggestedName}`
+      handle = await root.getFileHandle(fileName, { create: true })
     }
   } catch (e) {
     root = null;
@@ -361,13 +360,10 @@ async function streamToOPFS(stream, signal) {
     }
     return await handle.getFile()
   } catch (e) {
-    root.removeEntry(name).catch(() => {})
+    if (root && fileName) root.removeEntry(fileName).catch(() => {})
     throw e
   }
 }
-
-window.addEventListener("unhandledrejection", (e) => showError(String(e.reason?.message ?? e.reason ?? "error")))
-window.addEventListener("error", (e) => showError(String(e.error?.message ?? e.message ?? "error")))
 
 document.addEventListener("click", async (e) => {
   const cliModalBtn = e.target?.closest?.('#btn-cli-modal') || e.target?.closest?.('#btn-cli-modal-dl')
@@ -429,6 +425,9 @@ document.addEventListener("click", async (e) => {
     }
   }
 })
+
+window.addEventListener("unhandledrejection", (e) => showError(String(e.reason?.message ?? e.reason ?? "error")))
+window.addEventListener("error", (e) => showError(String(e.error?.message ?? e.message ?? "error")))
 
 const autoKey = getKeyBytes()
 if (autoKey) {
