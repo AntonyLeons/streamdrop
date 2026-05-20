@@ -69,9 +69,60 @@ PORT=3000 NODE_ENV=production bun run start
 - `SESSION_TTL_MS` (default: `86400000`)
 - `REAPER_INTERVAL_MS` (default: `60000`)
 
-### Reverse proxy notes
+### Self-hosting
 
-This app keeps some HTTP connections open (receiver wait / downloads). If you're deploying behind a reverse proxy or CDN, configure its read/idle timeouts accordingly. The server itself disables Bun's idle timeout (`idleTimeout: 0` in [server.ts](file:///Users/aleons/Documents/GitHub/streamdrop/src/server.ts)).
+If you don't trust the public server or want full control, StreamDrop is easy to self-host. All encryption happens client-side, but self-hosting gives you:
+- Full control over connection metadata
+- No reliance on third-party infrastructure
+- Full auditability
+
+**Star the repo** if you find this useful! It helps others discover StreamDrop.
+
+### Reverse proxy examples
+
+StreamDrop keeps long-lived HTTP connections open (for receiver waiting and streaming downloads). Configure your reverse proxy with generous read/idle timeouts. The server itself disables Bun's idle timeout (`idleTimeout: 0` in [server.ts](file:///Users/aleons/Documents/GitHub/streamdrop/src/server.ts)).
+
+**Nginx:**
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    
+    # Critical for long polling / streaming
+    proxy_read_timeout 86400s;
+    proxy_send_timeout 86400s;
+}
+```
+
+**Caddy (Caddyfile):**
+```
+your-domain.com {
+    reverse_proxy localhost:3000 {
+        transport http {
+            response_header_timeout 24h
+        }
+    }
+}
+```
+
+**Traefik (docker-compose labels):**
+```yaml
+labels:
+  - "traefik.http.routers.streamdrop.rule=Host(`your-domain.com`)"
+  - "traefik.http.services.streamdrop.loadbalancer.server.port=3000"
+  # Increase idle timeout for long-running connections
+  - "traefik.http.middlewares.streamdrop-timeout.plugin.traefik-plugin-response-modifier.responseHeaderTimeout=86400"
+```
+
+**Cloudflare:**
+If using Cloudflare as your CDN/proxy, be aware that Cloudflare has a default 100-second timeout. For best experience with large file transfers:
+- Use **Cloudflare Tunnel** with `cloudflared` (no hard timeout)
+- Or configure a longer timeout via Page Rules → Origin Error Page Pass Thru
+- Or use **Argo Tunnel** for uninterrupted streaming
 
 ## Docs (dev)
 
@@ -80,3 +131,20 @@ This app keeps some HTTP connections open (receiver wait / downloads). If you're
 ## iOS / Safari Compatibility
 
 StreamDrop includes full fallback support for iOS and Safari. While Apple's WebKit engine does not currently support `ReadableStream` in `fetch()` bodies, StreamDrop automatically detects iOS and Safari and falls back to a highly optimized `XMLHttpRequest` chunking implementation. It is fully functional on all platforms!
+
+## Support the project
+
+If you find StreamDrop useful, consider:
+
+- **Starring the repo** to help others discover it
+- Supporting my open-source work:
+
+<p>
+  <a href="https://www.buymeacoffee.com/leons">
+    <img align="left" src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" height="50" width="210" alt="leons" />
+  </a>
+  <a href="https://ko-fi.com/leonsdev">
+    <img align="left" src="https://cdn.ko-fi.com/cdn/kofi3.png?v=3" height="50" width="210" alt="leonsdev" />
+  </a>
+</p>
+<br /><br />

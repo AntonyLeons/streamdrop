@@ -3,6 +3,7 @@
   "module": "src/server.ts",
   "type": "module",
   "private": true,
+  "license": "GPL-3.0-only",
   "scripts": {
     "dev": "bun --watch src/server.ts",
     "start": "bun src/server.ts",
