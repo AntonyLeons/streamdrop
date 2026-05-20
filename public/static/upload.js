@@ -456,6 +456,7 @@ async function startTransfer(file) {
 
     if (!supportsDuplex || window._forceXhr) {
       setStep("encrypt", true)
+      item.setBusy(true)
       item.setState("Encrypting")
 
       let lastPct = 0
@@ -485,6 +486,7 @@ async function startTransfer(file) {
     item.setEncrypted(true)
     item.setBar(0)
     setStep("wait", true)
+    item.setBusy(false)
     item.setState("Ready")
     item.setBar(1)
     if (!cipherBlob) transferStats.set(session.id, { done: 1, total: 1, name: file.name })
@@ -496,6 +498,7 @@ async function startTransfer(file) {
     const startChannelUpload = async (channelId) => {
       activeUploads++
       globalActiveUploads++
+      if (activeUploads === 1) item.setBusy(true)
       item.setState(activeUploads > 1 ? `Uploading (${activeUploads})` : "Uploading")
       let startTime = Date.now()
       
@@ -592,11 +595,12 @@ async function startTransfer(file) {
         }
         
         item.incrementDownloads()
-      } finally {
-        activeUploads--
-        globalActiveUploads--
-        if (!abortController.signal.aborted) {
-          item.setState(activeUploads > 0 ? `Uploading (${activeUploads})` : "Ready")
+       } finally {
+         activeUploads--
+         globalActiveUploads--
+         if (!abortController.signal.aborted) {
+           if (activeUploads === 0) item.setBusy(false)
+           item.setState(activeUploads > 0 ? `Uploading (${activeUploads})` : "Ready")
           if (activeUploads === 0) {
             item.setBar(1)
             setStep("wait", true)
@@ -695,6 +699,9 @@ function createShareItem({ file, shareUrl, cliCode }) {
   const elNativeShare = root.querySelector('button[data-action="native-share"]')
   const elDownloads = root.querySelector(".sd-file-downloads")
   const elDownloadsText = root.querySelector(".sd-file-downloads-text")
+  const actionButtons = Array.from(root.querySelectorAll("button")).filter(
+    (b) => b.getAttribute("data-action") !== "delete"
+  )
   let downloads = 0
 
   root.dataset.shareUrl = shareUrl
@@ -722,6 +729,10 @@ function createShareItem({ file, shareUrl, cliCode }) {
       downloads++
       if (elDownloads) elDownloads.classList.remove("hidden")
       if (elDownloadsText) elDownloadsText.textContent = `Downloaded ${downloads} time${downloads === 1 ? "" : "s"}`
+    },
+    setBusy: (yes) => {
+      for (const btn of actionButtons) btn.disabled = yes
+      if (elLink) elLink.disabled = yes
     },
     setState: (s) => {
       elState.textContent = s
