@@ -12,6 +12,7 @@ const elShareEmpty = document.getElementById("sd-files-empty")
 const elError = document.getElementById("error")
 const elCliToggle = document.getElementById("cli-toggle")
 const elThemeToggle = document.getElementById("theme-toggle")
+const elQuickShare = document.getElementById("quick-share")
 
 setStep("encrypt")
 
@@ -224,6 +225,41 @@ elFile.addEventListener("change", () => {
   if (files.length > 0) handleFiles(files)
   elFile.value = ""
 })
+
+if (elQuickShare) {
+  elQuickShare.addEventListener("paste", (e) => {
+    const items = e.clipboardData?.items
+    if (!items) return
+
+    const files = []
+
+    for (const item of items) {
+      if (item.kind === "file") {
+        const file = item.getAsFile()
+        if (file) {
+          let name = file.name
+          if (!name || name === "image.png" || name === "image") {
+            const ext = file.type.split("/")[1] || "png"
+            name = `pasted-image-${Date.now()}.${ext}`
+          }
+          const renamedFile = new File([file], name, { type: file.type })
+          files.push(renamedFile)
+        }
+      }
+    }
+
+    if (files.length > 0) {
+      e.preventDefault()
+      handleFiles(files)
+      if (elQuickShare) elQuickShare.value = ""
+    }
+  })
+
+  elQuickShare.addEventListener("input", () => {
+    elQuickShare.style.height = "auto"
+    elQuickShare.style.height = Math.min(elQuickShare.scrollHeight, 120) + "px"
+  })
+}
 
 document.addEventListener("click", async (e) => {
   const cliModalBtn = e.target?.closest?.('#btn-cli-modal') || e.target?.closest?.('#btn-cli-modal-dl')

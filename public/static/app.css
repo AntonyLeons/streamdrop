@@ -311,6 +311,39 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
 
 .file { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 
+.chat-input-container {
+  margin-top: 10px;
+}
+
+.chat-input {
+  width: 100%;
+  min-height: 44px;
+  max-height: 120px;
+  padding: 12px 14px;
+  font-family: var(--sans);
+  font-size: 14px;
+  color: var(--text);
+  background: var(--field);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  outline: none;
+  resize: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+
+.chat-input:focus {
+  border-color: var(--v-border);
+  box-shadow: 0 0 0 4px var(--v-glow);
+}
+
+.chat-input::placeholder {
+  color: var(--text-muted);
+}
+
+.chat-input-wrap .kicker {
+  margin-top: 2px;
+}
+
 /* ── Step pipeline ───────────────────────────────────── */
 .status {
   margin-top: 18px;

@@ -16,20 +16,35 @@
             </div>
           </div>
 
-          <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-label="Drop file to upload">
-            <div class="drop-inner">
-              <div class="drop-icon">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="17 8 12 3 7 8"/>
-                  <line x1="12" y1="3" x2="12" y2="15"/>
-                </svg>
-              </div>
-              <div class="drop-title">Drop your files here</div>
-              <div class="drop-sub">or click to browse · encrypted before upload</div>
-            </div>
-            <input id="file" class="file" type="file" multiple aria-label="Select files to upload" />
-          </div>
+           <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-label="Drop file to upload">
+             <div class="drop-inner">
+               <div class="drop-icon">
+                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                   <polyline points="17 8 12 3 7 8"/>
+                   <line x1="12" y1="3" x2="12" y2="15"/>
+                 </svg>
+               </div>
+               <div class="drop-title">Drop your files here</div>
+               <div class="drop-sub">or click to browse · encrypted before upload</div>
+             </div>
+             <input id="file" class="file" type="file" multiple aria-label="Select files to upload" />
+           </div>
+
+           <div class="chat-input-wrap" style="margin-top: 16px">
+             <div class="kicker">Quick share</div>
+             <div class="chat-input-container">
+               <textarea
+                 id="quick-share"
+                 class="chat-input"
+                 placeholder="Paste an image here to generate a share link..."
+                 rows="1"
+               ></textarea>
+             </div>
+             <div class="dim" style="font-size: 11px; margin-top: 6px">
+               Copy an image, then paste (Ctrl+V / Cmd+V in the box above
+             </div>
+           </div>
 
           <div class="badge-row">
             <div class="badge"><div class="badge-dot"></div>AES-256-GCM</div>
