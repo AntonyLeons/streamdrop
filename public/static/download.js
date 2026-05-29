@@ -210,6 +210,7 @@ async function tryWebRTCDownload(raw) {
           elHint.textContent = "Complete"
           elStart.disabled = false
           elStart.textContent = "Download again"
+          elCancel.classList.add("hidden")
           if (elMeter) elMeter.classList.add("hidden")
           
           resolve(true)
@@ -351,6 +352,7 @@ async function run({ raw }) {
         elHint.textContent = "Complete"
         elStart.disabled = false
         elStart.textContent = "Download again"
+        elCancel.classList.add("hidden")
         if (elMeter) elMeter.classList.add("hidden")
         return
       } catch (e) {
