@@ -372,10 +372,14 @@ async function runReceive(input: string, overrideServer?: string | null) {
 
     console.log(`\x1b[36mDownloading to ${outPath}...\x1b[0m`)
     startTime = 0
+    let plainBytes = 0
     const decrypt = createDecryptTransform({
       key,
       sessionId: parsed.id,
-      onProgress: (received: number) => printProgress("Downloading", received),
+      onProgress: (received: number) => {
+        plainBytes = received
+        printProgress("Downloading", received)
+      },
     })
 
     const plain = res.body.pipeThrough(decrypt)
@@ -408,10 +412,20 @@ async function runReceive(input: string, overrideServer?: string | null) {
 
         await plain.pipeTo(Writable.toWeb(pass))
 
+        const expectedSize = typeof cfg.size === "number" ? cfg.size : (parseInt(cfg.size, 10) || 0)
+        if (expectedSize > 0 && plainBytes !== expectedSize) {
+          throw new Error(`Incomplete transfer: received ${plainBytes} bytes, expected ${expectedSize} bytes`)
+        }
+
         console.log()
         console.log(`\x1b[32mExtracted successfully.\x1b[0m\n`)
       } else {
         await writeToFile(outPath, plain)
+
+        const expectedSize = typeof cfg.size === "number" ? cfg.size : (parseInt(cfg.size, 10) || 0)
+        if (expectedSize > 0 && plainBytes !== expectedSize) {
+          throw new Error(`Incomplete transfer: received ${plainBytes} bytes, expected ${expectedSize} bytes`)
+        }
 
         console.log()
         console.log(`\x1b[32mSaved: ${outPath}\x1b[0m\n`)

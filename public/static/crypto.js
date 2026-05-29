@@ -115,6 +115,11 @@ export function createDecryptTransform({ key, sessionId, onProgress }) {
         expectedChunkIndex++
       }
     },
+    flush(controller) {
+      if (!headerParsed) {
+        throw new Error("Empty or invalid encrypted stream (no header found)")
+      }
+    }
   })
 }
 

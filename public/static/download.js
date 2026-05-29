@@ -194,6 +194,10 @@ async function tryWebRTCDownload(raw) {
           
           const file = await streamToOPFS(plaintext, activeAbortController.signal)
           
+          if (fileSize > 0 && plainBytes !== fileSize) {
+            throw new Error(`Incomplete transfer: received ${plainBytes} bytes, expected ${fileSize} bytes`)
+          }
+          
           finished = true
           cleanup()
           
@@ -340,6 +344,11 @@ async function run({ raw }) {
 
       try {
         const file = await streamToOPFS(plaintext, activeAbortController.signal)
+        
+        if (fileSize > 0 && plainBytes !== fileSize) {
+          throw new Error(`Incomplete transfer: received ${plainBytes} bytes, expected ${fileSize} bytes`)
+        }
+        
         const url = URL.createObjectURL(file)
         const a = document.createElement("a")
         a.href = url
