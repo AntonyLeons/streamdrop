@@ -514,6 +514,9 @@ async function startTransfer(file) {
       const workerStream = new ReadableStream({
         start(controller) {
           uploadStreamController = controller
+        },
+        pull(controller) {
+          uploadWorker.postMessage({ type: "pull" })
         }
       })
 
@@ -590,6 +593,9 @@ async function startTransfer(file) {
               const workerStream = new ReadableStream({
                 start(controller) {
                   uploadStreamController = controller
+                },
+                pull(controller) {
+                  uploadWorker.postMessage({ type: "pull" })
                 }
               })
 
@@ -806,10 +812,13 @@ async function startTransfer(file) {
                     }
 
                     done = msg.bytes
-                    if (channel.bufferedAmount > 1024 * 1024) {
-                      await new Promise((resolveResume) => {
-                        resumeResolve = resolveResume
-                      })
+                    
+                    if (channel.bufferedAmount <= 1024 * 1024) {
+                      uploadWorker.postMessage({ type: "pull" })
+                    } else {
+                      resumeResolve = () => {
+                        uploadWorker.postMessage({ type: "pull" })
+                      }
                     }
 
                     const pct = file.size ? Math.min(1, done / file.size) : 0
@@ -845,6 +854,8 @@ async function startTransfer(file) {
                 file,
                 chunkSize: finalChunkSize,
               })
+
+              uploadWorker.postMessage({ type: "pull" })
 
               try {
                 await encryptPromise

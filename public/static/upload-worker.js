@@ -2,6 +2,8 @@ import { createEncryptStream } from "./crypto.js"
 
 let encryptStream = null
 let reader = null
+let pullResolve = null
+let pullRequested = 0
 
 self.onmessage = async (e) => {
   const msg = e.data
@@ -26,15 +28,34 @@ self.onmessage = async (e) => {
     encryptLoop().catch((err) => {
       self.postMessage({ type: "error", message: err.message || String(err) })
     })
+  } else if (msg.type === "pull") {
+    pullRequested++
+    if (pullResolve) {
+      pullResolve()
+      pullResolve = null
+    }
   } else if (msg.type === "abort") {
     cleanup()
   }
+}
+
+async function waitForPull() {
+  if (pullRequested > 0) {
+    pullRequested--
+    return
+  }
+  return new Promise((resolve) => {
+    pullResolve = resolve
+  })
 }
 
 async function encryptLoop() {
   try {
     let encryptedBytes = 0
     while (true) {
+      // Wait for the main thread to pull before encrypting/sending the next chunk
+      await waitForPull()
+      
       const { value, done } = await reader.read()
       if (done) break
       if (value) {
