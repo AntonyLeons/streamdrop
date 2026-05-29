@@ -516,6 +516,9 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
+.meta:empty {
+  display: none;
+}
 
 .sd-files { margin-top: 22px; }
 .sd-files-list { display: flex; flex-direction: column; gap: 10px; }

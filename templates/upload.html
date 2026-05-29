@@ -72,21 +72,23 @@
           <div id="meta" class="meta mono"></div>
 
           <div id="sd-files" class="sd-files">
-            <div class="kicker">Files</div>
-            <div class="row" style="margin-top:10px; align-items:center; justify-content:flex-end; gap:12px">
-              <div class="dim" style="font-size:13px; display:flex; gap:8px; align-items:center">
-                curl/wget
-                <span class="tooltip">
-                  <button class="tooltip-icon" type="button" aria-describedby="cli-warning">i</button>
-                  <span id="cli-warning" class="tooltip-bubble" role="tooltip">
-                    ⚠️ curl/wget downloads are not E2EE. Use the StreamDrop CLI instead.
+            <div class="row" style="margin-top:10px; align-items:center;">
+              <div class="kicker">Files</div>
+              <div style="display:flex; gap:12px; align-items:center;">
+                <div class="dim" style="font-size:13px; display:flex; gap:8px; align-items:center">
+                  curl/wget
+                  <span class="tooltip">
+                    <button class="tooltip-icon" type="button" aria-describedby="cli-warning">i</button>
+                    <span id="cli-warning" class="tooltip-bubble" role="tooltip">
+                      ⚠️ curl/wget downloads are not E2EE. Use the StreamDrop CLI instead.
+                    </span>
                   </span>
-                </span>
+                </div>
+                <label class="switch" aria-label="Enable CLI (curl/wget)">
+                  <input id="cli-toggle" class="switch-input" type="checkbox" />
+                  <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+                </label>
               </div>
-              <label class="switch" aria-label="Enable CLI (curl/wget)">
-                <input id="cli-toggle" class="switch-input" type="checkbox" />
-                <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
-              </label>
             </div>
             <div id="sd-files-empty" class="dim" style="font-size:13px;margin-top:10px">Select files above to generate share links.</div>
             <div style="height:10px"></div>

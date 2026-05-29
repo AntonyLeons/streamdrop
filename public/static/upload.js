@@ -548,6 +548,12 @@ async function startTransfer(file) {
                 size: file.size,
                 key,
                 sessionId: session.id,
+              })
+
+              const uploadStream = wrapStreamWithProgress({
+                stream: encStream,
+                total: file.size,
+                signal: abortController.signal,
                 onProgress: (done, total) => {
                   if (activeUploads !== 1) return
                   const pct = total ? Math.min(1, done / total) : 0
@@ -569,11 +575,6 @@ async function startTransfer(file) {
                     markStepDone("stream")
                   }
                 },
-              })
-
-              const uploadStream = wrapStreamWithProgress({
-                stream: encStream,
-                signal: abortController.signal,
               })
 
               res = await fetch(`/upload/${session.uploadToken}/${encodeURIComponent(channelId)}`, {
