@@ -17,11 +17,13 @@
   "dependencies": {
     "@noble/curves": "^2.2.0",
     "hono": "^4.12.18",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "tar": "^7.5.15"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
     "@types/bun": "latest",
+    "@types/tar": "^7.0.87",
     "typescript": "^6.0.3"
   }
 }

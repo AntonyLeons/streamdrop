@@ -4,8 +4,8 @@ import { basename, extname, dirname, join } from "node:path"
 import { existsSync, readFileSync, createReadStream, createWriteStream, mkdirSync } from "node:fs"
 import { stat as statFs } from "node:fs/promises"
 import { homedir } from "node:os"
-import { spawn } from "node:child_process"
-import { Readable, Writable } from "node:stream"
+import * as tar from "tar"
+import { Readable, Writable, PassThrough } from "node:stream"
 import pkg from "./package.json"
 
 type SessionRes = { id: string; uploadToken: string; downloadToken: string }
@@ -212,14 +212,13 @@ async function runSend(serverRaw: string, filePath: string) {
       
       let streamToRead: ReadableStream<Uint8Array>
       if (stat.isDirectory()) {
-        const tar = spawn("tar", ["-cf", "-", basename(filePath)], {
+        const nodeStream = tar.c({
           cwd: dirname(filePath),
-          stdio: ["ignore", "pipe", "ignore"],
-        })
-        tar.on("error", (err) => {
-          console.error(`\nFailed to start tar archiving process: ${err.message}`)
-        })
-        streamToRead = Readable.toWeb(tar.stdout) as ReadableStream<Uint8Array>
+          portable: true,
+        }, [basename(filePath)])
+        const pass = new PassThrough()
+        nodeStream.pipe(pass)
+        streamToRead = Readable.toWeb(pass) as ReadableStream<Uint8Array>
       } else {
         streamToRead = Readable.toWeb(createReadStream(filePath)) as ReadableStream<Uint8Array>
       }
@@ -377,25 +376,13 @@ async function runReceive(input: string, overrideServer?: string | null) {
           console.log(`\n\x1b[33mFolder "${folderName}" already exists. Extracting inside safety folder "${basename(uniqueFolder)}/..." to prevent overwriting.\x1b[0m`)
         }
 
-        const tarProc = spawn("tar", ["-xf", "-"], {
+        const extractor = tar.x({
           cwd: extractDir,
-          stdio: ["pipe", "inherit", "inherit"],
         })
+        const pass = new PassThrough()
+        pass.pipe(extractor)
 
-        tarProc.on("error", (err) => {
-          console.error(`\nFailed to start tar extraction process: ${err.message}`)
-        })
-
-        const writer = Writable.toWeb(tarProc.stdin)
-
-        await plain.pipeTo(writer)
-        await new Promise<void>((resolve, reject) => {
-          tarProc.on("close", (code) => {
-            if (code === 0) resolve()
-            else reject(new Error(`tar exited with code ${code}`))
-          })
-          tarProc.on("error", reject)
-        })
+        await plain.pipeTo(Writable.toWeb(pass))
 
         console.log()
         console.log(`\x1b[32mExtracted successfully.\x1b[0m\n`)
