@@ -74,6 +74,32 @@ test("CLI receives using the new quote-free receive code format", async () => {
   await rm(receivedFilePath, { force: true })
 }, 15000)
 
+test("CLI outputs version and exits 0 on -v and --version", async () => {
+  const process1 = spawn(bunPath, [cliScriptPath, "-v"])
+  let out1 = ""
+  await new Promise<void>((resolve, reject) => {
+    process1.stdout.on("data", (data) => out1 += data.toString())
+    process1.on("close", (code) => {
+      if (code === 0) resolve()
+      else reject(new Error(`Exit code ${code}`))
+    })
+    process1.on("error", reject)
+  })
+  expect(out1.trim()).toBe("1.0.15")
+
+  const process2 = spawn(bunPath, [cliScriptPath, "--version"])
+  let out2 = ""
+  await new Promise<void>((resolve, reject) => {
+    process2.stdout.on("data", (data) => out2 += data.toString())
+    process2.on("close", (code) => {
+      if (code === 0) resolve()
+      else reject(new Error(`Exit code ${code}`))
+    })
+    process2.on("error", reject)
+  })
+  expect(out2.trim()).toBe("1.0.15")
+})
+
 test("CLI fails gracefully with a human-readable error for 404", async () => {
   const fakeCode = "fakeId:fakeKey:fake.txt"
   

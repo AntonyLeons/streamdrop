@@ -21,7 +21,7 @@ brew install streamdrop-cli
 ### Windows (Scoop & Chocolatey)
 ```powershell
 # Scoop
-scoop bucket add antonyleons https://github.com/AntonyLeons/scoop-bucket
+scoop bucket add antonyleons https://github.com/AntonyLeons/homebrew-tap.git
 scoop install streamdrop-cli
 
 ### From Source

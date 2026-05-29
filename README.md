@@ -24,25 +24,43 @@ Open http://localhost:3000.
 
 ## CLI
 
-Build a portable CLI binary:
+The StreamDrop CLI allows you to securely send and receive files directly from your terminal.
 
+### Installation
+
+**macOS / Linux (Homebrew)**
+```bash
+brew tap AntonyLeons/tap
+brew install streamdrop-cli
+```
+
+**Windows (Scoop)**
+```powershell
+scoop bucket add antonyleons https://github.com/AntonyLeons/homebrew-tap.git
+scoop install streamdrop-cli
+```
+
+**From Source**
+Ensure you have [Bun](https://bun.sh/) installed, then build the binary:
 ```bash
 bun install
 bun run cli:build
-./dist/streamdrop --help
+./dist/streamdrop-cli --help
 ```
+
+### Usage
 
 Send a file:
-
 ```bash
-./dist/streamdrop send ./myfile.zip
+streamdrop send ./myfile.zip
 ```
+*(Or use `./dist/streamdrop-cli send ./myfile.zip` if running from source)*
 
 Receive a file:
-
 ```bash
-./dist/streamdrop receive "<share-url>"
+streamdrop receive "<share-url>"
 ```
+*(Or use `./dist/streamdrop-cli receive "<share-url>"` if running from source)*
 
 Release binaries: GitHub Releases include prebuilt CLI binaries for macOS, Linux, and Windows, plus matching `.sha256` checksum files.
 
