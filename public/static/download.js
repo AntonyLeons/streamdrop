@@ -629,6 +629,13 @@ window.addEventListener("error", (e) => showError(String(e.error?.message ?? e.m
 
 const autoKey = getKeyBytes()
 if (autoKey) {
-  setMeta(`Starting ${suggestedName}…`)
-  startOnce(autoKey)
+  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  
+  if (isSafari || isIOS) {
+    setMeta(`Ready to download ${suggestedName}${fileSize ? ` · ${prettyBytes(fileSize)}` : ""}`)
+  } else {
+    setMeta(`Starting ${suggestedName}…`)
+    startOnce(autoKey)
+  }
 }
