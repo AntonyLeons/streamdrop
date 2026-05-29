@@ -60,6 +60,7 @@ export function createApp() {
       "Content-Security-Policy",
       `default-src 'none'; ` +
         `script-src 'self' 'nonce-${nonce}'; ` +
+        `worker-src 'self'; ` +
         `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; ` +
         `style-src-elem 'self' https://fonts.googleapis.com; ` +
         `font-src 'self' https://fonts.gstatic.com data:; ` +
@@ -117,6 +118,28 @@ export function createApp() {
       },
     })
   })
+
+  app.get("/static/download-worker.js", async () => {
+    const file = Bun.file(new URL("../public/static/download-worker.js", import.meta.url))
+    return new Response(file, {
+      headers: {
+        "content-type": "text/javascript; charset=utf-8",
+        "cache-control": "no-store",
+      },
+    })
+  })
+
+
+  app.get("/static/upload-worker.js", async () => {
+    const file = Bun.file(new URL("../public/static/upload-worker.js", import.meta.url))
+    return new Response(file, {
+      headers: {
+        "content-type": "text/javascript; charset=utf-8",
+        "cache-control": "no-store",
+      },
+    })
+  })
+
 
   app.get("/static/vendor/qrcode.min.js", async () => {
     const text = await getQRCodeVendorJS()

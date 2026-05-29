@@ -1,4 +1,4 @@
-import { base64urlEncode, createEncryptStream } from "./crypto.js"
+import { base64urlEncode } from "./crypto.js"
 
 const seedCfg = window.__STREAMDROP__ || {}
 let seedUsed = false
@@ -506,26 +506,56 @@ async function startTransfer(file) {
       item.setBusy(true)
       item.setState("Encrypting")
 
-      let lastPct = 0
-      const encStream = createEncryptStream({
-        stream: file.stream(),
-        size: file.size,
-        key,
-        sessionId: session.id,
-        onProgress: (done, total) => {
-          if (!total) return
-          const pct = Math.min(1, done / total)
-          if (pct - lastPct < 0.002 && pct < 1) return
-          lastPct = pct
-          item.setBar(pct)
-          transferStats.set(session.id, { done, total, name: file.name })
-        },
+      const uploadWorker = new Worker("/static/upload-worker.js", { type: "module" })
+      const cleanupWorker = () => { uploadWorker.terminate() }
+      abortController.signal.addEventListener("abort", cleanupWorker)
+
+      let uploadStreamController = null
+      const workerStream = new ReadableStream({
+        start(controller) {
+          uploadStreamController = controller
+        }
       })
 
-      const res = await streamToTempFileOrBlob(encStream, abortController.signal)
-      cipherBlob = res.blob
-      cleanup = res.cleanup
-      cleanupBySessionId.set(session.id, cleanup)
+      let lastPct = 0
+      uploadWorker.onmessage = (event) => {
+        const msg = event.data
+        if (msg.type === "chunk") {
+          uploadStreamController.enqueue(new Uint8Array(msg.data))
+          const done = msg.bytes
+          const total = file.size
+          if (total) {
+            const pct = Math.min(1, done / total)
+            if (pct - lastPct >= 0.002 || pct === 1) {
+              lastPct = pct
+              item.setBar(pct)
+              transferStats.set(session.id, { done, total, name: file.name })
+            }
+          }
+        } else if (msg.type === "complete") {
+          uploadStreamController.close()
+        } else if (msg.type === "error") {
+          uploadStreamController.error(new Error(msg.message))
+        }
+      }
+
+      uploadWorker.postMessage({
+        type: "init",
+        keyBytes: raw,
+        sessionId: session.id,
+        file,
+        chunkSize: 256 * 1024,
+      })
+
+      try {
+        const res = await streamToTempFileOrBlob(workerStream, abortController.signal)
+        cipherBlob = res.blob
+        cleanup = res.cleanup
+        cleanupBySessionId.set(session.id, cleanup)
+      } finally {
+        cleanupWorker()
+        abortController.signal.removeEventListener("abort", cleanupWorker)
+      }
 
       if (abortController.signal.aborted) return
     }
@@ -552,15 +582,38 @@ async function startTransfer(file) {
         let res
         try {
             if (supportsDuplex && !window._forceXhr) {
-              const encStream = createEncryptStream({
-                stream: file.stream(),
-                size: file.size,
-                key,
+              const uploadWorker = new Worker("/static/upload-worker.js", { type: "module" })
+              const cleanupWorker = () => { uploadWorker.terminate() }
+              abortController.signal.addEventListener("abort", cleanupWorker)
+
+              let uploadStreamController = null
+              const workerStream = new ReadableStream({
+                start(controller) {
+                  uploadStreamController = controller
+                }
+              })
+
+              uploadWorker.onmessage = (event) => {
+                const msg = event.data
+                if (msg.type === "chunk") {
+                  uploadStreamController.enqueue(new Uint8Array(msg.data))
+                } else if (msg.type === "complete") {
+                  uploadStreamController.close()
+                } else if (msg.type === "error") {
+                  uploadStreamController.error(new Error(msg.message))
+                }
+              }
+
+              uploadWorker.postMessage({
+                type: "init",
+                keyBytes: raw,
                 sessionId: session.id,
+                file,
+                chunkSize: 256 * 1024,
               })
 
               const uploadStream = wrapStreamWithProgress({
-                stream: encStream,
+                stream: workerStream,
                 total: file.size,
                 signal: abortController.signal,
                 onProgress: (done, total) => {
@@ -586,13 +639,18 @@ async function startTransfer(file) {
                 },
               })
 
-              res = await fetch(`/upload/${session.uploadToken}/${encodeURIComponent(channelId)}`, {
-                method: "PUT",
-                headers: { "content-type": "application/octet-stream" },
-                body: uploadStream,
-                duplex: "half",
-                signal: abortController.signal,
-              })
+              try {
+                res = await fetch(`/upload/${session.uploadToken}/${encodeURIComponent(channelId)}`, {
+                  method: "PUT",
+                  headers: { "content-type": "application/octet-stream" },
+                  body: uploadStream,
+                  duplex: "half",
+                  signal: abortController.signal,
+                })
+              } finally {
+                cleanupWorker()
+                abortController.signal.removeEventListener("abort", cleanupWorker)
+              }
             } else {
               res = await uploadBlobWithXhr(
                 `/upload/${session.uploadToken}/${encodeURIComponent(channelId)}`,
@@ -719,42 +777,38 @@ async function startTransfer(file) {
                                   navigator.userAgent.toLowerCase().includes('firefox');
               const finalChunkSize = (selfIsWebKit || peerIsWebKit) ? 16 * 1024 : 64 * 1024;
 
-              const encStream = createEncryptStream({
-                stream: file.stream(),
-                size: file.size,
-                key,
-                sessionId: session.id,
-                chunkSize: finalChunkSize,
-              })
-
-              const reader = encStream.getReader()
+              const uploadWorker = new Worker("/static/upload-worker.js", { type: "module" })
               let done = 0
               let lastTime = Date.now()
 
-              try {
-                while (true) {
-                  if (abortController.signal.aborted) break
-                  if (channel.readyState !== "open") {
-                    console.warn("P2P data channel closed during transfer.")
-                    break
-                  }
-                  const { value, done: isDone } = await reader.read()
-                  
-                  if (isDone) {
-                    if (channel.readyState === "open") {
-                      try { channel.send("EOF") } catch {}
+              const cleanupWorker = () => {
+                uploadWorker.terminate()
+              }
+              abortController.signal.addEventListener("abort", cleanupWorker)
+
+              const encryptPromise = new Promise((resolveEnc, rejectEnc) => {
+                uploadWorker.onmessage = async (event) => {
+                  const msg = event.data
+                  if (msg.type === "chunk") {
+                    const chunk = new Uint8Array(msg.data)
+                    if (channel.readyState !== "open") {
+                      uploadWorker.postMessage({ type: "abort" })
+                      rejectEnc(new Error("channel_closed"))
+                      return
                     }
-                    break
-                  }
+                    
+                    try {
+                      channel.send(chunk)
+                    } catch (err) {
+                      uploadWorker.postMessage({ type: "abort" })
+                      rejectEnc(err)
+                      return
+                    }
 
-                  if (value) {
-                    if (channel.readyState !== "open") break
-                    channel.send(value)
-                    done += value.byteLength
-
+                    done = msg.bytes
                     if (channel.bufferedAmount > 1024 * 1024) {
-                      await new Promise((resolve) => {
-                        resumeResolve = resolve
+                      await new Promise((resolveResume) => {
+                        resumeResolve = resolveResume
                       })
                     }
 
@@ -773,9 +827,27 @@ async function startTransfer(file) {
                         item.setState(`Uploading (P2P) · ${formatSpeed(speed)}${etaStr}`)
                       }
                     }
+                  } else if (msg.type === "complete") {
+                    if (channel.readyState === "open") {
+                      try { channel.send("EOF") } catch {}
+                    }
+                    resolveEnc()
+                  } else if (msg.type === "error") {
+                    rejectEnc(new Error(msg.message))
                   }
                 }
+              })
 
+              uploadWorker.postMessage({
+                type: "init",
+                keyBytes: raw,
+                sessionId: session.id,
+                file,
+                chunkSize: finalChunkSize,
+              })
+
+              try {
+                await encryptPromise
                 if (!abortController.signal.aborted) {
                   item.incrementDownloads()
                 }
@@ -783,6 +855,8 @@ async function startTransfer(file) {
                 console.error("P2P stream send failed:", err)
                 cleanupP2P()
               } finally {
+                cleanupWorker()
+                abortController.signal.removeEventListener("abort", cleanupWorker)
                 activeUploads--
                 globalActiveUploads--
                 if (activeUploads === 0) item.setBusy(false)

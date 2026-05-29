@@ -69,6 +69,10 @@ async function tryWebRTCDownload(raw) {
     let peerConnection = null
     let timeoutId = null
     let finished = false
+    let plainBytes = 0
+    let startTime = Date.now()
+
+    const worker = new Worker("/static/download-worker.js", { type: "module" })
 
     const cleanup = () => {
       if (timeoutId) clearTimeout(timeoutId)
@@ -81,6 +85,8 @@ async function tryWebRTCDownload(raw) {
     const fail = (err) => {
       if (finished) return
       finished = true
+      worker.postMessage({ type: "abort" })
+      worker.terminate()
       cleanup()
       reject(err)
     }
@@ -97,9 +103,55 @@ async function tryWebRTCDownload(raw) {
       fail(new Error("P2P negotiation timeout"))
     }, 8000)
 
+    worker.onmessage = (event) => {
+      const msg = event.data
+      if (msg.type === "progress") {
+        plainBytes = msg.bytes
+        setMeta(fileSize ? `${prettyBytes(plainBytes)} of ${prettyBytes(fileSize)}` : `${prettyBytes(plainBytes)} decrypted`)
+        const elapsed = (Date.now() - startTime) / 1000
+        if (elapsed > 0.5) {
+          const speed = plainBytes / elapsed
+          if (fileSize) {
+            const eta = Math.round((fileSize - plainBytes) / speed)
+            const etaStr = eta > 0 ? ` · ${eta}s left` : ""
+            elHint.textContent = `Downloading (P2P) · ${formatSpeed(speed)}${etaStr}`
+            setBar(Math.min(1, plainBytes / fileSize))
+          } else {
+            elHint.textContent = `Downloading (P2P) · ${formatSpeed(speed)}`
+            setBar(0.12 + Math.min(0.88, (Math.log10(1 + plainBytes) / 8) * 0.88))
+          }
+        } else if (!fileSize) {
+          setBar(0.12 + Math.min(0.88, (Math.log10(1 + plainBytes) / 8) * 0.88))
+        }
+      } else if (msg.type === "complete") {
+        finished = true
+        worker.terminate()
+        cleanup()
+        
+        const file = msg.file
+        const url = URL.createObjectURL(file)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = suggestedName
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        
+        setBar(1)
+        setMeta(fileSize ? `${prettyBytes(plainBytes)} of ${prettyBytes(fileSize)} downloaded` : `${prettyBytes(plainBytes)} downloaded`)
+        elHint.textContent = "Complete"
+        elStart.disabled = false
+        elStart.textContent = "Download again"
+        elCancel.classList.add("hidden")
+        if (elMeter) elMeter.classList.add("hidden")
+        
+        resolve(true)
+      } else if (msg.type === "error") {
+        fail(new Error(msg.message))
+      }
+    }
+
     try {
-      const key = await crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, ["decrypt"])
-      
       p2pSse = new EventSource(`/session/events/${cfg.downloadToken}`)
       
       peerConnection = new RTCPeerConnection({
@@ -130,33 +182,6 @@ async function tryWebRTCDownload(raw) {
       const channel = peerConnection.createDataChannel("file-transfer")
       channel.binaryType = "arraybuffer"
       
-      let startTime = Date.now()
-      let plainBytes = 0
-      
-      const decrypt = createDecryptTransform({
-        key,
-        sessionId: cfg.id,
-        onProgress: (n) => {
-          plainBytes = n
-          setMeta(fileSize ? `${prettyBytes(n)} of ${prettyBytes(fileSize)}` : `${prettyBytes(n)} decrypted`)
-          const elapsed = (Date.now() - startTime) / 1000
-          if (elapsed > 0.5) {
-            const speed = n / elapsed
-            if (fileSize) {
-              const eta = Math.round((fileSize - n) / speed)
-              const etaStr = eta > 0 ? ` · ${eta}s left` : ""
-              elHint.textContent = `Downloading (P2P) · ${formatSpeed(speed)}${etaStr}`
-              setBar(Math.min(1, n / fileSize))
-            } else {
-              elHint.textContent = `Downloading (P2P) · ${formatSpeed(speed)}`
-              setBar(0.12 + Math.min(0.88, (Math.log10(1 + n) / 8) * 0.88))
-            }
-          } else if (!fileSize) {
-            setBar(0.12 + Math.min(0.88, (Math.log10(1 + n) / 8) * 0.88))
-          }
-        }
-      })
-
       channel.onopen = async () => {
         if (timeoutId) {
           clearTimeout(timeoutId)
@@ -164,67 +189,31 @@ async function tryWebRTCDownload(raw) {
         }
         
         elHint.textContent = "Connected (P2P)"
-        setStep("download")
         if (elMeter) elMeter.classList.remove("hidden")
         setBar(0)
         
-        let streamController = null
-        const webrtcStream = new ReadableStream({
-          start(controller) {
-            streamController = controller
-          },
-          cancel() {
-            fail(new Error("Stream canceled"))
-          }
+        startTime = Date.now()
+        
+        // Initialize the worker
+        worker.postMessage({
+          type: "init",
+          keyBytes: raw,
+          sessionId: cfg.id,
+          suggestedName
         })
         
         channel.onmessage = (e) => {
           if (finished) return
           if (typeof e.data === "string" && e.data === "EOF") {
-            try { streamController.close() } catch {}
+            worker.postMessage({ type: "eof" })
           } else {
-            const bytes = typeof e.data === "string" ? new TextEncoder().encode(e.data) : new Uint8Array(e.data)
-            try { streamController.enqueue(bytes) } catch {}
+            const buf = typeof e.data === "string" ? new TextEncoder().encode(e.data).buffer : e.data
+            worker.postMessage({ type: "chunk", data: buf }, [buf])
           }
         }
         
         channel.onerror = (err) => fail(err)
-        channel.onclose = () => { try { streamController.close() } catch {} }
-
-        try {
-          const plaintext = webrtcStream.pipeThrough(decrypt)
-          setStep("decrypt")
-          setStep("save")
-          
-          const file = await streamToOPFS(plaintext, activeAbortController.signal)
-          
-          if (plainBytes === 0 || (fileSize > 0 && plainBytes !== fileSize)) {
-            throw new Error(`Incomplete transfer: received ${plainBytes} bytes, expected ${fileSize} bytes`)
-          }
-          
-          finished = true
-          cleanup()
-          
-          const url = URL.createObjectURL(file)
-          const a = document.createElement("a")
-          a.href = url
-          a.download = suggestedName
-          document.body.appendChild(a)
-          a.click()
-          a.remove()
-          
-          setBar(1)
-          setMeta(fileSize ? `${prettyBytes(plainBytes)} of ${prettyBytes(fileSize)} downloaded` : `${prettyBytes(plainBytes)} downloaded`)
-          elHint.textContent = "Complete"
-          elStart.disabled = false
-          elStart.textContent = "Download again"
-          elCancel.classList.add("hidden")
-          if (elMeter) elMeter.classList.add("hidden")
-          
-          resolve(true)
-        } catch (err) {
-          fail(err)
-        }
+        channel.onclose = () => { worker.postMessage({ type: "eof" }) }
       }
 
       peerConnection.onconnectionstatechange = () => {
@@ -261,8 +250,6 @@ async function run({ raw }) {
   elStart.textContent = "Running"
   elCancel.classList.remove("hidden")
 
-  setStep("download")
-
   activeAbortController = new AbortController()
   const onCancel = () => activeAbortController.abort()
   elCancel.addEventListener("click", onCancel, { once: true })
@@ -276,15 +263,12 @@ async function run({ raw }) {
       console.warn("WebRTC P2P failed, falling back to HTTP relay:", e)
     }
 
-    const key = await crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, ["decrypt"])
-
     let attempt = 0
     while (true) {
       attempt++
       if (activeAbortController.signal.aborted) return
 
       elHint.textContent = attempt > 1 ? `Reconnecting… (${attempt})` : "Connecting…"
-      setStep("download")
       if (elMeter) elMeter.classList.remove("hidden")
       setBar(0)
 
@@ -293,7 +277,7 @@ async function run({ raw }) {
         res = await fetch(`/d/${cfg.downloadToken}`, {
           method: "GET",
           headers: { accept: "application/octet-stream" },
-           signal: activeAbortController.signal,
+          signal: activeAbortController.signal,
         })
       } catch {
         if (activeAbortController.signal.aborted) return
@@ -324,43 +308,84 @@ async function run({ raw }) {
 
       let plainBytes = 0
       let startTime = Date.now()
-      const decrypt = createDecryptTransform({
-        key,
-        sessionId: cfg.id,
-        onProgress: (n) => {
-          plainBytes = n
-          setMeta(fileSize ? `${prettyBytes(n)} of ${prettyBytes(fileSize)}` : `${prettyBytes(n)} decrypted`)
-          const elapsed = (Date.now() - startTime) / 1000
-          if (elapsed > 0.5) {
-            const speed = n / elapsed
-            if (fileSize) {
-              const eta = Math.round((fileSize - n) / speed)
-              const etaStr = eta > 0 ? ` · ${eta}s left` : ""
-              elHint.textContent = `Downloading · ${formatSpeed(speed)}${etaStr}`
-              setBar(Math.min(1, n / fileSize))
-            } else {
-              elHint.textContent = `Downloading · ${formatSpeed(speed)}`
-              setBar(0.12 + Math.min(0.88, (Math.log10(1 + n) / 8) * 0.88))
+
+      // Initialize the worker for HTTP download
+      const worker = new Worker("/static/download-worker.js", { type: "module" })
+      let finished = false
+      
+      const failWorker = (err) => {
+        if (finished) return
+        finished = true
+        worker.postMessage({ type: "abort" })
+        worker.terminate()
+        throw err
+      }
+
+      const completionPromise = new Promise((resResolve, resReject) => {
+        worker.onmessage = (event) => {
+          const msg = event.data
+          if (msg.type === "progress") {
+            plainBytes = msg.bytes
+            setMeta(fileSize ? `${prettyBytes(plainBytes)} of ${prettyBytes(fileSize)}` : `${prettyBytes(plainBytes)} decrypted`)
+            const elapsed = (Date.now() - startTime) / 1000
+            if (elapsed > 0.5) {
+              const speed = plainBytes / elapsed
+              if (fileSize) {
+                const eta = Math.round((fileSize - plainBytes) / speed)
+                const etaStr = eta > 0 ? ` · ${eta}s left` : ""
+                elHint.textContent = `Downloading · ${formatSpeed(speed)}${etaStr}`
+                setBar(Math.min(1, plainBytes / fileSize))
+              } else {
+                elHint.textContent = `Downloading · ${formatSpeed(speed)}`
+                setBar(0.12 + Math.min(0.88, (Math.log10(1 + plainBytes) / 8) * 0.88))
+              }
+            } else if (!fileSize) {
+              setBar(0.12 + Math.min(0.88, (Math.log10(1 + plainBytes) / 8) * 0.88))
             }
-          } else if (!fileSize) {
-            setBar(0.12 + Math.min(0.88, (Math.log10(1 + n) / 8) * 0.88))
+          } else if (msg.type === "complete") {
+            finished = true
+            worker.terminate()
+            resResolve(msg.file)
+          } else if (msg.type === "error") {
+            finished = true
+            worker.terminate()
+            resReject(new Error(msg.message))
           }
-        },
+        }
       })
 
-      setStep("decrypt")
+      worker.postMessage({
+        type: "init",
+        keyBytes: raw,
+        sessionId: cfg.id,
+        suggestedName
+      })
 
-      const plaintext = res.body.pipeThrough(decrypt)
-
-      setStep("save")
-
+      const reader = res.body.getReader()
       try {
-        const file = await streamToOPFS(plaintext, activeAbortController.signal)
-        
+        while (true) {
+          if (activeAbortController.signal.aborted) {
+            worker.postMessage({ type: "abort" })
+            worker.terminate()
+            return
+          }
+          const { value, done } = await reader.read()
+          if (done) {
+            worker.postMessage({ type: "eof" })
+            break
+          }
+          if (value) {
+            const buf = value.buffer
+            worker.postMessage({ type: "chunk", data: buf }, [buf])
+          }
+        }
+
+        const file = await completionPromise
+
         if (plainBytes === 0 || (fileSize > 0 && plainBytes !== fileSize)) {
           throw new Error(`Incomplete transfer: received ${plainBytes} bytes, expected ${fileSize} bytes`)
         }
-        
+
         const url = URL.createObjectURL(file)
         const a = document.createElement("a")
         a.href = url
@@ -377,6 +402,8 @@ async function run({ raw }) {
         if (elMeter) elMeter.classList.add("hidden")
         return
       } catch (e) {
+        worker.postMessage({ type: "abort" })
+        worker.terminate()
         if (activeAbortController.signal.aborted) return
         const msg = String(e?.message ?? e ?? "")
         if (msg.includes("bad_magic") || msg.includes("bad_chunk_index") || msg.includes("OperationError")) {
@@ -513,67 +540,6 @@ async function parseError(res) {
   return (await safeText(res)).trim()
 }
 
-async function streamToOPFS(stream, signal) {
-  let root = null;
-  let handle = null;
-  let fileName = null;
-  
-  try {
-    if (navigator.storage && navigator.storage.getDirectory) {
-      root = await navigator.storage.getDirectory()
-      fileName = `sd_${Date.now()}_${suggestedName}`
-      handle = await root.getFileHandle(fileName, { create: true })
-    }
-  } catch (e) {
-    root = null;
-    handle = null;
-  }
-
-  if (!root || !handle) {
-    // Ultimate fallback if OPFS unsupported or setup fails
-    const reader = stream.getReader()
-    const chunks = []
-    while (true) {
-      if (signal?.aborted) throw new DOMException("Aborted", "AbortError")
-      const { value, done } = await reader.read()
-      if (done) break
-      if (value) chunks.push(value)
-    }
-    return new Blob(chunks, { type: "application/octet-stream" })
-  }
-  
-  // Use createSyncAccessHandle if available for performance, otherwise standard writable
-  try {
-    if (handle.createWritable) {
-      const writable = await handle.createWritable()
-      try {
-        await stream.pipeTo(writable, { signal })
-      } catch (e) {
-        writable.abort().catch(() => {})
-        throw e
-      }
-    } else {
-      const accessHandle = await handle.createSyncAccessHandle()
-      const reader = stream.getReader()
-      try {
-        while (true) {
-          if (signal?.aborted) throw new DOMException("Aborted", "AbortError")
-          const { value, done } = await reader.read()
-          if (done) break
-          if (value) accessHandle.write(value)
-        }
-        accessHandle.flush()
-      } finally {
-        accessHandle.close()
-        reader.cancel().catch(() => {})
-      }
-    }
-    return await handle.getFile()
-  } catch (e) {
-    if (root && fileName) root.removeEntry(fileName).catch(() => {})
-    throw e
-  }
-}
 
 document.addEventListener("click", async (e) => {
   const cliModalBtn = e.target?.closest?.('#btn-cli-modal') || e.target?.closest?.('#btn-cli-modal-dl')
