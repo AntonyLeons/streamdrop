@@ -413,7 +413,7 @@ async function runReceive(input: string, overrideServer?: string | null) {
         await plain.pipeTo(Writable.toWeb(pass))
 
         const expectedSize = typeof cfg.size === "number" ? cfg.size : (parseInt(cfg.size, 10) || 0)
-        if (expectedSize > 0 && plainBytes !== expectedSize) {
+        if (plainBytes === 0 || (expectedSize > 0 && plainBytes !== expectedSize)) {
           throw new Error(`Incomplete transfer: received ${plainBytes} bytes, expected ${expectedSize} bytes`)
         }
 
@@ -423,7 +423,7 @@ async function runReceive(input: string, overrideServer?: string | null) {
         await writeToFile(outPath, plain)
 
         const expectedSize = typeof cfg.size === "number" ? cfg.size : (parseInt(cfg.size, 10) || 0)
-        if (expectedSize > 0 && plainBytes !== expectedSize) {
+        if (plainBytes === 0 || (expectedSize > 0 && plainBytes !== expectedSize)) {
           throw new Error(`Incomplete transfer: received ${plainBytes} bytes, expected ${expectedSize} bytes`)
         }
 

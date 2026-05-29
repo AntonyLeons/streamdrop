@@ -194,7 +194,7 @@ async function tryWebRTCDownload(raw) {
           
           const file = await streamToOPFS(plaintext, activeAbortController.signal)
           
-          if (fileSize > 0 && plainBytes !== fileSize) {
+          if (plainBytes === 0 || (fileSize > 0 && plainBytes !== fileSize)) {
             throw new Error(`Incomplete transfer: received ${plainBytes} bytes, expected ${fileSize} bytes`)
           }
           
@@ -345,7 +345,7 @@ async function run({ raw }) {
       try {
         const file = await streamToOPFS(plaintext, activeAbortController.signal)
         
-        if (fileSize > 0 && plainBytes !== fileSize) {
+        if (plainBytes === 0 || (fileSize > 0 && plainBytes !== fileSize)) {
           throw new Error(`Incomplete transfer: received ${plainBytes} bytes, expected ${fileSize} bytes`)
         }
         
@@ -629,13 +629,6 @@ window.addEventListener("error", (e) => showError(String(e.error?.message ?? e.m
 
 const autoKey = getKeyBytes()
 if (autoKey) {
-  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-  
-  if (isSafari || isIOS) {
-    setMeta(`Ready to download ${suggestedName}${fileSize ? ` · ${prettyBytes(fileSize)}` : ""}`)
-  } else {
-    setMeta(`Starting ${suggestedName}…`)
-    startOnce(autoKey)
-  }
+  setMeta(`Starting ${suggestedName}…`)
+  startOnce(autoKey)
 }
