@@ -704,6 +704,7 @@ async function startTransfer(file) {
                 size: file.size,
                 key,
                 sessionId: session.id,
+                chunkSize: 16 * 1024,
               })
 
               const reader = encStream.getReader()
@@ -758,6 +759,7 @@ async function startTransfer(file) {
                 }
               } catch (err) {
                 console.error("P2P stream send failed:", err)
+                cleanupP2P()
               } finally {
                 activeUploads--
                 globalActiveUploads--

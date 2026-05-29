@@ -631,15 +631,29 @@ document.addEventListener("click", async (e) => {
 window.addEventListener("unhandledrejection", (e) => showError(String(e.reason?.message ?? e.reason ?? "error")))
 window.addEventListener("error", (e) => showError(String(e.error?.message ?? e.message ?? "error")))
 
-const autoKey = getKeyBytes()
-if (autoKey) {
-  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-  
-  if (isSafari || isIOS) {
-    setMeta(`Ready to download ${suggestedName}${fileSize ? ` · ${prettyBytes(fileSize)}` : ""}`)
-  } else {
-    setMeta(`Starting ${suggestedName}…`)
-    startOnce(autoKey)
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+const IOS_MAX_SIZE = 300 * 1024 * 1024 // 300 MB
+
+if (isIOS && fileSize > IOS_MAX_SIZE) {
+  elError.textContent = `File size (${prettyBytes(fileSize)}) exceeds iOS browser memory limits (300MB). Use the StreamDrop CLI instead.`
+  elError.classList.remove("hidden")
+  if (elHint) elHint.textContent = "Browser limits exceeded"
+  if (elStart) {
+    elStart.disabled = true
+    elStart.textContent = "CLI Recommended"
+    elStart.style.opacity = "0.5"
+    elStart.style.cursor = "not-allowed"
+  }
+  setMeta(`Ready to download ${suggestedName}${fileSize ? ` · ${prettyBytes(fileSize)}` : ""}`)
+} else {
+  const autoKey = getKeyBytes()
+  if (autoKey) {
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
+    if (isSafari || isIOS) {
+      setMeta(`Ready to download ${suggestedName}${fileSize ? ` · ${prettyBytes(fileSize)}` : ""}`)
+    } else {
+      setMeta(`Starting ${suggestedName}…`)
+      startOnce(autoKey)
+    }
   }
 }
