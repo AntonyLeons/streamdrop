@@ -699,6 +699,16 @@ async function startTransfer(file) {
               item.setState("Uploading (P2P)")
               
               let startTime = Date.now()
+              
+              let resumeResolve = null
+              channel.bufferedAmountLowThreshold = 256 * 1024 // 256 KB
+              channel.onbufferedamountlow = () => {
+                if (resumeResolve) {
+                  resumeResolve()
+                  resumeResolve = null
+                }
+              }
+
               const encStream = createEncryptStream({
                 stream: file.stream(),
                 size: file.size,
@@ -732,8 +742,10 @@ async function startTransfer(file) {
                     channel.send(value)
                     done += value.byteLength
 
-                    while (channel.bufferedAmount > 1024 * 1024) {
-                      await sleep(40)
+                    if (channel.bufferedAmount > 1024 * 1024) {
+                      await new Promise((resolve) => {
+                        resumeResolve = resolve
+                      })
                     }
 
                     const pct = file.size ? Math.min(1, done / file.size) : 0
