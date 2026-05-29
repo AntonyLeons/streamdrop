@@ -662,6 +662,7 @@ async function startTransfer(file) {
     sse = new EventSource(`/session/events/${session.uploadToken}`)
 
     let peerConnection = null
+    let peerIsWebKit = false
     const cleanupP2P = () => {
       if (peerConnection) {
         try { peerConnection.close() } catch {}
@@ -676,6 +677,7 @@ async function startTransfer(file) {
         const signal = JSON.parse(e.data)
         if (signal.type === "offer") {
           cleanupP2P()
+          peerIsWebKit = signal.browser === "webkit"
 
           peerConnection = new RTCPeerConnection({
             iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
@@ -712,12 +714,17 @@ async function startTransfer(file) {
                 }
               }
 
+              const selfIsWebKit = CSS.supports("-webkit-touch-callout", "none") || 
+                                  (navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome') && !navigator.userAgent.includes('Edg') && !navigator.userAgent.includes('Android')) ||
+                                  navigator.userAgent.toLowerCase().includes('firefox');
+              const finalChunkSize = (selfIsWebKit || peerIsWebKit) ? 16 * 1024 : 64 * 1024;
+
               const encStream = createEncryptStream({
                 stream: file.stream(),
                 size: file.size,
                 key,
                 sessionId: session.id,
-                chunkSize: 16 * 1024,
+                chunkSize: finalChunkSize,
               })
 
               const reader = encStream.getReader()
@@ -1082,9 +1089,8 @@ function sleep(ms) {
 }
 
 async function getOrCreateSession(file) {
-
-  const qs = file ? `?name=${encodeURIComponent(file.name)}&size=${file.size}` : ""
-  const res = await fetch(`/session${qs}`, { method: "POST", headers: { accept: "application/json" } })
+  // Protect metadata privacy: standard E2EE browser transfers do not register the plaintext name/size on the server.
+  const res = await fetch("/session", { method: "POST", headers: { accept: "application/json" } })
   if (!res.ok) {
     const msg = await safeText(res)
     throw new Error(msg || `session_failed_${res.status}`)

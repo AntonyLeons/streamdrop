@@ -236,10 +236,18 @@ async function tryWebRTCDownload(raw) {
       const offer = await peerConnection.createOffer()
       await peerConnection.setLocalDescription(offer)
       
+      const isWebKit = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                       (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+                       /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+      
       await fetch(`/session/signal/${cfg.downloadToken}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(offer)
+        body: JSON.stringify({
+          type: offer.type,
+          sdp: offer.sdp,
+          browser: isWebKit ? "webkit" : "default"
+        })
       })
     } catch (err) {
       fail(err)
