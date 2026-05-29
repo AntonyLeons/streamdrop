@@ -48,32 +48,27 @@ Important property: the `#fragment` is never sent to the server in HTTP requests
 
 The UI logic for this lives in [upload.js](file:///Users/aleons/Documents/GitHub/streamdrop/public/static/upload.js).
 
-#### 3) Encrypt then wait
+#### 3) Event-Driven & WebRTC P2P Signaling
 
-The sender encrypts the file before upload.
+The sender connects to the Server-Sent Events (SSE) stream via `GET /session/events/:uploadToken` and stays active.
+The browser uses standard WebRTC APIs to negotiate a peer-to-peer (P2P) connection directly with the receiver. WebRTC signaling (SDP offers/answers and ICE candidates) is sent securely through the zero-storage mailbox endpoint `POST /session/signal/:token` and dispatched instantly using the active SSE connection.
 
-Encryption is implemented as a streaming transform in [crypto.js](file:///Users/aleons/Documents/GitHub/streamdrop/public/static/crypto.js) (AES-256-GCM).
-
-After encryption finishes, the UI transitions to a receiver-first model:
-
-- It waits for a receiver to be present via `GET /wait-receiver/:id`
-
-#### 4) Receiver connects (download)
+#### 4) Receiver connects
 
 The receiver opens the share URL in a browser:
 
-- Server returns the download page via `GET /:id` in [app.ts](file:///Users/aleons/Documents/GitHub/streamdrop/src/app.ts)
-- The download page JS reads the key fragment and uses `GET /d/:downloadToken` to start the ciphertext stream.
+- The server returns the download page via `GET /:id` in [app.ts](file:///Users/aleons/Documents/GitHub/streamdrop/src/app.ts).
+- The download page JS reads the key fragment, establishes an SSE connection via `GET /session/events/:downloadToken` to notify the sender, and negotiates a direct WebRTC peer-to-peer connection.
 
 The download JS is in [download.js](file:///Users/aleons/Documents/GitHub/streamdrop/public/static/download.js).
 
-#### 5) Channel claim and upload stream
+#### 5) P2P Streaming & Fallback Channel Claim
 
-Each receiver download creates a per-receiver channel on the server:
-
-- `GET /d/:downloadToken` creates a channel, adds it to the session, and returns a ReadableStream of ciphertext.
-- The sender then calls `POST /claim/:uploadToken` to claim an unclaimed channel id.
-- The sender uploads ciphertext to that channel via `PUT /upload/:uploadToken/:channelId`.
+- **Primary (WebRTC P2P)**: Bytes are encrypted and sent directly from browser to browser using a WebRTC data channel. The sender implements backpressure (stalling the reader when the channel's buffered amount exceeds 1MB) to prevent memory exhaustion.
+- **Fallback (HTTP Relay)**: If the WebRTC connection fails to establish within a timeout (8 seconds), Streamdrop automatically falls back to the standard HTTP channel-relay flow:
+  - The receiver claims the channel using `GET /d/:downloadToken`.
+  - The sender obtains the channel id via `POST /claim/:uploadToken` and uploads ciphertext via `PUT /upload/:uploadToken/:channelId`.
+  - The server pipes the sender's bytes directly to the receiver's download response without saving them to disk.
 
 This “claim + channel” design allows multiple receivers sequentially without mixing streams.
 
@@ -97,9 +92,11 @@ The relay is intentionally “dumb”:
 
 Core behaviors:
 
-- `GET /wait-receiver/:id` long-polls until a receiver exists (or times out).
-- `GET /d/:downloadToken` creates a channel and streams from that channel to the receiver.
-- `POST /claim/:uploadToken` hands the sender a channel to upload into.
+- `GET /session/events/:token` delivers persistent Server-Sent Events (SSE) to senders and receivers.
+- `POST /session/signal/:token` forwards WebRTC signaling (SDP/ICE) messages to the peer.
+- `GET /wait-receiver/:id` yields/resolves only for plain curl/wget downloads where browser-level SSE/WebRTC signaling is not supported.
+- `GET /d/:downloadToken` creates a fallback stream channel and streams from that channel to the receiver.
+- `POST /claim/:uploadToken` hands the sender a fallback channel to upload into.
 - `PUT /upload/:uploadToken/:channelId` pipes sender bytes into the channel controller.
 
 Sessions are garbage-collected by a reaper in [sessions.ts](file:///Users/aleons/Documents/GitHub/streamdrop/src/sessions.ts) based on TTL and inactivity.
@@ -130,7 +127,7 @@ Implementation: [cli/index.ts](file:///Users/aleons/Documents/GitHub/streamdrop/
 - Creates a session: `POST /session?name=<filename>`
 - Generates a random 32-byte AES-GCM key
 - Prints a share URL: `/<id>#<key>,<filename>`
-- Waits for receivers: `GET /wait-receiver/:id`
+- Connects to the event stream: `GET /session/events/:uploadToken` and listens line-by-line using `node:readline` for receiver connection notifications
 - Claims channels: `POST /claim/:uploadToken`
 - Encrypts and uploads ciphertext: `PUT /upload/:uploadToken/:channelId`
 

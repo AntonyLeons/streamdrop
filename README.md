@@ -98,7 +98,7 @@ If you don't trust the public server or want full control, StreamDrop is easy to
 
 ### Reverse proxy examples
 
-StreamDrop keeps long-lived HTTP connections open (for receiver waiting and streaming downloads). Configure your reverse proxy with generous read/idle timeouts. The server itself disables Bun's idle timeout (`idleTimeout: 0` in [server.ts](file:///Users/aleons/Documents/GitHub/streamdrop/src/server.ts)).
+StreamDrop keeps long-lived HTTP connections open (for Server-Sent Events (SSE) signaling, WebRTC P2P direct streaming, and fallback streaming downloads). Configure your reverse proxy with generous read/idle timeouts. The server itself disables Bun's idle timeout (`idleTimeout: 0` in [server.ts](file:///Users/aleons/Documents/GitHub/streamdrop/src/server.ts)).
 
 **Nginx:**
 ```nginx
@@ -110,7 +110,7 @@ location / {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
     
-    # Critical for long polling / streaming
+    # Critical for persistent event streams (SSE) / streaming
     proxy_read_timeout 86400s;
     proxy_send_timeout 86400s;
 }
