@@ -194,7 +194,7 @@ async function runSend(serverRaw: string, filePath: string) {
   }
   if (argv.includes("--qr")) {
     try {
-      const qr = await QRCode.toString(shareUrl, { type: "terminal", small: true })
+      const qr = await QRCode.toString(shareUrl, { type: "terminal", small: false })
       console.log(qr.trimEnd() + "\n")
     } catch {}
   }
