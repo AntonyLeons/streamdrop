@@ -6,6 +6,7 @@ import { stat as statFs } from "node:fs/promises"
 import { homedir } from "node:os"
 import { spawn } from "node:child_process"
 import { Readable, Writable } from "node:stream"
+import pkg from "./package.json"
 
 type SessionRes = { id: string; uploadToken: string; downloadToken: string }
 
@@ -34,6 +35,11 @@ process.on("unhandledRejection", (reason: any) => {
   console.error(`\nError: ${reason?.message || reason}`)
   process.exit(1)
 })
+
+if (cmd === "-v" || cmd === "--version") {
+  console.log(pkg.version)
+  process.exit(0)
+}
 
 if (!cmd || cmd === "help" || cmd === "--help" || cmd === "-h") {
   printHelp()
