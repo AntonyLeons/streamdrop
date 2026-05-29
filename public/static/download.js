@@ -29,6 +29,10 @@ const fileSize = hasSize ? parseInt(lastPart, 10) : (cfg.size || 0)
 
 setMeta(`Waiting for ${suggestedName}${fileSize ? ` · ${prettyBytes(fileSize)}` : ""}. Click start when ready.`)
 
+if (elHint) {
+  elHint.textContent = keyFrag ? "Ready to decrypt and download." : "Requires a link with a key fragment."
+}
+
 let started = false
 let activeAbortController = null
 
