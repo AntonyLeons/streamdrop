@@ -344,60 +344,6 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
   margin-top: 2px;
 }
 
-/* ── Step pipeline ───────────────────────────────────── */
-.status {
-  margin-top: 18px;
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.step {
-  display: flex; gap: 8px; align-items: center;
-  padding: 7px 13px;
-  border-radius: 999px;
-  border: 1px solid var(--glass-border);
-  background: var(--step-bg);
-  transition: border-color .25s, background .25s, box-shadow .25s;
-}
-.step.on {
-  border-color: var(--v-border);
-  background: var(--v-surface);
-  box-shadow: 0 0 0 3px var(--v-glow);
-}
-.step.done {
-  border-color: rgba(52,211,153,.28);
-  background: rgba(52,211,153,.06);
-}
-
-.dot {
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  background: var(--text-faint);
-  transition: background .25s, box-shadow .25s;
-  flex-shrink: 0;
-}
-.step.on .dot {
-  background: var(--v-bright);
-  box-shadow: 0 0 0 3px var(--v-glow), 0 0 8px var(--v);
-  animation: pulse-dot 2s ease-in-out infinite;
-}
-.step.done .dot {
-  background: var(--good);
-  box-shadow: 0 0 0 3px var(--good-glow);
-}
-
-@keyframes pulse-dot {
-  0%, 100% { box-shadow: 0 0 0 3px var(--v-glow), 0 0 8px var(--v); }
-  50% { box-shadow: 0 0 0 5px var(--v-glow), 0 0 16px var(--v); }
-}
-
-.label { font-size: 12px; font-weight: 600; color: var(--text-muted); letter-spacing: .01em; }
-.step.on .label,
-.step.done .label { color: var(--text); }
-
-.step-arrow { color: var(--text-faint); font-size: 12px; }
 
 .switch {
   display: inline-flex;
@@ -852,7 +798,7 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
   .sd-file-actions button[data-action="open-link"] { order: 9; }
   .sd-file-actions button[data-action="native-share"] { order: 10; }
   .sd-file-name { white-space: normal; }
-  .badge-row, .status { justify-content: center; }
+  .badge-row { justify-content: center; }
   .mobile-hidden { display: none !important; }
   .footer-links { flex-direction: column; gap: 8px; }
   .footer-dot { display: none; }

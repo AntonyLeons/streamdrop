@@ -37,9 +37,6 @@ test("upload page loads with correct UI", async ({ page }) => {
 
 	await expect(page.locator("h1")).toContainText("StreamDrop");
 	await expect(page.locator(".dropzone")).toBeVisible();
-	await expect(page.locator("[data-step='encrypt']")).toBeVisible();
-	await expect(page.locator("[data-step='wait']")).toBeVisible();
-	await expect(page.locator("[data-step='stream']")).toBeVisible();
 	await expect(page.locator("#sd-files")).toBeVisible();
 	await expect(page.locator("#sd-files-empty")).toBeVisible();
 	await expect(page.locator("text=CLI endpoints")).toHaveCount(0);
@@ -172,7 +169,6 @@ test("download page loads for valid session", async ({ page, request }) => {
 	await page.goto(`/${cfg.id}`);
 	await expect(page.locator("h1")).toContainText("Receive");
 	await expect(page.locator("#start")).toBeVisible();
-	await expect(page.locator("[data-step='download']")).toBeVisible();
 });
 
 test("download page for unknown id shows 404", async ({ page }) => {
