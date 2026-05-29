@@ -39,6 +39,7 @@ test("upload page loads with correct UI", async ({ page }) => {
 	await expect(page.locator(".dropzone")).toBeVisible();
 	await expect(page.locator("#sd-files")).toBeVisible();
 	await expect(page.locator("#sd-files-empty")).toBeVisible();
+	await expect(page.locator("#active-transfer-warning")).toBeHidden();
 	await expect(page.locator("text=CLI endpoints")).toHaveCount(0);
 });
 
@@ -59,6 +60,7 @@ test("selecting a file shows share link and QR section", async ({ page }) => {
 	await uploadFile(page, "hello.txt", "Hello StreamDrop E2E!");
 
 	await expect(page.locator("#sd-files-empty")).toBeHidden({ timeout: 20_000 });
+	await expect(page.locator("#active-transfer-warning")).toBeVisible();
 
 	// Share link should contain the session id and a key fragment
 	const cfg = await getPageCfg(page);

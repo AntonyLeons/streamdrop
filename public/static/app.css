@@ -859,3 +859,33 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
 .footer-link-item.right {
   text-align: left;
 }
+
+/* ── Warning banner ──────────────────────────────────── */
+.warning-banner {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--warn-border);
+  background: var(--warn-surface);
+  color: var(--warn-text);
+  font-size: 13px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  box-shadow: 0 0 0 1px var(--warn-border) inset;
+}
+.warning-banner.hidden {
+  display: none;
+}
+.warning-banner-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--warn-text);
+}
+.warning-banner-text {
+  line-height: 1.5;
+}
+

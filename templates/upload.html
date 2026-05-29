@@ -71,8 +71,21 @@
               </div>
             </div>
             <div id="sd-files-empty" class="dim" style="font-size:13px;margin-top:10px">Select files above to generate share links.</div>
+
             <div style="height:10px"></div>
             <div id="sd-files-list" class="sd-files-list"></div>
+            <div id="active-transfer-warning" class="warning-banner hidden" style="margin-top: 16px;">
+              <div class="warning-banner-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                  <line x1="12" y1="9" x2="12" y2="13"></line>
+                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+              </div>
+              <div class="warning-banner-text">
+                <strong>Keep this tab open & active!</strong> Browsers throttle background tabs, which slow down transfers.
+              </div>
+            </div>
             <template id="sd-file-template">
               <section class="sd-file-item">
                 <div class="sd-file-row">

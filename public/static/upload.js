@@ -365,8 +365,10 @@ document.addEventListener("click", async (e) => {
     rawHostingBySessionId.delete(sessionId)
     transferStats.delete(sessionId)
     root.remove()
-    if (elShares.childElementCount === 0 && elShareEmpty) {
-      elShareEmpty.classList.remove("hidden")
+    if (elShares.childElementCount === 0) {
+      if (elShareEmpty) elShareEmpty.classList.remove("hidden")
+      const elWarn = document.getElementById("active-transfer-warning")
+      if (elWarn) elWarn.classList.add("hidden")
       setMeta("")
       setStep("key")
     }
@@ -485,6 +487,8 @@ async function startTransfer(file) {
   itemBySessionId.set(session.id, item)
   updateCliCopyValues(item.root)
   if (elShareEmpty) elShareEmpty.classList.add("hidden")
+  const elWarn = document.getElementById("active-transfer-warning")
+  if (elWarn) elWarn.classList.remove("hidden")
   elShares.prepend(item.root)
 
   const abortController = new AbortController()
@@ -533,7 +537,6 @@ async function startTransfer(file) {
     item.setState("Ready")
     item.setBar(1)
     if (!cipherBlob) transferStats.set(session.id, { done: 1, total: 1, name: file.name })
-    setMeta("Ready. Share the links below.")
 
     let activeUploads = 0
     const inFlight = new Set()
