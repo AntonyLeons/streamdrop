@@ -75,6 +75,10 @@ test("CLI receives using the new quote-free receive code format", async () => {
 }, 15000)
 
 test("CLI outputs version and exits 0 on -v and --version", async () => {
+  const cliPkgPath = join(process.cwd(), "cli", "package.json")
+  const cliPkg = JSON.parse(await readFile(cliPkgPath, "utf8"))
+  const expectedVersion = cliPkg.version
+
   const process1 = spawn(bunPath, [cliScriptPath, "-v"])
   let out1 = ""
   await new Promise<void>((resolve, reject) => {
@@ -85,7 +89,7 @@ test("CLI outputs version and exits 0 on -v and --version", async () => {
     })
     process1.on("error", reject)
   })
-  expect(out1.trim()).toBe("1.0.15")
+  expect(out1.trim()).toBe(expectedVersion)
 
   const process2 = spawn(bunPath, [cliScriptPath, "--version"])
   let out2 = ""
@@ -97,7 +101,7 @@ test("CLI outputs version and exits 0 on -v and --version", async () => {
     })
     process2.on("error", reject)
   })
-  expect(out2.trim()).toBe("1.0.15")
+  expect(out2.trim()).toBe(expectedVersion)
 })
 
 test("CLI fails gracefully with a human-readable error for 404", async () => {
