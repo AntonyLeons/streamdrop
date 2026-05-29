@@ -381,13 +381,15 @@ export function createApp() {
       await body.pipeTo(ch.writable, { signal: c.req.raw.signal })
       incrementFiles()
       if (session.fileSize) incrementBytes(session.fileSize)
-    } catch (e) {
+    } catch (e: any) {
       const isAbort =
+        c.req.raw.signal.aborted ||
         (e instanceof DOMException && e.name === "AbortError") ||
         (e instanceof Error && /abort|cancel|closed/i.test(e.message))
-      const isReceiverLost = e instanceof Error && /receivers_lost|pipe_failed/i.test(e.message)
-      if (isReceiverLost) return c.json({ error: "receivers_lost" }, 409, { "cache-control": "no-store" })
-      if (!isAbort) throw e
+      if (isAbort) {
+        return c.json({ error: "aborted" }, 200, { "cache-control": "no-store" })
+      }
+      return c.json({ error: "receivers_lost" }, 409, { "cache-control": "no-store" })
     } finally {
       session.activeSenders = Math.max(0, session.activeSenders - 1)
       session.status = session.activeSenders > 0 ? "active" : "waiting"
@@ -421,13 +423,15 @@ export function createApp() {
       await body.pipeTo(ch.writable, { signal: c.req.raw.signal })
       incrementFiles()
       if (session.fileSize) incrementBytes(session.fileSize)
-    } catch (e) {
+    } catch (e: any) {
       const isAbort =
+        c.req.raw.signal.aborted ||
         (e instanceof DOMException && e.name === "AbortError") ||
         (e instanceof Error && /abort|cancel|closed/i.test(e.message))
-      const isReceiverLost = e instanceof Error && /receivers_lost|pipe_failed/i.test(e.message)
-      if (isReceiverLost) return c.json({ error: "receivers_lost" }, 409, { "cache-control": "no-store" })
-      if (!isAbort) throw e
+      if (isAbort) {
+        return c.json({ error: "aborted" }, 200, { "cache-control": "no-store" })
+      }
+      return c.json({ error: "receivers_lost" }, 409, { "cache-control": "no-store" })
     } finally {
       session.activeSenders = Math.max(0, session.activeSenders - 1)
       session.status = session.activeSenders > 0 ? "active" : "waiting"
