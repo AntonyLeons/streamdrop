@@ -768,7 +768,6 @@ async function startTransfer(file) {
                   setStep("wait", true)
                   markStepDone("stream")
                 }
-                cleanupP2P()
               }
             }
           }
