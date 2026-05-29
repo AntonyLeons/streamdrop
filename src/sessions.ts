@@ -25,6 +25,7 @@ export type Session = {
   receivers: Set<WritableStreamDefaultWriter<Uint8Array>>
   channels: Map<string, Channel>
   receiverWaiters: Set<Waiter>
+  sseCallbacks?: Set<(eventData: any) => void>
 }
 
 const DEFAULT_MAX_RECEIVERS = 2000
@@ -74,6 +75,7 @@ export function createSession(now = Date.now()): Session | null {
     receivers: new Set(),
     channels: new Map(),
     receiverWaiters: new Set(),
+    sseCallbacks: new Set(),
   }
 
   sessionsById.set(id, session)
@@ -173,6 +175,14 @@ export function startSessionReaper() {
   const t = setInterval(run, intervalMs)
   run()
   return () => clearInterval(t)
+}
+
+export function notifySessionEvent(session: Session, event: string, data: any) {
+  if (session.sseCallbacks) {
+    for (const callback of session.sseCallbacks) {
+      callback({ event, data })
+    }
+  }
 }
 
 function getEnvPositiveInt(name: string, fallback: number) {

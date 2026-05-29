@@ -486,6 +486,7 @@ async function startTransfer(file) {
 
   transferStats.set(session.id, { done: 0, total: file.size, name: file.name })
 
+  let sse = null
   try {
     let cipherBlob = null
     let cleanup = null
@@ -646,30 +647,64 @@ async function startTransfer(file) {
       }
     }
 
-    while (true) {
-      item.setState(activeUploads > 0 ? `Uploading (${activeUploads})` : "Waiting for receiver")
-      await waitForReceiverOnline(session.id, abortController.signal)
+    item.setState("Waiting for receiver")
+
+    sse = new EventSource(`/session/events/${session.uploadToken}`)
+
+    sse.addEventListener("channel_created", async (e) => {
       if (abortController.signal.aborted) return
+      try {
+        const data = JSON.parse(e.data)
+        const channelId = data.channelId
 
-      while (true) {
-        const channelId = await claimChannel(session.uploadToken, abortController.signal)
-        if (!channelId) break
-        const p = startChannelUpload(channelId)
-        inFlight.add(p)
-        p.finally(() => inFlight.delete(p))
+        const claimed = await claimChannel(session.uploadToken, abortController.signal, channelId)
+        if (claimed) {
+          const p = startChannelUpload(channelId).catch((err) => {
+            if (!abortController.signal.aborted) {
+              item.setState("Failed")
+              showError(`Upload failed: ${err.message || err}`)
+              setTimeout(() => {
+                if (activeUploads === 0 && !abortController.signal.aborted) {
+                  item.setState("Ready")
+                }
+              }, 5000)
+            }
+          })
+          inFlight.add(p)
+          p.finally(() => inFlight.delete(p))
+        }
+      } catch {}
+    })
+
+    sse.onerror = () => {
+      if (abortController.signal.aborted && sse) {
+        sse.close()
       }
+    }
 
-      await sleep(250)
+    await new Promise((resolve) => {
+      abortController.signal.addEventListener("abort", () => {
+        if (sse) sse.close()
+        resolve()
+      }, { once: true })
+    })
+  } catch (err) {
+    if (!abortController.signal.aborted) {
+      item.setState("Failed")
+      item.setBusy(false)
+      throw err
     }
   } finally {
+    if (sse) sse.close()
     abortControllersBySessionId.delete(session.id)
   }
 }
 
-async function claimChannel(uploadToken, signal) {
+async function claimChannel(uploadToken, signal, channelId = null) {
   let res
   try {
-    res = await fetch(`/claim/${uploadToken}`, { method: "POST", headers: { accept: "application/json" }, signal })
+    const qs = channelId ? `?channelId=${encodeURIComponent(channelId)}` : ""
+    res = await fetch(`/claim/${uploadToken}${qs}`, { method: "POST", headers: { accept: "application/json" }, signal })
   } catch {
     if (signal?.aborted) return null
     await sleep(250)

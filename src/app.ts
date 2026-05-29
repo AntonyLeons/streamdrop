@@ -1,5 +1,6 @@
 import { Hono } from "hono"
 import { serveStatic } from "hono/bun"
+import { streamSSE } from "hono/streaming"
 import {
   createSession,
   getMaxReceivers,
@@ -12,6 +13,7 @@ import {
   waitForReceiverWithTimeout,
   getSessionCount,
   getActiveTransferCount,
+  notifySessionEvent,
 } from "./sessions"
 import { renderDownloadPage, renderNotFoundPage, renderUploadPage, renderServiceUnavailablePage, renderPrivacyPage, renderTermsPage } from "./pages"
 import { getQRCodeVendorJS } from "./vendor/qrcode"
@@ -208,6 +210,50 @@ export function createApp() {
     return c.json({ ok: true }, 200, { "cache-control": "no-store" })
   })
 
+  app.get("/session/events/:uploadToken", async (c) => {
+    const uploadToken = c.req.param("uploadToken")
+    const session = getSessionByUploadToken(uploadToken)
+    if (!session) return c.json({ error: "not_found" }, 404, { "cache-control": "no-store" })
+
+    return streamSSE(c, async (stream) => {
+      const callback = (eventData: any) => {
+        stream.writeSSE({
+          event: eventData.event,
+          data: JSON.stringify(eventData.data),
+        }).catch(() => {})
+      }
+
+      if (!session.sseCallbacks) {
+        session.sseCallbacks = new Set()
+      }
+      session.sseCallbacks.add(callback)
+
+      stream.onAbort(() => {
+        session.sseCallbacks?.delete(callback)
+      })
+
+      await stream.writeSSE({ event: "connected", data: "ok" })
+
+      for (const ch of session.channels.values()) {
+        if (!ch.claimed) {
+          await stream.writeSSE({
+            event: "channel_created",
+            data: JSON.stringify({ channelId: ch.id }),
+          })
+        }
+      }
+
+      while (true) {
+        await Bun.sleep(15000)
+        try {
+          await stream.writeSSE({ event: "ping", data: "heartbeat" })
+        } catch {
+          break
+        }
+      }
+    })
+  })
+
   app.get("/wait-receiver/:id", async (c) => {
     const id = c.req.param("id")
     const session = getSessionById(id)
@@ -224,6 +270,16 @@ export function createApp() {
     const uploadToken = c.req.param("uploadToken")
     const session = getSessionByUploadToken(uploadToken)
     if (!session) return c.json({ error: "not_found" }, 404, { "cache-control": "no-store" })
+
+    const wantsChannelId = c.req.query("channelId")
+    if (wantsChannelId) {
+      const ch = session.channels.get(wantsChannelId)
+      if (ch && !ch.claimed) {
+        ch.claimed = true
+        return c.json({ channelId: ch.id }, 200, { "cache-control": "no-store" })
+      }
+      return new Response(null, { status: 204, headers: { "cache-control": "no-store" } })
+    }
 
     for (const ch of session.channels.values()) {
       if (ch.claimed) continue
@@ -348,6 +404,7 @@ export function createApp() {
     const { readable, writable } = new TransformStream()
     session.channels.set(channelId, { id: channelId, writable, claimed: false, sending: false, createdAt: Date.now() })
     notifyReceiverAvailable(session)
+    notifySessionEvent(session, "channel_created", { channelId })
 
     const onAbort = () => {
       session.channels.delete(channelId)
@@ -380,6 +437,7 @@ export function createApp() {
     const { readable, writable } = new TransformStream()
     session.channels.set(channelId, { id: channelId, writable, claimed: false, sending: false, createdAt: Date.now() })
     notifyReceiverAvailable(session)
+    notifySessionEvent(session, "channel_created", { channelId })
 
     const onAbort = () => {
       session.channels.delete(channelId)
