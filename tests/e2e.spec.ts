@@ -127,6 +127,12 @@ test("selecting multiple files shows multiple share links", async ({
 		timeout: 20_000,
 	});
 
+	const sessionIds = await page
+		.locator(".sd-file-item")
+		.evaluateAll((els) => els.map((el) => el.getAttribute("data-session-id")));
+	console.log("SESSION IDS:", sessionIds);
+	expect(sessionIds[0]).not.toBe(sessionIds[1]);
+
 	const links = await page
 		.locator(".sd-file-item .sd-file-link")
 		.evaluateAll((els) =>
@@ -264,4 +270,63 @@ test("upload returns 404 if no receiver is waiting on the channel", async ({
 
 	expect(retry.status).toBe(404);
 	expect(retry.body.error).toBe("channel_not_found");
+});
+
+test("download count is isolated per file when multiple files are uploaded", async ({ browser }) => {
+	const ctxSender = await browser.newContext();
+	const ctxReceiver = await browser.newContext({ acceptDownloads: true });
+	const sender = await ctxSender.newPage();
+	const receiver = await ctxReceiver.newPage();
+
+	sender.on("console", (msg) => console.log("SENDER MSG:", msg.text()));
+	sender.on("pageerror", (err) => console.log("SENDER ERR:", err));
+	receiver.on("console", (msg) => console.log("RECEIVER MSG:", msg.text()));
+	receiver.on("pageerror", (err) => console.log("RECEIVER ERR:", err));
+
+	try {
+		await sender.goto("/");
+		await sender.evaluate(() => {
+			(window as any)._forceXhr = true;
+		});
+
+		await receiver.addInitScript(() => {
+			delete (window as any).showSaveFilePicker;
+			if (navigator.storage) {
+				navigator.storage.getDirectory = () =>
+					Promise.reject(new Error("no opfs"));
+			}
+		});
+
+		// Upload two files
+		await uploadFiles(sender, [
+			{ name: "fileA.txt", content: "AAA" },
+			{ name: "fileB.txt", content: "BBB" },
+		]);
+
+		await expect(sender.locator(".sd-file-item")).toHaveCount(2, { timeout: 20_000 });
+
+		const itemA = sender.locator(".sd-file-item", { hasText: "fileA.txt" });
+		const itemB = sender.locator(".sd-file-item", { hasText: "fileB.txt" });
+
+		const shareUrlA = await itemA.locator(".sd-file-link").inputValue();
+
+		// Download fileA.txt only (auto-starts on page load in Chromium)
+		const downloadPromise = receiver.waitForEvent("download", { timeout: 15_000 });
+		await receiver.goto(shareUrlA);
+
+		const download = await downloadPromise;
+		const downloadPath = path.join("/tmp", download.suggestedFilename() || "fileA-download");
+		await download.saveAs(downloadPath);
+
+		// Verify only fileA.txt download count is incremented on the uploader page
+		await expect(itemA.locator(".sd-file-downloads")).not.toHaveClass(/hidden/);
+		await expect(itemA.locator(".sd-file-downloads-text")).toContainText("Downloaded 1 time");
+
+		// fileB should still be hidden and have 0 downloads
+		await expect(itemB.locator(".sd-file-downloads")).toHaveClass(/hidden/);
+		await expect(itemB.locator(".sd-file-downloads-text")).toContainText("Downloaded 0 times");
+	} finally {
+		await ctxSender.close();
+		await ctxReceiver.close();
+	}
 });

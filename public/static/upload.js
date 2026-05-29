@@ -456,7 +456,13 @@ function handleFiles(files) {
 }
 
 async function startTransfer(file) {
-  const session = await getOrCreateSession(file)
+  let session
+  if (!seedUsed && seedCfg && seedCfg.id && seedCfg.uploadToken && seedCfg.downloadToken) {
+    seedUsed = true
+    session = seedCfg
+  } else {
+    session = await getOrCreateSession(file)
+  }
 
   setStep("encrypt", true)
   setMeta(`${file.name} · ${prettyBytes(file.size)}`)
@@ -1060,10 +1066,6 @@ function sleep(ms) {
 }
 
 async function getOrCreateSession(file) {
-  if (!seedUsed && seedCfg && seedCfg.id && seedCfg.uploadToken && seedCfg.downloadToken) {
-    seedUsed = true
-    return seedCfg
-  }
 
   const qs = file ? `?name=${encodeURIComponent(file.name)}&size=${file.size}` : ""
   const res = await fetch(`/session${qs}`, { method: "POST", headers: { accept: "application/json" } })
