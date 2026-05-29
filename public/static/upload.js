@@ -652,6 +652,131 @@ async function startTransfer(file) {
 
     sse = new EventSource(`/session/events/${session.uploadToken}`)
 
+    let peerConnection = null
+    const cleanupP2P = () => {
+      if (peerConnection) {
+        try { peerConnection.close() } catch {}
+        peerConnection = null
+      }
+    }
+    abortController.signal.addEventListener("abort", cleanupP2P)
+
+    sse.addEventListener("signal", async (e) => {
+      if (abortController.signal.aborted) return
+      try {
+        const signal = JSON.parse(e.data)
+        if (signal.type === "offer") {
+          cleanupP2P()
+
+          peerConnection = new RTCPeerConnection({
+            iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+          })
+
+          peerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+              fetch(`/session/signal/${session.uploadToken}`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ type: "candidate", candidate: event.candidate })
+              }).catch(() => {})
+            }
+          }
+
+          peerConnection.ondatachannel = (event) => {
+            const channel = event.channel
+            channel.binaryType = "arraybuffer"
+
+            channel.onopen = async () => {
+              activeUploads++
+              globalActiveUploads++
+              item.setBusy(true)
+              item.setState("Uploading (P2P)")
+              
+              let startTime = Date.now()
+              const encStream = createEncryptStream({
+                stream: file.stream(),
+                size: file.size,
+                key,
+                sessionId: session.id,
+              })
+
+              const reader = encStream.getReader()
+              let done = 0
+              let lastTime = Date.now()
+
+              try {
+                while (true) {
+                  if (abortController.signal.aborted) break
+                  const { value, done: isDone } = await reader.read()
+                  
+                  if (isDone) {
+                    channel.send("EOF")
+                    break
+                  }
+
+                  if (value) {
+                    channel.send(value)
+                    done += value.byteLength
+
+                    while (channel.bufferedAmount > 1024 * 1024) {
+                      await sleep(40)
+                    }
+
+                    const pct = file.size ? Math.min(1, done / file.size) : 0
+                    item.setBar(pct)
+                    transferStats.set(session.id, { done, total: file.size, name: file.name })
+
+                    const now = Date.now()
+                    if (now - lastTime > 500) {
+                      lastTime = now
+                      const elapsed = (now - startTime) / 1000
+                      if (elapsed > 0.5) {
+                        const speed = done / elapsed
+                        const eta = Math.round((file.size - done) / speed)
+                        const etaStr = eta > 0 ? ` · ${eta}s left` : ""
+                        item.setState(`Uploading (P2P) · ${formatSpeed(speed)}${etaStr}`)
+                      }
+                    }
+                  }
+                }
+
+                if (!abortController.signal.aborted) {
+                  item.incrementDownloads()
+                }
+              } catch (err) {
+                console.error("P2P stream send failed:", err)
+              } finally {
+                activeUploads--
+                globalActiveUploads--
+                if (activeUploads === 0) item.setBusy(false)
+                item.setState(activeUploads > 0 ? `Uploading (${activeUploads})` : "Ready")
+                if (activeUploads === 0) {
+                  item.setBar(1)
+                  setStep("wait", true)
+                  markStepDone("stream")
+                }
+                cleanupP2P()
+              }
+            }
+          }
+
+          await peerConnection.setRemoteDescription(new RTCSessionDescription(signal))
+          const answer = await peerConnection.createAnswer()
+          await peerConnection.setLocalDescription(answer)
+
+          await fetch(`/session/signal/${session.uploadToken}`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(answer)
+          })
+        } else if (signal.type === "candidate" && signal.candidate && peerConnection) {
+          await peerConnection.addIceCandidate(new RTCIceCandidate(signal.candidate))
+        }
+      } catch (err) {
+        console.error("P2P signaling error:", err)
+      }
+    })
+
     sse.addEventListener("channel_created", async (e) => {
       if (abortController.signal.aborted) return
       try {

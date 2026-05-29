@@ -26,6 +26,8 @@ export type Session = {
   channels: Map<string, Channel>
   receiverWaiters: Set<Waiter>
   sseCallbacks?: Set<(eventData: any) => void>
+  receiverSseCallbacks?: Set<(eventData: any) => void>
+  p2pActive?: boolean
 }
 
 const DEFAULT_MAX_RECEIVERS = 2000
@@ -76,6 +78,8 @@ export function createSession(now = Date.now()): Session | null {
     channels: new Map(),
     receiverWaiters: new Set(),
     sseCallbacks: new Set(),
+    receiverSseCallbacks: new Set(),
+    p2pActive: false,
   }
 
   sessionsById.set(id, session)
@@ -180,6 +184,14 @@ export function startSessionReaper() {
 export function notifySessionEvent(session: Session, event: string, data: any) {
   if (session.sseCallbacks) {
     for (const callback of session.sseCallbacks) {
+      callback({ event, data })
+    }
+  }
+}
+
+export function notifyReceiverEvent(session: Session, event: string, data: any) {
+  if (session.receiverSseCallbacks) {
+    for (const callback of session.receiverSseCallbacks) {
       callback({ event, data })
     }
   }

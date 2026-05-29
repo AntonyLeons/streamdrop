@@ -121,3 +121,55 @@ test("GET / returns 503 when session cap is reached", async () => {
   const res = await app.request("/")
   expect([200, 503]).toContain(res.status)
 })
+
+test("POST /session/signal/:token relays signaling payload correctly", async () => {
+  const app = createApp()
+  const session = createSession()
+  if (!session) throw new Error("unexpected session cap hit")
+
+  const signalFromReceiver = { type: "offer", sdp: "v=0..." }
+  let receivedSignal: any = null
+  session.sseCallbacks = new Set([(eventData: any) => {
+    receivedSignal = eventData
+  }])
+
+  const res1 = await app.request(`/session/signal/${session.downloadToken}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(signalFromReceiver)
+  })
+  expect(res1.status).toBe(200)
+  expect(await res1.json()).toEqual({ ok: true })
+  
+  expect(receivedSignal).toBeTruthy()
+  expect(receivedSignal.event).toBe("signal")
+  expect(receivedSignal.data).toEqual(signalFromReceiver)
+
+  const signalFromSender = { type: "answer", sdp: "v=0..." }
+  let receivedSignalReceiver: any = null
+  session.receiverSseCallbacks = new Set([(eventData: any) => {
+    receivedSignalReceiver = eventData
+  }])
+
+  const res2 = await app.request(`/session/signal/${session.uploadToken}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(signalFromSender)
+  })
+  expect(res2.status).toBe(200)
+  expect(await res2.json()).toEqual({ ok: true })
+
+  expect(receivedSignalReceiver).toBeTruthy()
+  expect(receivedSignalReceiver.event).toBe("signal")
+  expect(receivedSignalReceiver.data).toEqual(signalFromSender)
+})
+
+test("GET /session/events/:token starts event stream successfully", async () => {
+  const app = createApp()
+  const session = createSession()
+  if (!session) throw new Error("unexpected session cap hit")
+
+  const res = await app.request(`/session/events/${session.uploadToken}`)
+  expect(res.status).toBe(200)
+  expect(res.headers.get("content-type")).toContain("text/event-stream")
+})

@@ -14,6 +14,7 @@ import {
   getSessionCount,
   getActiveTransferCount,
   notifySessionEvent,
+  notifyReceiverEvent,
 } from "./sessions"
 import { renderDownloadPage, renderNotFoundPage, renderUploadPage, renderServiceUnavailablePage, renderPrivacyPage, renderTermsPage } from "./pages"
 import { getQRCodeVendorJS } from "./vendor/qrcode"
@@ -210,9 +211,15 @@ export function createApp() {
     return c.json({ ok: true }, 200, { "cache-control": "no-store" })
   })
 
-  app.get("/session/events/:uploadToken", async (c) => {
-    const uploadToken = c.req.param("uploadToken")
-    const session = getSessionByUploadToken(uploadToken)
+  app.get("/session/events/:token", async (c) => {
+    const token = c.req.param("token")
+    let session = getSessionByUploadToken(token)
+    let isSender = true
+    if (!session) {
+      session = getSessionByDownloadToken(token)
+      isSender = false
+    }
+
     if (!session) return c.json({ error: "not_found" }, 404, { "cache-control": "no-store" })
 
     return streamSSE(c, async (stream) => {
@@ -223,24 +230,40 @@ export function createApp() {
         }).catch(() => {})
       }
 
-      if (!session.sseCallbacks) {
-        session.sseCallbacks = new Set()
-      }
-      session.sseCallbacks.add(callback)
-
-      stream.onAbort(() => {
-        session.sseCallbacks?.delete(callback)
-      })
-
-      await stream.writeSSE({ event: "connected", data: "ok" })
-
-      for (const ch of session.channels.values()) {
-        if (!ch.claimed) {
-          await stream.writeSSE({
-            event: "channel_created",
-            data: JSON.stringify({ channelId: ch.id }),
-          })
+      if (isSender) {
+        if (!session.sseCallbacks) {
+          session.sseCallbacks = new Set()
         }
+        session.sseCallbacks.add(callback)
+
+        stream.onAbort(() => {
+          session.sseCallbacks?.delete(callback)
+        })
+
+        await stream.writeSSE({ event: "connected", data: "ok" })
+
+        for (const ch of session.channels.values()) {
+          if (!ch.claimed) {
+            await stream.writeSSE({
+              event: "channel_created",
+              data: JSON.stringify({ channelId: ch.id }),
+            })
+          }
+        }
+      } else {
+        if (!session.receiverSseCallbacks) {
+          session.receiverSseCallbacks = new Set()
+        }
+        session.receiverSseCallbacks.add(callback)
+
+        stream.onAbort(() => {
+          session.receiverSseCallbacks?.delete(callback)
+        })
+
+        await stream.writeSSE({ event: "connected", data: "ok" })
+
+        // Notify the sender that the receiver is online and signaling can begin!
+        notifySessionEvent(session, "receiver_online", { ok: true })
       }
 
       while (true) {
@@ -252,6 +275,28 @@ export function createApp() {
         }
       }
     })
+  })
+
+  app.post("/session/signal/:token", async (c) => {
+    const token = c.req.param("token")
+    const body = await c.req.json()
+
+    let session = getSessionByUploadToken(token)
+    let isSender = true
+    if (!session) {
+      session = getSessionByDownloadToken(token)
+      isSender = false
+    }
+
+    if (!session) return c.json({ error: "not_found" }, 404, { "cache-control": "no-store" })
+
+    if (isSender) {
+      notifyReceiverEvent(session, "signal", body)
+    } else {
+      notifySessionEvent(session, "signal", body)
+    }
+
+    return c.json({ ok: true }, 200, { "cache-control": "no-store" })
   })
 
   app.get("/wait-receiver/:id", async (c) => {

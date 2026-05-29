@@ -59,6 +59,185 @@ elStart.addEventListener("click", async () => {
   startOnce(raw)
 })
 
+async function tryWebRTCDownload(raw) {
+  return new Promise(async (resolve, reject) => {
+    let p2pSse = null
+    let peerConnection = null
+    let timeoutId = null
+    let finished = false
+
+    const cleanup = () => {
+      if (timeoutId) clearTimeout(timeoutId)
+      if (p2pSse) p2pSse.close()
+      if (peerConnection) {
+        try { peerConnection.close() } catch {}
+      }
+    }
+
+    const fail = (err) => {
+      if (finished) return
+      finished = true
+      cleanup()
+      reject(err)
+    }
+
+    if (activeAbortController?.signal.aborted) {
+      fail(new DOMException("Aborted", "AbortError"))
+      return
+    }
+    activeAbortController?.signal.addEventListener("abort", () => {
+      fail(new DOMException("Aborted", "AbortError"))
+    }, { once: true })
+
+    timeoutId = setTimeout(() => {
+      fail(new Error("P2P negotiation timeout"))
+    }, 8000)
+
+    try {
+      const key = await crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, ["decrypt"])
+      
+      p2pSse = new EventSource(`/session/events/${cfg.downloadToken}`)
+      
+      peerConnection = new RTCPeerConnection({
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+      })
+
+      peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+          fetch(`/session/signal/${cfg.downloadToken}`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ type: "candidate", candidate: event.candidate })
+          }).catch(() => {})
+        }
+      }
+
+      p2pSse.addEventListener("signal", async (e) => {
+        try {
+          const signal = JSON.parse(e.data)
+          if (signal.type === "answer") {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(signal))
+          } else if (signal.type === "candidate" && signal.candidate) {
+            await peerConnection.addIceCandidate(new RTCIceCandidate(signal.candidate))
+          }
+        } catch {}
+      })
+
+      const channel = peerConnection.createDataChannel("file-transfer")
+      channel.binaryType = "arraybuffer"
+      
+      let startTime = Date.now()
+      let plainBytes = 0
+      
+      const decrypt = createDecryptTransform({
+        key,
+        sessionId: cfg.id,
+        onProgress: (n) => {
+          plainBytes = n
+          setMeta(fileSize ? `${prettyBytes(n)} of ${prettyBytes(fileSize)}` : `${prettyBytes(n)} decrypted`)
+          const elapsed = (Date.now() - startTime) / 1000
+          if (elapsed > 0.5) {
+            const speed = n / elapsed
+            if (fileSize) {
+              const eta = Math.round((fileSize - n) / speed)
+              const etaStr = eta > 0 ? ` · ${eta}s left` : ""
+              elHint.textContent = `Downloading (P2P) · ${formatSpeed(speed)}${etaStr}`
+              setBar(Math.min(1, n / fileSize))
+            } else {
+              elHint.textContent = `Downloading (P2P) · ${formatSpeed(speed)}`
+              setBar(0.12 + Math.min(0.88, (Math.log10(1 + n) / 8) * 0.88))
+            }
+          } else if (!fileSize) {
+            setBar(0.12 + Math.min(0.88, (Math.log10(1 + n) / 8) * 0.88))
+          }
+        }
+      })
+
+      channel.onopen = async () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId)
+          timeoutId = null
+        }
+        
+        elHint.textContent = "Connected (P2P)"
+        setStep("download")
+        if (elMeter) elMeter.classList.remove("hidden")
+        setBar(0)
+        
+        let streamController = null
+        const webrtcStream = new ReadableStream({
+          start(controller) {
+            streamController = controller
+          },
+          cancel() {
+            fail(new Error("Stream canceled"))
+          }
+        })
+        
+        channel.onmessage = (e) => {
+          if (finished) return
+          if (typeof e.data === "string" && e.data === "EOF") {
+            try { streamController.close() } catch {}
+          } else {
+            const bytes = typeof e.data === "string" ? new TextEncoder().encode(e.data) : new Uint8Array(e.data)
+            try { streamController.enqueue(bytes) } catch {}
+          }
+        }
+        
+        channel.onerror = (err) => fail(err)
+        channel.onclose = () => { try { streamController.close() } catch {} }
+
+        try {
+          const plaintext = webrtcStream.pipeThrough(decrypt)
+          setStep("decrypt")
+          setStep("save")
+          
+          const file = await streamToOPFS(plaintext, activeAbortController.signal)
+          
+          finished = true
+          cleanup()
+          
+          const url = URL.createObjectURL(file)
+          const a = document.createElement("a")
+          a.href = url
+          a.download = suggestedName
+          document.body.appendChild(a)
+          a.click()
+          a.remove()
+          
+          setBar(1)
+          setMeta(fileSize ? `${prettyBytes(plainBytes)} of ${prettyBytes(fileSize)} downloaded` : `${prettyBytes(plainBytes)} downloaded`)
+          elHint.textContent = "Complete"
+          elStart.disabled = false
+          elStart.textContent = "Download again"
+          if (elMeter) elMeter.classList.add("hidden")
+          
+          resolve(true)
+        } catch (err) {
+          fail(err)
+        }
+      }
+
+      peerConnection.onconnectionstatechange = () => {
+        if (peerConnection.connectionState === "failed" || peerConnection.connectionState === "closed") {
+          fail(new Error("P2P connection closed or failed"))
+        }
+      }
+
+      const offer = await peerConnection.createOffer()
+      await peerConnection.setLocalDescription(offer)
+      
+      await fetch(`/session/signal/${cfg.downloadToken}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(offer)
+      })
+    } catch (err) {
+      fail(err)
+    }
+  })
+}
+
 async function run({ raw }) {
   elHint.textContent = "Connecting…"
   elStart.disabled = true
@@ -67,13 +246,21 @@ async function run({ raw }) {
 
   setStep("download")
 
-  const key = await crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, ["decrypt"])
-
   activeAbortController = new AbortController()
   const onCancel = () => activeAbortController.abort()
   elCancel.addEventListener("click", onCancel, { once: true })
 
   try {
+    try {
+      console.log("Attempting WebRTC P2P...")
+      const success = await tryWebRTCDownload(raw)
+      if (success) return
+    } catch (e) {
+      console.warn("WebRTC P2P failed, falling back to HTTP relay:", e)
+    }
+
+    const key = await crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, ["decrypt"])
+
     let attempt = 0
     while (true) {
       attempt++
