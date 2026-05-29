@@ -177,7 +177,7 @@ async function runSend(serverRaw: string, filePath: string) {
     totalSize = stat.size
   }
 
-  const sess = (await fetchJson(`${server}/session?name=${encodeURIComponent(fileName)}&size=${totalSize || ""}`, { method: "POST" })) as SessionRes
+  const sess = (await fetchJson(`${server}/session`, { method: "POST" })) as SessionRes
   if (!sess?.id || !sess.uploadToken || !sess.downloadToken) throw new Error("session_failed")
 
   const rawKey = crypto.getRandomValues(new Uint8Array(32))
