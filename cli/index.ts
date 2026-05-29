@@ -6,6 +6,7 @@ import { stat as statFs } from "node:fs/promises"
 import { homedir } from "node:os"
 import * as tar from "tar"
 import { Readable, Writable, PassThrough } from "node:stream"
+import { createInterface } from "node:readline"
 import pkg from "./package.json"
 
 type SessionRes = { id: string; uploadToken: string; downloadToken: string }
@@ -200,53 +201,76 @@ async function runSend(serverRaw: string, filePath: string) {
 
   const key = await crypto.subtle.importKey("raw", rawKey, { name: "AES-GCM" }, false, ["encrypt"])
 
-  while (true) {
-    const ok = await waitForReceiver(server, sess.id)
-    if (!ok) continue
-    while (true) {
-      const channelId = await claim(server, sess.uploadToken)
-      if (!channelId) break
-      
-      console.log(`\x1b[32mReceiver connected. Starting upload...\x1b[0m`)
-      startTime = 0 // reset progress timer
-      
-      let streamToRead: ReadableStream<Uint8Array>
-      if (stat.isDirectory()) {
-        const nodeStream = tar.c({
-          cwd: dirname(filePath),
-          portable: true,
-        }, [basename(filePath)])
-        const pass = new PassThrough()
-        nodeStream.pipe(pass)
-        streamToRead = Readable.toWeb(pass) as ReadableStream<Uint8Array>
-      } else {
-        streamToRead = Readable.toWeb(createReadStream(filePath)) as ReadableStream<Uint8Array>
-      }
+  console.log(`\x1b[33mWaiting for receiver...\x1b[0m\n`)
 
-      const enc = createEncryptStream({ 
-        stream: streamToRead, 
-        size: totalSize,
-        key, 
-        sessionId: sess.id, 
-        onProgress: (sent: number, total: number) => printProgress("Uploading", sent, total)
-      })
-      
-      const res = await fetch(`${server}/upload/${sess.uploadToken}/${encodeURIComponent(channelId)}`, {
-        method: "PUT",
-        headers: { "content-type": "application/octet-stream" },
-        body: enc,
-        duplex: "half",
-      } as any)
-      
-      console.log() // New line after progress
-      if (!res.ok) {
-        const t = await safeText(res)
-        console.error(`\x1b[31mUpload failed: ${t || res.status}\x1b[0m\n`)
-      } else {
-        console.log(`\x1b[32mUpload complete.\x1b[0m\n`)
+  const sseUrl = `${server}/session/events/${sess.uploadToken}`
+  const sseRes = await fetch(sseUrl)
+  if (!sseRes.ok) throw new Error(`Events stream connection failed: ${sseRes.status}`)
+  if (!sseRes.body) throw new Error("Events stream returned empty body")
+
+  const reader = Readable.from(sseRes.body as any)
+  const rl = createInterface({ input: reader, crlfDelay: Infinity })
+
+  let currentEvent = ""
+  for await (const line of rl) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+
+    if (trimmed.startsWith("event:")) {
+      currentEvent = trimmed.slice(6).trim()
+    } else if (trimmed.startsWith("data:")) {
+      const dataStr = trimmed.slice(5).trim()
+      let data: any = null
+      try {
+        data = JSON.parse(dataStr)
+      } catch {}
+
+      if (currentEvent === "channel_created" && data?.channelId) {
+        const channelId = data.channelId
+        const claimed = await claim(server, sess.uploadToken, channelId)
+        if (claimed) {
+          console.log(`\x1b[32mReceiver connected. Starting upload...\x1b[0m`)
+          startTime = 0
+          
+          let streamToRead: ReadableStream<Uint8Array>
+          if (stat.isDirectory()) {
+            const nodeStream = tar.c({
+              cwd: dirname(filePath),
+              portable: true,
+            }, [basename(filePath)])
+            const pass = new PassThrough()
+            nodeStream.pipe(pass)
+            streamToRead = Readable.toWeb(pass) as ReadableStream<Uint8Array>
+          } else {
+            streamToRead = Readable.toWeb(createReadStream(filePath)) as ReadableStream<Uint8Array>
+          }
+
+          const enc = createEncryptStream({ 
+            stream: streamToRead, 
+            size: totalSize,
+            key, 
+            sessionId: sess.id, 
+            onProgress: (sent: number, total: number) => printProgress("Uploading", sent, total)
+          })
+          
+          const uploadRes = await fetch(`${server}/upload/${sess.uploadToken}/${encodeURIComponent(channelId)}`, {
+            method: "PUT",
+            headers: { "content-type": "application/octet-stream" },
+            body: enc,
+            duplex: "half",
+          } as any)
+          
+          console.log()
+          if (!uploadRes.ok) {
+            const t = await safeText(uploadRes)
+            console.error(`\x1b[31mUpload failed: ${t || uploadRes.status}\x1b[0m\n`)
+          } else {
+            console.log(`\x1b[32mUpload complete.\x1b[0m\n`)
+          }
+        }
       }
+      currentEvent = ""
     }
-    await sleep(250)
   }
 }
 
@@ -508,47 +532,16 @@ async function safeText(res: Response) {
   }
 }
 
-async function waitForReceiver(server: string, sessionId: string): Promise<boolean> {
+
+
+async function claim(server: string, uploadToken: string, channelId?: string): Promise<string | null> {
   let attempt = 0
   while (true) {
     attempt++
     const { timeoutSignal, cleanup } = createFetchTimeout()
     try {
-      const res = await fetch(`${server}/wait-receiver/${sessionId}`, {
-        method: "GET",
-        headers: { accept: "application/json" },
-        signal: timeoutSignal,
-      })
-
-      if (res.status === 404) throw new Error("Session not found.")
-      if (res.status === 410) throw new Error("Session has expired.")
-      if (isTransientHttpError(res.status) || !res.ok) {
-        console.error(`\x1b[33mServer ${res.status}, retrying...\x1b[0m`)
-        await sleep(backoffMs(attempt))
-        continue
-      }
-
-      const body = (await res.json().catch(() => null)) as any
-      return !!body?.ok
-    } catch (err: any) {
-      if (err.message === "Session not found." || err.message === "Session has expired.") throw err
-      if (isFatalNetworkError(err)) {
-        throw new Error(`Connection failed: ${err.message || err}`)
-      }
-      await sleep(backoffMs(attempt))
-    } finally {
-      cleanup()
-    }
-  }
-}
-
-async function claim(server: string, uploadToken: string): Promise<string | null> {
-  let attempt = 0
-  while (true) {
-    attempt++
-    const { timeoutSignal, cleanup } = createFetchTimeout()
-    try {
-      const res = await fetch(`${server}/claim/${uploadToken}`, {
+      const qs = channelId ? `?channelId=${encodeURIComponent(channelId)}` : ""
+      const res = await fetch(`${server}/claim/${uploadToken}${qs}`, {
         method: "POST",
         headers: { accept: "application/json" },
         signal: timeoutSignal,
