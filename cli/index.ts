@@ -1,7 +1,7 @@
 import QRCode from "qrcode"
 import { createDecryptTransform, createEncryptStream } from "../public/static/crypto.js"
 import { basename, extname, dirname, join } from "node:path"
-import { existsSync, readFileSync, createReadStream, createWriteStream } from "node:fs"
+import { existsSync, readFileSync, createReadStream, createWriteStream, mkdirSync } from "node:fs"
 import { stat as statFs } from "node:fs/promises"
 import { homedir } from "node:os"
 import { spawn } from "node:child_process"
@@ -34,6 +34,11 @@ process.on("uncaughtException", (err) => {
 process.on("unhandledRejection", (reason: any) => {
   console.error(`\nError: ${reason?.message || reason}`)
   process.exit(1)
+})
+
+process.on("SIGINT", () => {
+  console.log("\n\n\x1b[31mTransfer cancelled.\x1b[0m")
+  process.exit(0)
 })
 
 if (cmd === "-v" || cmd === "--version") {
@@ -105,7 +110,7 @@ function getFlagValue(name: string) {
   const i = argv.indexOf(name)
   if (i === -1) return null
   const v = argv[i + 1]
-  if (!v || v.startsWith("--")) return null
+  if (!v || v.startsWith("-")) return null
   return v
 }
 
@@ -210,6 +215,9 @@ async function runSend(serverRaw: string, filePath: string) {
         const tar = spawn("tar", ["-cf", "-", basename(filePath)], {
           cwd: dirname(filePath),
           stdio: ["ignore", "pipe", "ignore"],
+        })
+        tar.on("error", (err) => {
+          console.error(`\nFailed to start tar archiving process: ${err.message}`)
         })
         streamToRead = Readable.toWeb(tar.stdout) as ReadableStream<Uint8Array>
       } else {
@@ -352,8 +360,30 @@ async function runReceive(input: string, overrideServer?: string | null) {
     try {
       if (shouldExtract) {
         console.log(`Folder archive detected. Extracting on the fly...`)
+
+        let extractDir = "."
+        const folderName = outName.replace(".sd-dir.tar", "")
+        const targetFolder = join(dirname(outPath), folderName)
+
+        if (existsSync(targetFolder)) {
+          let counter = 1
+          let uniqueFolder = `${targetFolder} (${counter})`
+          while (existsSync(uniqueFolder)) {
+            counter++
+            uniqueFolder = `${targetFolder} (${counter})`
+          }
+          mkdirSync(uniqueFolder, { recursive: true })
+          extractDir = uniqueFolder
+          console.log(`\n\x1b[33mFolder "${folderName}" already exists. Extracting inside safety folder "${basename(uniqueFolder)}/..." to prevent overwriting.\x1b[0m`)
+        }
+
         const tarProc = spawn("tar", ["-xf", "-"], {
+          cwd: extractDir,
           stdio: ["pipe", "inherit", "inherit"],
+        })
+
+        tarProc.on("error", (err) => {
+          console.error(`\nFailed to start tar extraction process: ${err.message}`)
         })
 
         const writer = Writable.toWeb(tarProc.stdin)
