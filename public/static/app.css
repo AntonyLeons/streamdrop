@@ -854,6 +854,9 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
   .sd-file-name { white-space: normal; }
   .badge-row, .status { justify-content: center; }
   .mobile-hidden { display: none !important; }
+  .footer-links { flex-direction: column; gap: 8px; }
+  .footer-dot { display: none; }
+  .footer-link-item { width: auto !important; text-align: center !important; }
 }
 
 @media (min-width: 521px) {
@@ -872,6 +875,9 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
 .site-footer {
   margin-top: auto;
   padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
   font-size: 13px;
   color: var(--text-muted);
@@ -893,4 +899,17 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
 }
 .footer-dot {
   color: var(--glass-border);
+}
+.footer-link-item {
+  width: 140px;
+}
+.footer-link-item.left {
+  text-align: right;
+}
+.footer-link-item.center {
+  width: auto;
+  text-align: center;
+}
+.footer-link-item.right {
+  text-align: left;
 }
