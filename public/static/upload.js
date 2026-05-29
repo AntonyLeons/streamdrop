@@ -707,14 +707,21 @@ async function startTransfer(file) {
               try {
                 while (true) {
                   if (abortController.signal.aborted) break
+                  if (channel.readyState !== "open") {
+                    console.warn("P2P data channel closed during transfer.")
+                    break
+                  }
                   const { value, done: isDone } = await reader.read()
                   
                   if (isDone) {
-                    channel.send("EOF")
+                    if (channel.readyState === "open") {
+                      try { channel.send("EOF") } catch {}
+                    }
                     break
                   }
 
                   if (value) {
+                    if (channel.readyState !== "open") break
                     channel.send(value)
                     done += value.byteLength
 
