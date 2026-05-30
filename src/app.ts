@@ -65,7 +65,7 @@ export function createApp() {
         `style-src-elem 'self' https://fonts.googleapis.com; ` +
         `font-src 'self' https://fonts.gstatic.com data:; ` +
         `img-src 'self' data:; ` +
-        `connect-src 'self'; ` +
+        `connect-src 'self' https://stun.l.google.com:19302; ` +
         `base-uri 'none'; ` +
         `form-action 'none'; ` +
         `frame-ancestors 'none'; ` +
