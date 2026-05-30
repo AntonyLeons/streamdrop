@@ -603,6 +603,12 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
   border-color: var(--v-border);
   box-shadow: 0 0 0 4px var(--v-glow);
 }
+.input:disabled,
+.input[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
 
 /* ── Buttons ─────────────────────────────────────────── */
 .btn {
@@ -640,6 +646,14 @@ html[data-theme="dark"] .theme-icon-moon { display: inline-flex; }
   color: var(--text);
 }
 .btn:active { transform: translateY(1px); }
+.btn:disabled,
+.btn[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+  box-shadow: none !important;
+  transform: none !important;
+}
 
 /* Primary filled variant */
 .btn-primary {
