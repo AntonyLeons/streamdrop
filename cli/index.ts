@@ -8,6 +8,8 @@ import * as tar from "tar"
 import { Readable, Writable, PassThrough } from "node:stream"
 import { createInterface } from "node:readline"
 import pkg from "./package.json"
+import { RTCPeerConnection, RTCSessionDescription, RTCIceCandidate } from "werift"
+
 
 type SessionRes = { id: string; uploadToken: string; downloadToken: string }
 
@@ -211,6 +213,7 @@ async function runSend(serverRaw: string, filePath: string) {
   const reader = Readable.from(sseRes.body as any)
   const rl = createInterface({ input: reader, crlfDelay: Infinity })
 
+  let pc: RTCPeerConnection | null = null
   let currentEvent = ""
   for await (const line of rl) {
     const trimmed = line.trim()
@@ -224,6 +227,183 @@ async function runSend(serverRaw: string, filePath: string) {
       try {
         data = JSON.parse(dataStr)
       } catch {}
+
+      if (currentEvent === "signal" && data) {
+        if (data.type === "offer") {
+          if (pc) {
+            try { pc.close() } catch {}
+            pc = null
+          }
+
+          console.log(`\x1b[36mDirect P2P offer received. Connecting...\x1b[0m`)
+
+          const isLocal = server.includes("localhost") || server.includes("127.0.0.1") || server.includes("[::1]")
+          pc = new RTCPeerConnection({
+            iceServers: isLocal ? [] : [{ urls: "stun:stun.l.google.com:19302" }]
+          })
+
+          pc.onicecandidate = (event) => {
+            if (event.candidate) {
+              fetch(`${server}/session/signal/${sess.uploadToken}`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ type: "candidate", candidate: event.candidate })
+              }).catch(() => {})
+            }
+          }
+
+          const localPc = pc
+          pc.ondatachannel = (event) => {
+            const channel = event.channel
+            channel.binaryType = "arraybuffer"
+
+            let ackReceived = false
+            let resolveAck: (() => void) | undefined
+
+            channel.onmessage = (e: any) => {
+              let isAck = false
+              if (typeof e.data === "string" && e.data === "ACK") {
+                isAck = true
+              } else if (e.data instanceof ArrayBuffer) {
+                const bytes = new Uint8Array(e.data)
+                if (bytes.length === 3 && bytes[0] === 0x41 && bytes[1] === 0x43 && bytes[2] === 0x4b) {
+                  isAck = true
+                }
+              }
+              if (isAck) {
+                ackReceived = true
+                if (resolveAck) {
+                  resolveAck()
+                }
+              }
+            }
+
+            channel.onopen = async () => {
+              console.log(`\n\x1b[32mReceiver connected (P2P). Starting upload...\x1b[0m`)
+              startTime = 0
+
+              let streamToRead: ReadableStream<Uint8Array>
+              if (stat.isDirectory()) {
+                const nodeStream = tar.c({
+                  cwd: dirname(filePath),
+                  portable: true,
+                }, [basename(filePath)])
+                const pass = new PassThrough()
+                nodeStream.pipe(pass)
+                streamToRead = Readable.toWeb(pass) as ReadableStream<Uint8Array>
+              } else {
+                streamToRead = Readable.toWeb(createReadStream(filePath)) as ReadableStream<Uint8Array>
+              }
+
+              const enc = createEncryptStream({
+                stream: streamToRead,
+                size: totalSize,
+                key,
+                sessionId: sess.id,
+                chunkSize: 16 * 1024, // 16 KB chunks for high compatibility with browser P2P data channels
+                onProgress: (sent: number, total: number) => printProgress("Uploading (P2P)", sent, total)
+              })
+
+              const reader = enc.getReader()
+              try {
+                while (true) {
+                  const { done, value } = await reader.read()
+                  if (done) {
+                    if (channel.readyState === "open") {
+                      channel.send("EOF")
+                    }
+                    break
+                  }
+
+                  if (channel.readyState !== "open") {
+                    throw new Error("P2P data channel closed during transmission")
+                  }
+
+                  channel.send(value)
+
+                  if (channel.bufferedAmount > 1024 * 1024) {
+                    await new Promise<void>((resolve, reject) => {
+                      const onBufferedAmountLow = () => {
+                        channel.onbufferedamountlow = undefined
+                        resolve()
+                      }
+                      const onClose = () => {
+                        reject(new Error("P2P data channel closed during backpressure wait"))
+                      }
+                      channel.onbufferedamountlow = onBufferedAmountLow
+                      channel.onclose = onClose
+
+                      // Safety timeout (10s)
+                      setTimeout(() => {
+                        if (channel.onbufferedamountlow === onBufferedAmountLow) {
+                          channel.onbufferedamountlow = undefined
+                          resolve()
+                        }
+                      }, 10000)
+                    })
+                  }
+                }
+
+                console.log()
+                console.log(`\x1b[32mUpload complete.\x1b[0m\n`)
+
+                // Wait for the data channel buffer to be completely empty
+                if (channel.bufferedAmount > 0) {
+                  await new Promise<void>((resolve) => {
+                    const onBufferedAmountLow = () => {
+                      channel.onbufferedamountlow = undefined
+                      resolve()
+                    }
+                    channel.onbufferedamountlow = onBufferedAmountLow
+                    channel.onclose = () => resolve()
+                    setTimeout(resolve, 2000)
+                  })
+                }
+
+                // Wait for the receiver's ACK message over the data channel
+                if (!ackReceived && channel.readyState === "open") {
+                  await new Promise<void>((resolve) => {
+                    resolveAck = resolve
+                    channel.onclose = () => resolve()
+                    // 5-second safety timeout in case the receiver fails to ACK cleanly
+                    setTimeout(resolve, 5000)
+                  })
+                }
+
+                if (pc === localPc) {
+                  try { localPc.close() } catch {}
+                  pc = null
+                } else {
+                  try { localPc.close() } catch {}
+                }
+                console.log(`\x1b[33mWaiting for receiver...\x1b[0m\n`)
+              } catch (err: any) {
+                console.error(`\n\x1b[31mP2P Upload failed: ${err.message || err}\x1b[0m\n`)
+                if (pc === localPc) {
+                  try { localPc.close() } catch {}
+                  pc = null
+                } else {
+                  try { localPc.close() } catch {}
+                }
+              }
+            }
+          }
+
+          await pc.setRemoteDescription(new RTCSessionDescription(data.sdp, data.type))
+          const answer = await pc.createAnswer()
+          await pc.setLocalDescription(answer)
+
+          try {
+            await fetch(`${server}/session/signal/${sess.uploadToken}`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify(answer)
+            })
+          } catch {}
+        } else if (data.type === "candidate" && data.candidate && pc) {
+          await pc.addIceCandidate(new RTCIceCandidate(data.candidate))
+        }
+      }
 
       if (currentEvent === "channel_created" && data?.channelId) {
         const channelId = data.channelId
@@ -274,6 +454,256 @@ async function runSend(serverRaw: string, filePath: string) {
   }
 }
 
+async function attemptP2PDownload(
+  server: string,
+  cfg: any,
+  key: CryptoKey,
+  outPath: string,
+  sessionId: string,
+  shouldExtract: boolean,
+  outName: string,
+  expectedSize: number
+): Promise<boolean> {
+  return new Promise<boolean>(async (resolve) => {
+    let pc: RTCPeerConnection | null = null
+    let sseReader: any = null
+    let timeoutId: any = null
+    let finished = false
+    let rl: any = null
+    const sseController = new AbortController()
+
+    const cleanup = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+        timeoutId = null
+      }
+      if (pc) {
+        try { pc.close() } catch {}
+        pc = null
+      }
+      sseController.abort()
+      if (rl) {
+        try { rl.close() } catch {}
+        rl = null
+      }
+      if (sseReader) {
+        try { sseReader.cancel() } catch {}
+        sseReader = null
+      }
+    }
+
+    try {
+      console.log(`\x1b[36mAttempting direct P2P connection...\x1b[0m`)
+
+      const isLocal = server.includes("localhost") || server.includes("127.0.0.1") || server.includes("[::1]")
+      pc = new RTCPeerConnection({
+        iceServers: isLocal ? [] : [{ urls: "stun:stun.l.google.com:19302" }]
+      })
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          fetch(`${server}/session/signal/${cfg.downloadToken}`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ type: "candidate", candidate: event.candidate })
+          }).catch(() => {})
+        }
+      }
+
+      const channel = pc.createDataChannel("file-transfer")
+      channel.binaryType = "arraybuffer"
+
+      const sseUrl = `${server}/session/events/${cfg.downloadToken}`
+      const sseRes = await fetch(sseUrl, { signal: sseController.signal })
+      if (!sseRes.ok) {
+        cleanup()
+        resolve(false)
+        return
+      }
+      if (!sseRes.body) {
+        cleanup()
+        resolve(false)
+        return
+      }
+
+      const reader = Readable.from(sseRes.body as any)
+      reader.on("error", () => {}) // Prevent unhandled stream crashes on abort
+      sseReader = reader
+      rl = createInterface({ input: reader, crlfDelay: Infinity })
+
+      // Listen for signals in background
+      ;(async () => {
+        let currentEvent = ""
+        try {
+          for await (const line of rl) {
+            const trimmed = line.trim()
+            if (!trimmed) continue
+            if (trimmed.startsWith("event:")) {
+              currentEvent = trimmed.slice(6).trim()
+            } else if (trimmed.startsWith("data:")) {
+              const dataStr = trimmed.slice(5).trim()
+              let data: any = null
+              try { data = JSON.parse(dataStr) } catch {}
+
+              if (currentEvent === "signal" && data && pc) {
+                if (data.type === "answer") {
+                  await pc.setRemoteDescription(new RTCSessionDescription(data.sdp, data.type))
+                } else if (data.type === "candidate" && data.candidate) {
+                  await pc.addIceCandidate(new RTCIceCandidate(data.candidate))
+                }
+              }
+              currentEvent = ""
+            }
+          }
+        } catch {}
+      })()
+
+      // Create offer
+      const offer = await pc.createOffer()
+      await pc.setLocalDescription(offer)
+
+      try {
+        await fetch(`${server}/session/signal/${cfg.downloadToken}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            type: offer.type,
+            sdp: offer.sdp,
+            browser: "default"
+          })
+        })
+      } catch {}
+
+      // Connection timeout (5s)
+      timeoutId = setTimeout(() => {
+        if (!finished) {
+          console.log(`\x1b[33mP2P connection timeout.\x1b[0m`)
+          cleanup()
+          resolve(false)
+        }
+      }, 5000)
+
+      channel.onopen = async () => {
+        if (finished) return
+        if (timeoutId) {
+          clearTimeout(timeoutId)
+          timeoutId = null
+        }
+
+        console.log(`\x1b[32mConnected (P2P). Downloading...\x1b[0m`)
+        startTime = 0
+
+        let plainBytes = 0
+        const decrypt = createDecryptTransform({
+          key,
+          sessionId,
+          onProgress: (received: number) => {
+            plainBytes = received
+            printProgress("Downloading", received)
+          },
+        })
+
+        let streamController: ReadableStreamDefaultController<Uint8Array> | undefined
+        const encryptedStream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            streamController = controller
+          }
+        })
+
+        channel.onmessage = (e: any) => {
+          if (finished) return
+          let isEof = false
+          if (typeof e.data === "string" && e.data === "EOF") {
+            isEof = true
+          } else if (e.data instanceof ArrayBuffer) {
+            const bytes = new Uint8Array(e.data)
+            if (bytes.length === 3 && bytes[0] === 0x45 && bytes[1] === 0x4f && bytes[2] === 0x46) {
+              isEof = true
+            }
+          }
+
+          if (isEof) {
+            try { streamController?.close() } catch {}
+          } else {
+            const buf = typeof e.data === "string" ? new TextEncoder().encode(e.data).buffer : e.data
+            try { streamController?.enqueue(new Uint8Array(buf)) } catch {}
+          }
+        }
+
+        channel.onerror = (err) => {
+          try { streamController?.error(err) } catch {}
+        }
+
+        channel.onclose = () => {
+          try { streamController?.close() } catch {}
+        }
+
+        const plain = encryptedStream.pipeThrough(decrypt)
+
+        try {
+          if (shouldExtract) {
+            console.log(`Folder archive detected. Extracting on the fly...`)
+
+            let extractDir = "."
+            const folderName = outName.replace(".sd-dir.tar", "")
+            const targetFolder = join(dirname(outPath), folderName)
+
+            if (existsSync(targetFolder)) {
+              let counter = 1
+              let uniqueFolder = `${targetFolder} (${counter})`
+              while (existsSync(uniqueFolder)) {
+                counter++
+                uniqueFolder = `${targetFolder} (${counter})`
+              }
+              mkdirSync(uniqueFolder, { recursive: true })
+              extractDir = uniqueFolder
+              console.log(`\n\x1b[33mFolder "${folderName}" already exists. Extracting inside safety folder "${basename(uniqueFolder)}/..." to prevent overwriting.\x1b[0m`)
+            }
+
+            const extractor = tar.x({ cwd: extractDir })
+            const pass = new PassThrough()
+            pass.pipe(extractor)
+
+            await plain.pipeTo(Writable.toWeb(pass))
+
+            if (plainBytes === 0 || (expectedSize > 0 && plainBytes !== expectedSize)) {
+              throw new Error(`Incomplete transfer: received ${plainBytes} bytes, expected ${expectedSize} bytes`)
+            }
+
+            console.log()
+            console.log(`\x1b[32mExtracted successfully.\x1b[0m\n`)
+          } else {
+            await writeToFile(outPath, plain)
+
+            if (plainBytes === 0 || (expectedSize > 0 && plainBytes !== expectedSize)) {
+              throw new Error(`Incomplete transfer: received ${plainBytes} bytes, expected ${expectedSize} bytes`)
+            }
+
+            console.log()
+            console.log(`\x1b[32mSaved: ${outPath}\x1b[0m\n`)
+          }
+          if (channel.readyState === "open") {
+            try { channel.send("ACK") } catch {}
+          }
+          finished = true
+          cleanup()
+          resolve(true)
+        } catch (e: any) {
+          console.error(`\n\x1b[31mP2P transfer error: ${e.message || e}\x1b[0m`)
+          finished = true
+          cleanup()
+          resolve(false)
+        }
+      }
+    } catch (err: any) {
+      console.log(`\x1b[33mP2P negotiation failed: ${err.message || err}\x1b[0m`)
+      finished = true
+      cleanup()
+      resolve(false)
+    }
+  })
+}
+
 async function runReceive(input: string, overrideServer?: string | null) {
   const parsed = parseShareInput(input)
   const server = normalizeServer(overrideServer ?? parsed.server ?? DEFAULT_SERVER)
@@ -310,6 +740,21 @@ async function runReceive(input: string, overrideServer?: string | null) {
       counter++
     }
   }
+
+  const expectedSize = typeof cfg.size === "number" ? cfg.size : (parseInt(cfg.size, 10) || 0)
+  const p2pSuccess = await attemptP2PDownload(
+    server,
+    cfg,
+    key,
+    outPath,
+    parsed.id,
+    shouldExtract,
+    outName,
+    expectedSize
+  )
+  if (p2pSuccess) return
+
+  console.log(`\x1b[33mP2P connection failed or timed out. Falling back to HTTP relay...\x1b[0m`)
 
   let attempt = 0
   while (true) {

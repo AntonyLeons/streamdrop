@@ -26,7 +26,8 @@
   "dependencies": {
     "@noble/curves": "^2.2.0",
     "qrcode": "^1.5.4",
-    "tar": "^7.5.15"
+    "tar": "^7.5.15",
+    "werift": "^0.23.0"
   },
   "devDependencies": {
     "@types/tar": "^7.0.87"

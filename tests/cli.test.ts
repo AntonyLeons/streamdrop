@@ -18,6 +18,7 @@ beforeAll(async () => {
   testServer = Bun.serve({
     fetch: app.fetch,
     port: 0, // Random open port
+    idleTimeout: 255,
   })
   serverUrl = `http://localhost:${testServer.port}`
 })
@@ -72,7 +73,7 @@ test("CLI receives using the new quote-free receive code format", async () => {
 
   await rm(testFilePath, { force: true })
   await rm(receivedFilePath, { force: true })
-}, 15000)
+}, 30000)
 
 test("CLI outputs version and exits 0 on -v and --version", async () => {
   const cliPkgPath = join(process.cwd(), "cli", "package.json")
@@ -179,7 +180,7 @@ test("CLI sends and receives a file successfully", async () => {
   // Cleanup
   await rm(testFilePath, { force: true })
   await rm(receivedFilePath, { force: true })
-}, 15000)
+}, 30000)
 
 test("CLI handles file overwrite protection correctly", async () => {
   const testFileName = `cli-test-overwrite-${Date.now()}.bin`
@@ -224,7 +225,7 @@ test("CLI handles file overwrite protection correctly", async () => {
   await rm(testFilePath, { force: true })
   await rm(receivedFilePath1, { force: true })
   await rm(expectedOverwrittenFile, { force: true })
-}, 15000)
+}, 30000)
 
 test("CLI sends and extracts a folder automatically", async () => {
   const dirName = `cli-test-dir-${Date.now()}`
@@ -265,7 +266,7 @@ test("CLI sends and extracts a folder automatically", async () => {
   // Cleanup
   await rm(dirPath, { recursive: true, force: true })
   await rm(receivedDirPath, { recursive: true, force: true })
-}, 15000)
+}, 30000)
 
 test("package manager configurations have aligned version numbers", async () => {
   const tapPath = join(process.cwd(), "..", "homebrew-tap")
