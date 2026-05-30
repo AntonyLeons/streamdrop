@@ -172,8 +172,8 @@ function printProgress(action: string, current: number, total?: number) {
     const etaStr = eta > 0 ? ` · ${eta}s left` : ""
     
     const barWidth = 30
-    const filledWidth = Math.round((current / total) * barWidth)
-    const emptyWidth = barWidth - filledWidth
+    const filledWidth = Math.max(0, Math.min(barWidth, Math.round((current / total) * barWidth)))
+    const emptyWidth = Math.max(0, barWidth - filledWidth)
     const barStr = "=".repeat(filledWidth) + " ".repeat(emptyWidth)
     
     process.stdout.write(`\r\x1b[K\x1b[36m${action}:\x1b[0m [${barStr}] ${percent}% (${formatBytes(current)}/${formatBytes(total)}) | ${speedStr}${etaStr}`)
@@ -330,10 +330,7 @@ async function runSend(serverRaw: string, filePath: string) {
                 key,
                 sessionId: sess.id,
                 chunkSize: 16 * 1024, // 16 KB chunks for high compatibility with browser P2P data channels
-                onProgress: (sent: number, total: number) => {
-                  uploadedBytes = sent
-                  printProgress("Uploading (P2P)", sent, total)
-                }
+                onProgress: () => {}
               })
 
               const reader = enc.getReader()
@@ -352,25 +349,48 @@ async function runSend(serverRaw: string, filePath: string) {
                   }
 
                   channel.send(value)
+                  uploadedBytes += value.byteLength
+                  printProgress("Uploading (P2P)", uploadedBytes, totalSize)
 
                   if (channel.bufferedAmount > 1024 * 1024) {
                     await new Promise<void>((resolve, reject) => {
+                      let resolved = false
                       const onBufferedAmountLow = () => {
+                        if (resolved) return
+                        resolved = true
+                        try {
+                          if (typeof channel.off === "function") {
+                            channel.off("bufferedamountlow", onBufferedAmountLow)
+                          }
+                        } catch {}
                         (channel as any).onbufferedamountlow = undefined
                         resolve()
                       }
                       const onClose = () => {
+                        if (resolved) return
+                        resolved = true
                         reject(new Error("P2P data channel closed during backpressure wait"))
                       }
+
                       (channel as any).onbufferedamountlow = onBufferedAmountLow
+                      try {
+                        if (typeof channel.on === "function") {
+                          channel.on("bufferedamountlow", onBufferedAmountLow)
+                        }
+                      } catch {}
                       channel.onclose = onClose
 
                       // Safety timeout (10s)
                       setTimeout(() => {
-                        if ((channel as any).onbufferedamountlow === onBufferedAmountLow) {
-                          (channel as any).onbufferedamountlow = undefined
-                          resolve()
-                        }
+                        if (resolved) return
+                        resolved = true
+                        try {
+                          if (typeof channel.off === "function") {
+                            channel.off("bufferedamountlow", onBufferedAmountLow)
+                          }
+                        } catch {}
+                        (channel as any).onbufferedamountlow = undefined
+                        resolve()
                       }, 10000)
                     })
                   }

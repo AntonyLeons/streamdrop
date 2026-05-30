@@ -47,6 +47,11 @@ export function createEncryptStream({ stream, size, key, sessionId, chunkSize = 
             sent += chunk.byteLength
             if (onProgress) onProgress(sent, size)
             chunkIndex++
+
+            // Standard Web Stream flow control: pause if the controller queue is full
+            while (controller.desiredSize !== null && controller.desiredSize <= 0) {
+              await new Promise((r) => setTimeout(r, 10))
+            }
           }
         }
 
