@@ -332,3 +332,37 @@ test("download count is isolated per file when multiple files are uploaded", asy
 		await ctxReceiver.close();
 	}
 });
+
+test("pasting an image creates a share link successfully", async ({ page }) => {
+	await page.goto("/");
+
+	// Verify quick-share is visible
+	const quickShare = page.locator("#quick-share");
+	await expect(quickShare).toBeVisible();
+
+	// Dispatch a mock clipboard paste event containing an image file
+	await page.evaluate(() => {
+		const el = document.getElementById("quick-share");
+		if (!el) return;
+
+		const data = new DataTransfer();
+		const file = new File([new Uint8Array([1, 2, 3])], "image.png", { type: "image/png" });
+		data.items.add(file);
+
+		const event = new ClipboardEvent("paste", {
+			clipboardData: data,
+			bubbles: true,
+			cancelable: true,
+		});
+		el.dispatchEvent(event);
+	});
+
+	// Expect the file list empty state to be hidden and a share item to appear
+	await expect(page.locator("#sd-files-empty")).toBeHidden({ timeout: 20_000 });
+	await expect(page.locator(".sd-file-item")).toHaveCount(1, { timeout: 20_000 });
+
+	// The item name should match the pasted pattern
+	const fileName = await page.locator(".sd-file-item .sd-file-name").textContent();
+	expect(fileName).toMatch(/^pasted-image-\d+\.png/);
+});
+
