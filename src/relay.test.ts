@@ -32,15 +32,18 @@ test("receiver-first relay pipes bytes from upload to download", async () => {
     expect(channelId).toBeTruthy()
 
     const payload = new TextEncoder().encode("hello-streamdrop")
-    const uploadRes = await fetch(`${base}/upload/${cfg.uploadToken}/${channelId}`, {
+    const uploadResP = fetch(`${base}/upload/${cfg.uploadToken}/${channelId}`, {
       method: "PUT",
       headers: { "content-type": "application/octet-stream" },
       body: payload,
     })
-    expect(uploadRes.status).toBe(200)
+
     const downloadRes = await downloadResP
     const got = new Uint8Array(await downloadRes.arrayBuffer())
     expect(Buffer.from(got)).toEqual(Buffer.from(payload))
+
+    const uploadRes = await uploadResP
+    expect(uploadRes.status).toBe(200)
   } finally {
     server.stop(true)
   }
@@ -60,17 +63,20 @@ test("raw receiver-first relay pipes bytes and returns .bin filename", async () 
     expect(channelId).toBeTruthy()
 
     const payload = new TextEncoder().encode("hello-raw")
-    const uploadRes = await fetch(`${base}/raw/upload/${cfg.uploadToken}/${channelId}`, {
+    const uploadResP = fetch(`${base}/raw/upload/${cfg.uploadToken}/${channelId}`, {
       method: "PUT",
       headers: { "content-type": "application/octet-stream" },
       body: payload,
     })
-    expect(uploadRes.status).toBe(200)
+
     const downloadRes = await downloadResP
     expect(downloadRes.status).toBe(200)
     expect(downloadRes.headers.get("content-disposition")).toContain('filename="streamdrop.bin"')
     const got = new Uint8Array(await downloadRes.arrayBuffer())
     expect(Buffer.from(got)).toEqual(Buffer.from(payload))
+
+    const uploadRes = await uploadResP
+    expect(uploadRes.status).toBe(200)
   } finally {
     server.stop(true)
   }
@@ -119,28 +125,32 @@ test("receiver-first relay supports multiple sequential downloads (re-stream)", 
     expect(ch1).toBeTruthy()
 
     const payload1 = new TextEncoder().encode("cycle1")
-    const upload1 = await fetch(`${base}/upload/${cfg.uploadToken}/${ch1}`, {
+    const upload1P = fetch(`${base}/upload/${cfg.uploadToken}/${ch1}`, {
       method: "PUT",
       headers: { "content-type": "application/octet-stream" },
       body: payload1,
     })
-    expect(upload1.status).toBe(200)
     const download1 = await download1P
     expect(Buffer.from(new Uint8Array(await download1.arrayBuffer()))).toEqual(Buffer.from(payload1))
+
+    const upload1 = await upload1P
+    expect(upload1.status).toBe(200)
 
     const download2P = fetch(`${base}/d/${cfg.downloadToken}`)
     const ch2 = await claimChannelId(base, cfg.uploadToken)
     expect(ch2).toBeTruthy()
 
     const payload2 = new TextEncoder().encode("cycle2")
-    const upload2 = await fetch(`${base}/upload/${cfg.uploadToken}/${ch2}`, {
+    const upload2P = fetch(`${base}/upload/${cfg.uploadToken}/${ch2}`, {
       method: "PUT",
       headers: { "content-type": "application/octet-stream" },
       body: payload2,
     })
-    expect(upload2.status).toBe(200)
     const download2 = await download2P
     expect(Buffer.from(new Uint8Array(await download2.arrayBuffer()))).toEqual(Buffer.from(payload2))
+
+    const upload2 = await upload2P
+    expect(upload2.status).toBe(200)
   } finally {
     server.stop(true)
   }

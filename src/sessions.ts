@@ -10,6 +10,8 @@ export type Channel = {
   claimed: boolean
   sending: boolean
   createdAt: number
+  completionPromise?: Promise<void>
+  resolveCompletion?: () => void
 }
 
 export type Session = {

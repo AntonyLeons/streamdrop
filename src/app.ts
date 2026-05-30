@@ -404,6 +404,10 @@ export function createApp() {
       await body.pipeTo(ch.writable, { signal: c.req.raw.signal })
       incrementFiles()
       if (session.fileSize) incrementBytes(session.fileSize)
+
+      if (ch.completionPromise) {
+        await ch.completionPromise
+      }
     } catch (e: any) {
       const isAbort =
         c.req.raw.signal.aborted ||
@@ -446,6 +450,10 @@ export function createApp() {
       await body.pipeTo(ch.writable, { signal: c.req.raw.signal })
       incrementFiles()
       if (session.fileSize) incrementBytes(session.fileSize)
+
+      if (ch.completionPromise) {
+        await ch.completionPromise
+      }
     } catch (e: any) {
       const isAbort =
         c.req.raw.signal.aborted ||
@@ -473,8 +481,25 @@ export function createApp() {
       return c.json({ error: "too_many_receivers" }, 429, { "cache-control": "no-store" })
 
     const channelId = randomChannelId()
-    const { readable, writable } = new TransformStream()
-    session.channels.set(channelId, { id: channelId, writable, claimed: false, sending: false, createdAt: Date.now() })
+    const { readable: rawReadable, writable } = new TransformStream()
+    let resolveCompletion: (() => void) | undefined
+    const completionPromise = new Promise<void>((resolve) => {
+      resolveCompletion = resolve
+    })
+    const readable = rawReadable.pipeThrough(new TransformStream({
+      flush() {
+        if (resolveCompletion) resolveCompletion()
+      }
+    }))
+    session.channels.set(channelId, {
+      id: channelId,
+      writable,
+      claimed: false,
+      sending: false,
+      createdAt: Date.now(),
+      completionPromise,
+      resolveCompletion,
+    })
     notifyReceiverAvailable(session)
     notifySessionEvent(session, "channel_created", { channelId })
 
@@ -506,8 +531,25 @@ export function createApp() {
       return c.json({ error: "too_many_receivers" }, 429, { "cache-control": "no-store" })
 
     const channelId = randomChannelId()
-    const { readable, writable } = new TransformStream()
-    session.channels.set(channelId, { id: channelId, writable, claimed: false, sending: false, createdAt: Date.now() })
+    const { readable: rawReadable, writable } = new TransformStream()
+    let resolveCompletion: (() => void) | undefined
+    const completionPromise = new Promise<void>((resolve) => {
+      resolveCompletion = resolve
+    })
+    const readable = rawReadable.pipeThrough(new TransformStream({
+      flush() {
+        if (resolveCompletion) resolveCompletion()
+      }
+    }))
+    session.channels.set(channelId, {
+      id: channelId,
+      writable,
+      claimed: false,
+      sending: false,
+      createdAt: Date.now(),
+      completionPromise,
+      resolveCompletion,
+    })
     notifyReceiverAvailable(session)
     notifySessionEvent(session, "channel_created", { channelId })
 

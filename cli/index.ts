@@ -157,11 +157,22 @@ function printProgress(action: string, current: number, total?: number) {
   if (total) {
     const percent = ((current / total) * 100).toFixed(1)
     const eta = speed > 0 ? Math.round((total - current) / speed) : 0
-    const etaStr = eta > 0 ? `${eta}s left` : ""
-    process.stdout.write(`\r\x1b[K${action}: ${formatBytes(current)} / ${formatBytes(total)} (${percent}%) | ${speedStr} | ${etaStr}`)
+    const etaStr = eta > 0 ? ` · ${eta}s left` : ""
+    
+    const barWidth = 30
+    const filledWidth = Math.round((current / total) * barWidth)
+    const emptyWidth = barWidth - filledWidth
+    const barStr = "=".repeat(filledWidth) + " ".repeat(emptyWidth)
+    
+    process.stdout.write(`\r\x1b[K\x1b[36m${action}:\x1b[0m [${barStr}] ${percent}% (${formatBytes(current)}/${formatBytes(total)}) | ${speedStr}${etaStr}`)
   } else {
-    process.stdout.write(`\r\x1b[K${action}: ${formatBytes(current)} | ${speedStr}`)
+    process.stdout.write(`\r\x1b[K\x1b[36m${action}:\x1b[0m ${formatBytes(current)} | ${speedStr}`)
   }
+}
+
+function printSuccess(action: string, current: number, total?: number) {
+  printProgress(action, current, total)
+  process.stdout.write(` | \x1b[32m✔ ${action.startsWith("Download") ? "Saved" : "Complete"}!\x1b[0m\n`)
 }
 
 async function runSend(serverRaw: string, filePath: string) {
@@ -254,8 +265,8 @@ async function runSend(serverRaw: string, filePath: string) {
 
           const localPc = pc
           pc.ondatachannel = (event) => {
-            const channel = event.channel
-            channel.binaryType = "arraybuffer"
+            const channel = event.channel;
+            (channel as any).binaryType = "arraybuffer"
 
             let ackReceived = false
             let resolveAck: (() => void) | undefined
@@ -279,8 +290,9 @@ async function runSend(serverRaw: string, filePath: string) {
             }
 
             channel.onopen = async () => {
-              console.log(`\n\x1b[32mReceiver connected (P2P). Starting upload...\x1b[0m`)
+              process.stdout.write(`\r\x1b[K\x1b[32mReceiver connected (P2P). Starting upload...\x1b[0m`)
               startTime = 0
+              let uploadedBytes = 0
 
               let streamToRead: ReadableStream<Uint8Array>
               if (stat.isDirectory()) {
@@ -301,7 +313,10 @@ async function runSend(serverRaw: string, filePath: string) {
                 key,
                 sessionId: sess.id,
                 chunkSize: 16 * 1024, // 16 KB chunks for high compatibility with browser P2P data channels
-                onProgress: (sent: number, total: number) => printProgress("Uploading (P2P)", sent, total)
+                onProgress: (sent: number, total: number) => {
+                  uploadedBytes = sent
+                  printProgress("Uploading (P2P)", sent, total)
+                }
               })
 
               const reader = enc.getReader()
@@ -324,19 +339,19 @@ async function runSend(serverRaw: string, filePath: string) {
                   if (channel.bufferedAmount > 1024 * 1024) {
                     await new Promise<void>((resolve, reject) => {
                       const onBufferedAmountLow = () => {
-                        channel.onbufferedamountlow = undefined
+                        (channel as any).onbufferedamountlow = undefined
                         resolve()
                       }
                       const onClose = () => {
                         reject(new Error("P2P data channel closed during backpressure wait"))
                       }
-                      channel.onbufferedamountlow = onBufferedAmountLow
+                      (channel as any).onbufferedamountlow = onBufferedAmountLow
                       channel.onclose = onClose
 
                       // Safety timeout (10s)
                       setTimeout(() => {
-                        if (channel.onbufferedamountlow === onBufferedAmountLow) {
-                          channel.onbufferedamountlow = undefined
+                        if ((channel as any).onbufferedamountlow === onBufferedAmountLow) {
+                          (channel as any).onbufferedamountlow = undefined
                           resolve()
                         }
                       }, 10000)
@@ -344,17 +359,16 @@ async function runSend(serverRaw: string, filePath: string) {
                   }
                 }
 
-                console.log()
-                console.log(`\x1b[32mUpload complete.\x1b[0m\n`)
+                printSuccess("Uploading (P2P)", uploadedBytes, totalSize)
 
                 // Wait for the data channel buffer to be completely empty
                 if (channel.bufferedAmount > 0) {
                   await new Promise<void>((resolve) => {
                     const onBufferedAmountLow = () => {
-                      channel.onbufferedamountlow = undefined
+                      (channel as any).onbufferedamountlow = undefined
                       resolve()
                     }
-                    channel.onbufferedamountlow = onBufferedAmountLow
+                    (channel as any).onbufferedamountlow = onBufferedAmountLow
                     channel.onclose = () => resolve()
                     setTimeout(resolve, 2000)
                   })
@@ -409,8 +423,9 @@ async function runSend(serverRaw: string, filePath: string) {
         const channelId = data.channelId
         const claimed = await claim(server, sess.uploadToken, channelId)
         if (claimed) {
-          console.log(`\x1b[32mReceiver connected. Starting upload...\x1b[0m`)
+          process.stdout.write(`\r\x1b[K\x1b[32mReceiver connected. Starting upload...\x1b[0m`)
           startTime = 0
+          let uploadedBytes = 0
           
           let streamToRead: ReadableStream<Uint8Array>
           if (stat.isDirectory()) {
@@ -430,7 +445,10 @@ async function runSend(serverRaw: string, filePath: string) {
             size: totalSize,
             key, 
             sessionId: sess.id, 
-            onProgress: (sent: number, total: number) => printProgress("Uploading", sent, total)
+            onProgress: (sent: number, total: number) => {
+              uploadedBytes = sent
+              printProgress("Uploading", sent, total)
+            }
           })
           
           const uploadRes = await fetch(`${server}/upload/${sess.uploadToken}/${encodeURIComponent(channelId)}`, {
@@ -440,12 +458,12 @@ async function runSend(serverRaw: string, filePath: string) {
             duplex: "half",
           } as any)
           
-          console.log()
           if (!uploadRes.ok) {
+            console.log()
             const t = await safeText(uploadRes)
             console.error(`\x1b[31mUpload failed: ${t || uploadRes.status}\x1b[0m\n`)
           } else {
-            console.log(`\x1b[32mUpload complete.\x1b[0m\n`)
+            printSuccess("Uploading", uploadedBytes, totalSize)
           }
         }
       }
@@ -510,8 +528,8 @@ async function attemptP2PDownload(
         }
       }
 
-      const channel = pc.createDataChannel("file-transfer")
-      channel.binaryType = "arraybuffer"
+      const channel = pc.createDataChannel("file-transfer");
+      (channel as any).binaryType = "arraybuffer"
 
       const sseUrl = `${server}/session/events/${cfg.downloadToken}`
       const sseRes = await fetch(sseUrl, { signal: sseController.signal })
@@ -590,7 +608,7 @@ async function attemptP2PDownload(
           timeoutId = null
         }
 
-        console.log(`\x1b[32mConnected (P2P). Downloading...\x1b[0m`)
+        process.stdout.write(`\r\x1b[K\x1b[32mConnected (P2P). Downloading...\x1b[0m`)
         startTime = 0
 
         let plainBytes = 0
@@ -630,7 +648,7 @@ async function attemptP2PDownload(
           }
         }
 
-        channel.onerror = (err) => {
+        channel.onerror = (err: any) => {
           try { streamController?.error(err) } catch {}
         }
 
@@ -670,8 +688,7 @@ async function attemptP2PDownload(
               throw new Error(`Incomplete transfer: received ${plainBytes} bytes, expected ${expectedSize} bytes`)
             }
 
-            console.log()
-            console.log(`\x1b[32mExtracted successfully.\x1b[0m\n`)
+            printSuccess("Downloading", plainBytes, expectedSize)
           } else {
             await writeToFile(outPath, plain)
 
@@ -679,8 +696,7 @@ async function attemptP2PDownload(
               throw new Error(`Incomplete transfer: received ${plainBytes} bytes, expected ${expectedSize} bytes`)
             }
 
-            console.log()
-            console.log(`\x1b[32mSaved: ${outPath}\x1b[0m\n`)
+            printSuccess("Downloading", plainBytes, expectedSize)
           }
           if (channel.readyState === "open") {
             try { channel.send("ACK") } catch {}
@@ -862,8 +878,7 @@ async function runReceive(input: string, overrideServer?: string | null) {
           throw new Error(`Incomplete transfer: received ${plainBytes} bytes, expected ${expectedSize} bytes`)
         }
 
-        console.log()
-        console.log(`\x1b[32mExtracted successfully.\x1b[0m\n`)
+        printSuccess("Downloading", plainBytes, expectedSize)
       } else {
         await writeToFile(outPath, plain)
 
@@ -872,9 +887,9 @@ async function runReceive(input: string, overrideServer?: string | null) {
           throw new Error(`Incomplete transfer: received ${plainBytes} bytes, expected ${expectedSize} bytes`)
         }
 
-        console.log()
-        console.log(`\x1b[32mSaved: ${outPath}\x1b[0m\n`)
+        printSuccess("Downloading", plainBytes, expectedSize)
       }
+
       cleanup()
       return
     } catch (e: any) {
