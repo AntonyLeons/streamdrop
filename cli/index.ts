@@ -265,7 +265,7 @@ async function runSend(serverRaw: string, filePath: string) {
             iceServers: isLocal ? [] : [{ urls: "stun:stun.l.google.com:19302" }]
           })
 
-          pc.onicecandidate = (event) => {
+          pc.onicecandidate = (event: any) => {
             if (event.candidate) {
               fetch(`${server}/session/signal/${sess.uploadToken}`, {
                 method: "POST",
@@ -276,7 +276,7 @@ async function runSend(serverRaw: string, filePath: string) {
           }
 
           const localPc = pc
-          pc.ondatachannel = (event) => {
+          pc.ondatachannel = (event: any) => {
             const channel = event.channel;
             (channel as any).binaryType = "arraybuffer"
 
@@ -530,7 +530,7 @@ async function attemptP2PDownload(
         iceServers: isLocal ? [] : [{ urls: "stun:stun.l.google.com:19302" }]
       })
 
-      pc.onicecandidate = (event) => {
+      pc.onicecandidate = (event: any) => {
         if (event.candidate) {
           fetch(`${server}/session/signal/${cfg.downloadToken}`, {
             method: "POST",

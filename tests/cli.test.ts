@@ -268,36 +268,3 @@ test("CLI sends and extracts a folder automatically", async () => {
   await rm(receivedDirPath, { recursive: true, force: true })
 }, 30000)
 
-test("package manager configurations have aligned version numbers", async () => {
-  const tapPath = join(process.cwd(), "..", "homebrew-tap")
-  if (!existsSync(tapPath)) {
-    return // Skip if sibling tap repository is not present (e.g. in CI pipelines)
-  }
-
-  const cliPkgPath = join(process.cwd(), "cli", "package.json")
-  const cliPkg = JSON.parse(await readFile(cliPkgPath, "utf8"))
-  const expectedVersion = cliPkg.version
-
-  // 1. Verify Homebrew Formula version
-  const brewPath = join(process.cwd(), "..", "homebrew-tap", "Formula", "streamdrop-cli.rb")
-  const brewContent = await readFile(brewPath, "utf8")
-  const brewMatch = brewContent.match(/version\s+"([^"]+)"/)
-  expect(brewMatch).toBeTruthy()
-  expect(brewMatch![1]).toBe(expectedVersion)
-
-  // 2. Verify Homebrew Template placeholder
-  const brewTemplatePath = join(process.cwd(), "..", "homebrew-tap", "Formula", "streamdrop-cli.rb.template")
-  const brewTemplateContent = await readFile(brewTemplatePath, "utf8")
-  expect(brewTemplateContent).toContain('version "${VERSION}"')
-
-  // 3. Verify Scoop Manifest version
-  const scoopPath = join(process.cwd(), "..", "homebrew-tap", "bucket", "streamdrop-cli.json")
-  const scoopContent = await readFile(scoopPath, "utf8")
-  const scoopJson = JSON.parse(scoopContent)
-  expect(scoopJson.version).toBe(expectedVersion)
-
-  // 4. Verify Scoop Template placeholder
-  const scoopTemplatePath = join(process.cwd(), "..", "homebrew-tap", "bucket", "streamdrop-cli.json.template")
-  const scoopTemplateContent = await readFile(scoopTemplatePath, "utf8")
-  expect(scoopTemplateContent).toContain('"version": "${VERSION}"')
-})

@@ -24,6 +24,7 @@
     "@playwright/test": "^1.59.1",
     "@types/bun": "latest",
     "@types/tar": "^7.0.87",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "werift": "^0.23.0"
   }
 }
