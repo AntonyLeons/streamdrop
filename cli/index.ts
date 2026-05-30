@@ -226,7 +226,7 @@ async function runSend(serverRaw: string, filePath: string) {
 
   const key = await crypto.subtle.importKey("raw", rawKey, { name: "AES-GCM" }, false, ["encrypt"])
 
-  console.log(`\x1b[33mWaiting for receiver...\x1b[0m\n`)
+  console.log(`\x1b[33mWaiting for receiver...\x1b[0m`)
 
   const sseUrl = `${server}/session/events/${sess.uploadToken}`
   const sseRes = await fetch(sseUrl)
@@ -402,7 +402,7 @@ async function runSend(serverRaw: string, filePath: string) {
                 } else {
                   try { localPc.close() } catch {}
                 }
-                console.log(`\x1b[33mWaiting for receiver...\x1b[0m\n`)
+                console.log(`\x1b[33mWaiting for receiver...\x1b[0m`)
               } catch (err: any) {
                 console.error(`\n\x1b[31mP2P Upload failed: ${err.message || err}\x1b[0m\n`)
                 if (pc === localPc) {
