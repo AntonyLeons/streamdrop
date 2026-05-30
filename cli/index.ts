@@ -92,19 +92,31 @@ if (cmd === "send") {
 }
 
 function printHelp() {
-  console.log(`streamdrop
+  console.log(`\x1b[1m\x1b[36mstreamdrop\x1b[0m \x1b[90mv${pkg.version}\x1b[0m · End-to-end encrypted, zero-storage file transfer
 
-Usage:
-  streamdrop send <file_or_folder> [--server <url>] [--qr]
-  streamdrop receive <share-url> [--server <url>] [--out <file>] [--no-extract]
+\x1b[1m\x1b[33mUSAGE\x1b[0m
+  streamdrop \x1b[32msend\x1b[0m <file_or_folder> [flags]
+  streamdrop \x1b[32mreceive\x1b[0m <share-url> [flags]
 
-Environment:
-  STREAMDROP_SERVER
+\x1b[1m\x1b[33mCOMMANDS\x1b[0m
+  \x1b[32msend\x1b[0m <file_or_folder>    Send a file or folder securely
+  \x1b[32mreceive\x1b[0m <share-url>       Receive a shared file or folder \x1b[90m(alias: recv)\x1b[0m
 
-Config File (~/.streamdroprc):
+\x1b[1m\x1b[33mFLAGS\x1b[0m
+  \x1b[36m--server <url>\x1b[0m          Override default server
+  \x1b[36m--qr\x1b[0m                    Display QR code in terminal for mobile downloads (send only)
+  \x1b[36m--out <file>\x1b[0m            Specify output filename (receive only)
+  \x1b[36m--no-extract\x1b[0m            Do not extract directory tarball automatically (receive only)
+  \x1b[36m-h, --help\x1b[0m              Show help information
+  \x1b[36m-v, --version\x1b[0m           Show version number
+
+\x1b[1m\x1b[33mENVIRONMENT\x1b[0m
+  \x1b[36mSTREAMDROP_SERVER\x1b[0m       Override default server URL
+
+\x1b[1m\x1b[33mCONFIG FILE\x1b[0m \x1b[90m(~/.streamdroprc)\x1b[0m
   SERVER=https://my-server.com
 
-Default server:
+\x1b[1m\x1b[33mDEFAULT SERVER\x1b[0m
   ${DEFAULT_SERVER}
 `)
 }
