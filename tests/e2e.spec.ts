@@ -1,5 +1,9 @@
 import path from "node:path";
 import { expect, type Page, test } from "@playwright/test";
+import { spawn } from "node:child_process";
+import crypto from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -365,4 +369,106 @@ test("pasting an image creates a share link successfully", async ({ page }) => {
 	const fileName = await page.locator(".sd-file-item .sd-file-name").textContent();
 	expect(fileName).toMatch(/^pasted-image-\d+\.png/);
 });
+
+test("full CLI to browser P2P transfer round-trip", async ({ page }) => {
+	const testFileName = `e2e-cli-to-browser-${Date.now()}.bin`;
+	const testFilePath = path.join(os.tmpdir(), testFileName);
+	const testData = crypto.randomBytes(4 * 1024); // 4 KB payload
+	await fs.promises.writeFile(testFilePath, testData);
+
+	const bunPath = "bun";
+	const cliScriptPath = path.join(process.cwd(), "cli", "index.ts");
+	const serverUrl = "http://localhost:4000";
+
+	let shareUrl = "";
+	const sender = spawn(bunPath, [cliScriptPath, "send", testFilePath, "--server", serverUrl]);
+	sender.stderr.on("data", (data) => console.error("CLI SENDER STDERR:", data.toString()));
+
+	try {
+		await new Promise<void>((resolve, reject) => {
+			let output = "";
+			sender.stdout.on("data", (data) => {
+				output += data.toString();
+				const cleanOutput = output.replace(/\x1b\[[0-9;]*m/g, "");
+				const match = cleanOutput.match(/Share URL:\s+(http[^\s]+)/);
+				if (match) {
+					shareUrl = match[1];
+					resolve();
+				}
+			});
+			sender.on("error", reject);
+		});
+
+		// Force fallback blob approach, since headless chromium exposes
+		// showSaveFilePicker but won't trigger the test "download" event easily
+		await page.addInitScript(() => {
+			delete (window as any).showSaveFilePicker;
+			if (navigator.storage) {
+				navigator.storage.getDirectory = () =>
+					Promise.reject(new Error("no opfs"));
+			}
+		});
+
+		// Open the share URL in Playwright browser
+		await page.goto(shareUrl);
+		await expect(page.locator("#start")).toBeVisible();
+
+		// Trigger download
+		const downloadPromise = page.waitForEvent("download", { timeout: 15_000 });
+		await page.locator("#start").click();
+
+		const download = await downloadPromise;
+		const downloadPath = path.join("/tmp", download.suggestedFilename() || "cli-to-browser-download");
+		await download.saveAs(downloadPath);
+
+		// Verify download matches original
+		const downloadedContent = await fs.promises.readFile(downloadPath);
+		expect(downloadedContent.equals(testData)).toBe(true);
+	} finally {
+		sender.kill();
+		await fs.promises.rm(testFilePath, { force: true });
+	}
+});
+
+test("full browser to CLI P2P transfer round-trip", async ({ page }) => {
+	const testFileName = `e2e-browser-to-cli-${Date.now()}.bin`;
+	const testFilePath = path.join(os.tmpdir(), testFileName);
+	const testData = crypto.randomBytes(4 * 1024); // 4 KB payload
+	await fs.promises.writeFile(testFilePath, testData);
+
+	try {
+		await page.goto("/");
+		await page.evaluate(() => {
+			(window as any)._forceXhr = true;
+		});
+
+		// Upload the file on the browser side
+		await uploadFile(page, testFileName, testData);
+
+		// Wait for share link to be populated
+		const shareLinkInput = page.locator(".sd-file-item .sd-file-link");
+		await expect(shareLinkInput).toBeVisible({ timeout: 15_000 });
+		const shareUrl = await shareLinkInput.inputValue();
+
+		// Spawn CLI receiver to download the file
+		const bunPath = "bun";
+		const cliScriptPath = path.join(process.cwd(), "cli", "index.ts");
+		const serverUrl = "http://localhost:4000";
+		const receivedFilePath = path.join(process.cwd(), testFileName);
+
+		const receiver = spawn(bunPath, [cliScriptPath, "receive", shareUrl, "--server", serverUrl]);
+		receiver.stderr.on("data", (data) => console.error("CLI RECEIVER STDERR:", data.toString()));
+		await new Promise<void>((resolve) => receiver.on("close", resolve));
+
+		// Verify the received file matches original
+		expect(fs.existsSync(receivedFilePath)).toBe(true);
+		const receivedContent = await fs.promises.readFile(receivedFilePath);
+		expect(receivedContent.equals(testData)).toBe(true);
+
+		await fs.promises.rm(receivedFilePath, { force: true });
+	} finally {
+		await fs.promises.rm(testFilePath, { force: true });
+	}
+});
+
 
