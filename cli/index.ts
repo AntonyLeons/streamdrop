@@ -219,7 +219,12 @@ async function runSend(serverRaw: string, filePath: string) {
   }
   if (argv.includes("--qr")) {
     try {
-      const qr = await QRCode.toString(shareUrl, { type: "terminal", small: false })
+      // Standard macOS Terminal (Terminal.app) default line-spacing distorts Unicode half-blocks
+      const isAppleTerminal = process.env.TERM_PROGRAM === "Apple_Terminal"
+      const qr = await QRCode.toString(shareUrl, {
+        type: "terminal",
+        small: !isAppleTerminal
+      })
       console.log(qr.trimEnd() + "\n")
     } catch {}
   }
