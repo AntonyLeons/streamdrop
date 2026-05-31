@@ -223,9 +223,10 @@ async function runSend(serverRaw: string, filePath: string) {
       const isAppleTerminal = process.env.TERM_PROGRAM === "Apple_Terminal"
       const qr = await QRCode.toString(shareUrl, {
         type: "terminal",
-        small: !isAppleTerminal
+        small: !isAppleTerminal,
+        errorCorrectionLevel: "L" // Shrinks the QR code grid size to keep it extremely compact and highly scannable on screens
       })
-      console.log(qr.trimEnd() + "\n")
+      console.log(qr.trimEnd())
     } catch {}
   }
 
