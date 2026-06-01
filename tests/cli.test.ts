@@ -268,3 +268,147 @@ test("CLI sends and extracts a folder automatically", async () => {
   await rm(receivedDirPath, { recursive: true, force: true })
 }, 30000)
 
+test("CLI respects STREAMDROP_SERVER environment variable", async () => {
+  const testFileName = `cli-test-env-${Date.now()}.bin`
+  const testFilePath = join(tmpdir(), testFileName)
+  const receivedFilePath = join(process.cwd(), testFileName)
+
+  const testData = randomBytes(1024)
+  await writeFile(testFilePath, testData)
+
+  let shareUrl = ""
+  
+  // Start the sender WITH STREAMDROP_SERVER env set, and WITHOUT --server flag
+  const sender = spawn(bunPath, [cliScriptPath, "send", testFilePath], {
+    env: {
+      ...process.env,
+      STREAMDROP_SERVER: serverUrl
+    }
+  })
+  
+  await new Promise<void>((resolve, reject) => {
+    let output = ""
+    sender.stdout.on("data", (data) => {
+      output += data.toString()
+      const cleanOutput = output.replace(/\x1b\[[0-9;]*m/g, "")
+      const match = cleanOutput.match(/Share URL:\s+(http[^\s]+)/)
+      if (match) {
+        shareUrl = match[1]
+        resolve()
+      }
+    })
+    sender.on("error", reject)
+  })
+
+  expect(shareUrl).toBeTruthy()
+  expect(shareUrl).toContain(serverUrl)
+
+  // Start the receiver WITH STREAMDROP_SERVER env set, and WITHOUT --server flag
+  const receiver = spawn(bunPath, [cliScriptPath, "receive", shareUrl], {
+    env: {
+      ...process.env,
+      STREAMDROP_SERVER: serverUrl
+    }
+  })
+  
+  await new Promise<void>((resolve, reject) => {
+    receiver.on("close", (code) => {
+      if (code === 0) resolve()
+      else reject(new Error(`Receiver exited with code ${code}`))
+    })
+    receiver.on("error", reject)
+  })
+
+  sender.kill()
+
+  const receivedData = await readFile(receivedFilePath)
+  expect(receivedData.length).toBe(testData.length)
+
+  await rm(testFilePath, { force: true })
+  await rm(receivedFilePath, { force: true })
+}, 30000)
+
+test("CLI respects .streamdroprc configuration file", async () => {
+  const { homedir } = await import("node:os")
+  const rcPath = join(homedir(), ".streamdroprc")
+  const backupRcPath = join(homedir(), ".streamdroprc.backup")
+  let backedUp = false
+
+  // Backup existing .streamdroprc if it exists
+  if (existsSync(rcPath)) {
+    const originalContent = await readFile(rcPath)
+    await writeFile(backupRcPath, originalContent)
+    backedUp = true
+  }
+
+  try {
+    // Write test config to .streamdroprc
+    await writeFile(rcPath, `SERVER=${serverUrl}\n`)
+
+    const testFileName = `cli-test-rc-${Date.now()}.bin`
+    const testFilePath = join(tmpdir(), testFileName)
+    const receivedFilePath = join(process.cwd(), testFileName)
+
+    const testData = randomBytes(1024)
+    await writeFile(testFilePath, testData)
+
+    let shareUrl = ""
+
+    // Start the sender WITHOUT STREAMDROP_SERVER env and WITHOUT --server flag
+    const envCopy = { ...process.env }
+    delete envCopy.STREAMDROP_SERVER
+
+    const sender = spawn(bunPath, [cliScriptPath, "send", testFilePath], {
+      env: envCopy
+    })
+
+    await new Promise<void>((resolve, reject) => {
+      let output = ""
+      sender.stdout.on("data", (data) => {
+        output += data.toString()
+        const cleanOutput = output.replace(/\x1b\[[0-9;]*m/g, "")
+        const match = cleanOutput.match(/Share URL:\s+(http[^\s]+)/)
+        if (match) {
+          shareUrl = match[1]
+          resolve()
+        }
+      })
+      sender.on("error", reject)
+    })
+
+    expect(shareUrl).toBeTruthy()
+    expect(shareUrl).toContain(serverUrl)
+
+    // Start the receiver WITHOUT env and WITHOUT flag
+    const receiver = spawn(bunPath, [cliScriptPath, "receive", shareUrl], {
+      env: envCopy
+    })
+
+    await new Promise<void>((resolve, reject) => {
+      receiver.on("close", (code) => {
+        if (code === 0) resolve()
+        else reject(new Error(`Receiver exited with code ${code}`))
+      })
+      receiver.on("error", reject)
+    })
+
+    sender.kill()
+
+    const receivedData = await readFile(receivedFilePath)
+    expect(receivedData.length).toBe(testData.length)
+
+    await rm(testFilePath, { force: true })
+    await rm(receivedFilePath, { force: true })
+  } finally {
+    // Clean up .streamdroprc
+    await rm(rcPath, { force: true })
+    // Restore backup if it existed
+    if (backedUp) {
+      const backupContent = await readFile(backupRcPath)
+      await writeFile(rcPath, backupContent)
+      await rm(backupRcPath, { force: true })
+    }
+  }
+}, 30000)
+
+
