@@ -609,14 +609,11 @@ const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platfor
 const IOS_MAX_SIZE = 300 * 1024 * 1024 // 300 MB
 
 if (isIOS && fileSize > IOS_MAX_SIZE) {
-  elError.textContent = `File size (${prettyBytes(fileSize)}) exceeds iOS browser memory limits (300MB). Use the StreamDrop CLI instead.`
+  elError.textContent = `Warning: File size (${prettyBytes(fileSize)}) exceeds typical iOS Safari memory limits. StreamDrop will attempt to use OPFS for streaming, but if it fails, please use the CLI.`
   elError.classList.remove("hidden")
-  if (elHint) elHint.textContent = "Browser limits exceeded"
+  if (elHint) elHint.textContent = "CLI Recommended for large files"
   if (elStart) {
-    elStart.disabled = true
-    elStart.textContent = "CLI Recommended"
-    elStart.style.opacity = "0.5"
-    elStart.style.cursor = "not-allowed"
+    elStart.textContent = "Download anyway"
   }
   setMeta(`Ready to download ${suggestedName}${fileSize ? ` · ${prettyBytes(fileSize)}` : ""}`)
 } else {
