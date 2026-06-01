@@ -467,7 +467,6 @@ async function startTransfer(file) {
   }
 
   setStep("encrypt", true)
-  setMeta(`${file.name} · ${prettyBytes(file.size)}`)
 
   const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"])
   const raw = new Uint8Array(await crypto.subtle.exportKey("raw", key))
