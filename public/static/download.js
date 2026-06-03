@@ -605,26 +605,65 @@ document.addEventListener("click", async (e) => {
 window.addEventListener("unhandledrejection", (e) => showError(String(e.reason?.message ?? e.reason ?? "error")))
 window.addEventListener("error", (e) => showError(String(e.error?.message ?? e.message ?? "error")))
 
-const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-const IOS_MAX_SIZE = 300 * 1024 * 1024 // 300 MB
+const ua = navigator.userAgent
+const isFacebookOrInstagram = /FBAN|FBAV|FB_IAB/i.test(ua) || /Instagram/i.test(ua) || /LinkedInApp/i.test(ua)
+const isAndroid = /Android/i.test(ua)
 
-if (isIOS && fileSize > IOS_MAX_SIZE) {
-  elError.textContent = `Warning: File size (${prettyBytes(fileSize)}) exceeds typical iOS Safari memory limits. StreamDrop will attempt to use OPFS for streaming, but if it fails, please use the CLI.`
-  elError.classList.remove("hidden")
-  if (elHint) elHint.textContent = "CLI Recommended for large files"
-  if (elStart) {
-    elStart.textContent = "Download anyway"
+if (isFacebookOrInstagram) {
+  const elInAppWarn = document.getElementById("in-app-warning")
+  if (elInAppWarn) {
+    elInAppWarn.classList.remove("hidden")
+    const elInAppText = document.getElementById("in-app-warning-text")
+    if (elInAppText) {
+      if (isAndroid) {
+        const currentUrlNoProtocol = window.location.href.replace(/^https?:\/\//, '')
+        const intentUrl = `intent://${currentUrlNoProtocol}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(window.location.href)};end`
+        elInAppText.innerHTML = `<strong>Downloads are blocked inside Facebook/Instagram/LinkedIn!</strong> Please open this page in Chrome to download files. <a href="${intentUrl}" style="display: inline-block; margin-top: 8px; font-weight: bold; text-decoration: underline; color: inherit;">Tap here to open in Chrome &rarr;</a>`
+      } else {
+        elInAppText.innerHTML = `<strong>Downloads are blocked inside Facebook/Instagram/LinkedIn!</strong> Please tap the menu icon (••• or share) at the top/bottom and select <strong>"Open in Safari"</strong> to download this file.`
+      }
+    }
   }
-  setMeta(`Ready to download ${suggestedName}${fileSize ? ` · ${prettyBytes(fileSize)}` : ""}`)
-} else {
-  const autoKey = getKeyBytes()
-  if (autoKey) {
-    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
-    if (isSafari || isIOS) {
-      setMeta(`Ready to download ${suggestedName}${fileSize ? ` · ${prettyBytes(fileSize)}` : ""}`)
+
+  if (elStart) {
+    if (isAndroid) {
+      elStart.textContent = "Open in Chrome to download"
+      elStart.addEventListener("click", (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        const currentUrlNoProtocol = window.location.href.replace(/^https?:\/\//, '')
+        const intentUrl = `intent://${currentUrlNoProtocol}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(window.location.href)};end`
+        window.location.href = intentUrl
+      }, { capture: true })
     } else {
-      setMeta(`Starting ${suggestedName}…`)
-      startOnce(autoKey)
+      elStart.disabled = true
+      elStart.textContent = "Downloads Blocked in WebView"
+      elStart.style.opacity = "0.5"
+      elStart.style.cursor = "not-allowed"
+    }
+  }
+} else {
+  const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  const IOS_MAX_SIZE = 300 * 1024 * 1024 // 300 MB
+
+  if (isIOS && fileSize > IOS_MAX_SIZE) {
+    elError.textContent = `Warning: File size (${prettyBytes(fileSize)}) exceeds typical iOS Safari memory limits. StreamDrop will attempt to use OPFS for streaming, but if it fails, please use the CLI.`
+    elError.classList.remove("hidden")
+    if (elHint) elHint.textContent = "CLI Recommended for large files"
+    if (elStart) {
+      elStart.textContent = "Download anyway"
+    }
+    setMeta(`Ready to download ${suggestedName}${fileSize ? ` · ${prettyBytes(fileSize)}` : ""}`)
+  } else {
+    const autoKey = getKeyBytes()
+    if (autoKey) {
+      const isSafari = /^((?!chrome|android).)*safari/i.test(ua)
+      if (isSafari || isIOS) {
+        setMeta(`Ready to download ${suggestedName}${fileSize ? ` · ${prettyBytes(fileSize)}` : ""}`)
+      } else {
+        setMeta(`Starting ${suggestedName}…`)
+        startOnce(autoKey)
+      }
     }
   }
 }

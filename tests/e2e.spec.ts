@@ -183,6 +183,47 @@ test("download page loads for valid session", async ({ page, request }) => {
 	await expect(page.locator("#start")).toBeVisible();
 });
 
+test("download page detects Android Facebook/Instagram in-app browser and shows Chrome intent link", async ({ browser, request }) => {
+	const res = await request.get("/", {
+		headers: { accept: "application/json" },
+	});
+	const cfg = await res.json();
+
+	// Emulate Android Facebook App WebView User-Agent
+	const context = await browser.newContext({
+		userAgent: "Mozilla/5.0 (Linux; Android 12; SM-G973F Build/SP1A.210812.016; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/100.0.4896.127 Mobile Safari/537.36 [FB_IAB/FB4A;FBAV/365.0.0.30.112;]"
+	});
+	const page = await context.newPage();
+
+	await page.goto(`/${cfg.id}`);
+	await expect(page.locator("#in-app-warning")).toBeVisible();
+	await expect(page.locator("#in-app-warning-text")).toContainText("blocked inside Facebook/Instagram/LinkedIn");
+	await expect(page.locator("#in-app-warning-text a")).toHaveAttribute("href", /intent:\/\/.*#Intent;/);
+	await expect(page.locator("#start")).toContainText("Open in Chrome to download");
+	await context.close();
+});
+
+test("download page detects iOS Facebook/Instagram in-app browser and blocks download with Safari instruction", async ({ browser, request }) => {
+	const res = await request.get("/", {
+		headers: { accept: "application/json" },
+	});
+	const cfg = await res.json();
+
+	// Emulate iOS Instagram App WebView User-Agent
+	const context = await browser.newContext({
+		userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 15_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 231.0.0.17.115"
+	});
+	const page = await context.newPage();
+
+	await page.goto(`/${cfg.id}`);
+	await expect(page.locator("#in-app-warning")).toBeVisible();
+	await expect(page.locator("#in-app-warning-text")).toContainText("blocked inside Facebook/Instagram/LinkedIn");
+	await expect(page.locator("#in-app-warning-text")).toContainText("Open in Safari");
+	await expect(page.locator("#start")).toContainText("Downloads Blocked in WebView");
+	await expect(page.locator("#start")).toBeDisabled();
+	await context.close();
+});
+
 test("download page for unknown id shows 404", async ({ page }) => {
 	await page.goto("/nonexistent_id_xyz");
 	await expect(page.locator("body")).toContainText("404");
