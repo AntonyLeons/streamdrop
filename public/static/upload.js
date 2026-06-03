@@ -502,7 +502,7 @@ async function startTransfer(file) {
 
     if (!supportsDuplex || window._forceXhr) {
       setStep("encrypt", true)
-      item.setBusy(true)
+      item.setBusy(true, true)
       item.setState("Encrypting")
 
       const uploadWorker = new Worker("/static/upload-worker.js", { type: "module" })
@@ -776,6 +776,14 @@ async function startTransfer(file) {
                   resumeResolve = null
                 }
               }
+              channel.onclose = () => {
+                uploadWorker.postMessage({ type: "abort" })
+                if (rejectEncPromise) rejectEncPromise(new Error("channel_closed"))
+              }
+              channel.onerror = (err) => {
+                uploadWorker.postMessage({ type: "abort" })
+                if (rejectEncPromise) rejectEncPromise(err || new Error("channel_error"))
+              }
 
               const selfIsWebKit = CSS.supports("-webkit-touch-callout", "none") || 
                                   (navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome') && !navigator.userAgent.includes('Edg') && !navigator.userAgent.includes('Android')) ||
@@ -791,7 +799,9 @@ async function startTransfer(file) {
               }
               abortController.signal.addEventListener("abort", cleanupWorker)
 
+              let rejectEncPromise = null
               const encryptPromise = new Promise((resolveEnc, rejectEnc) => {
+                rejectEncPromise = rejectEnc
                 uploadWorker.onmessage = async (event) => {
                   const msg = event.data
                   if (msg.type === "chunk") {
@@ -1047,7 +1057,11 @@ function createShareItem({ file, shareUrl, cliCode }) {
       if (elDownloads) elDownloads.classList.remove("hidden")
       if (elDownloadsText) elDownloadsText.textContent = `Downloaded ${downloads} time${downloads === 1 ? "" : "s"}`
     },
-    setBusy: (yes) => {
+    setBusy: (yes, isEncrypting = false) => {
+      if (yes && !isEncrypting) {
+        // Do not disable buttons or inputs when a download is in progress
+        return
+      }
       for (const btn of actionButtons) btn.disabled = yes
       if (elLink) elLink.disabled = yes
     },
