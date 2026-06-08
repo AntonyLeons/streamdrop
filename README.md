@@ -13,6 +13,10 @@ Files are encrypted in the sender’s browser and streamed through the server in
 - StreamDrop generates share links (the decryption key stays in the URL fragment after `#`)
 - Receiver opens the link and downloads; decryption happens locally in the browser
 
+## HTTPS Requirement
+
+Downloads via WebRTC and streaming require a **secure context (HTTPS)**. Modern browsers restrict certain APIs (like `navigator.clipboard`, `WebRTC`, and `fetch` with streaming) to HTTPS origins. When running locally on `localhost`, this is not an issue (browsers treat `localhost` as secure). For production or network access, you **must** serve StreamDrop over HTTPS — either directly or via a reverse proxy (Nginx, Caddy, Cloudflare Tunnel, etc.).
+
 ## Quick start (local)
 
 ```bash
@@ -38,6 +42,11 @@ brew install streamdrop-cli
 ```powershell
 scoop bucket add antonyleons https://github.com/AntonyLeons/homebrew-tap.git
 scoop install streamdrop-cli
+```
+
+**npm (Node.js)**
+```bash
+npm install -g streamdrop-cli
 ```
 
 **From Source**
