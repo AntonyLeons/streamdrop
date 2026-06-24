@@ -136,6 +136,7 @@ async function tryWebRTCDownload(raw) {
         document.body.appendChild(a)
         a.click()
         a.remove()
+        if (msg.opfsName) sessionOpfsFiles.add(msg.opfsName)
         
         setBar(1)
         setMeta(fileSize ? `${prettyBytes(plainBytes)} of ${prettyBytes(fileSize)} downloaded` : `${prettyBytes(plainBytes)} downloaded`)
@@ -345,7 +346,7 @@ async function run({ raw }) {
           } else if (msg.type === "complete") {
             finished = true
             worker.terminate()
-            resResolve(msg.file)
+            resResolve({ file: msg.file, opfsName: msg.opfsName })
           } else if (msg.type === "error") {
             finished = true
             worker.terminate()
@@ -380,7 +381,7 @@ async function run({ raw }) {
           }
         }
 
-        const file = await completionPromise
+        const { file, opfsName } = await completionPromise
 
         if (plainBytes === 0 || (fileSize > 0 && plainBytes !== fileSize)) {
           throw new Error(`Incomplete transfer: received ${plainBytes} bytes, expected ${fileSize} bytes`)
@@ -393,6 +394,7 @@ async function run({ raw }) {
         document.body.appendChild(a)
         a.click()
         a.remove()
+        if (opfsName) sessionOpfsFiles.add(opfsName)
         setBar(1)
         setMeta(fileSize ? `${prettyBytes(plainBytes)} of ${prettyBytes(fileSize)} downloaded` : `${prettyBytes(plainBytes)} downloaded`)
         elHint.textContent = "Complete"
@@ -465,6 +467,52 @@ window.addEventListener("beforeunload", (e) => {
     e.returnValue = "You have an active download. Closing this page will stop it."
   }
 })
+
+// Best-effort cleanup of orphaned OPFS temp files left behind by older
+// versions of this site (each download used to leak the full plaintext into
+// OPFS and never delete it). The 24h TTL is safe for in-flight downloads or
+// active upload shares in other tabs — only files older than a day are swept.
+sweepStaleOpfs()
+
+// OPFS files created during this tab's lifetime. We keep them alive for the
+// entire session so the browser's download manager can stream from the Blob
+// URL no matter how large the file or how slow the disk. All are cleaned up
+// on pagehide; the 24h sweep above catches anything that escapes (tab crash,
+// force-quit, etc.).
+const sessionOpfsFiles = new Set()
+
+window.addEventListener("pagehide", () => {
+  if (sessionOpfsFiles.size === 0) return
+  if (!navigator.storage?.getDirectory) return
+  navigator.storage.getDirectory().then((root) => {
+    for (const name of sessionOpfsFiles) {
+      root.removeEntry(name).catch(() => {})
+    }
+    sessionOpfsFiles.clear()
+  }).catch(() => {})
+})
+
+async function sweepStaleOpfs() {
+  if (!navigator.storage?.getDirectory) return
+  let root
+  try {
+    root = await navigator.storage.getDirectory()
+  } catch {
+    return
+  }
+  const ttlMs = 24 * 60 * 60 * 1000
+  const now = Date.now()
+  try {
+    for await (const entry of root.values()) {
+      if (entry.kind !== "file") continue
+      const m = entry.name.match(/^sd(?:_enc)?_(\d+)_/)
+      if (!m) continue
+      const ts = Number(m[1])
+      if (!Number.isFinite(ts) || now - ts < ttlMs) continue
+      try { await root.removeEntry(entry.name) } catch {}
+    }
+  } catch {}
+}
 
 function formatSpeed(bytesPerSec) {
   if (bytesPerSec === 0) return "0 B/s"

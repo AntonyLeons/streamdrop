@@ -444,6 +444,43 @@ window.addEventListener("beforeunload", (e) => {
   }
 })
 
+// On tab close, clean up all encrypted OPFS temp files from this session.
+// Without this, files whose delete button was never clicked would linger
+// until the 24h sweep on the next visit (which may never come).
+window.addEventListener("pagehide", () => {
+  for (const cleanup of cleanupBySessionId.values()) {
+    cleanup().catch(() => {})
+  }
+  cleanupBySessionId.clear()
+})
+
+// Best-effort cleanup of orphaned OPFS temp files from prior sessions.
+// 24h TTL is safe for active upload shares in other tabs — only files
+// older than a day are swept.
+sweepStaleOpfs()
+
+async function sweepStaleOpfs() {
+  if (!navigator.storage?.getDirectory) return
+  let root
+  try {
+    root = await navigator.storage.getDirectory()
+  } catch {
+    return
+  }
+  const ttlMs = 24 * 60 * 60 * 1000
+  const now = Date.now()
+  try {
+    for await (const entry of root.values()) {
+      if (entry.kind !== "file") continue
+      const m = entry.name.match(/^sd(?:_enc)?_(\d+)_/)
+      if (!m) continue
+      const ts = Number(m[1])
+      if (!Number.isFinite(ts) || now - ts < ttlMs) continue
+      try { await root.removeEntry(entry.name) } catch {}
+    }
+  } catch {}
+}
+
 function formatSpeed(bytesPerSec) {
   if (bytesPerSec === 0) return "0 B/s"
   const k = 1024

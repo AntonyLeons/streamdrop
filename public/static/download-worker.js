@@ -15,7 +15,7 @@ self.onmessage = async (e) => {
   const msg = e.data
   if (msg.type === "init") {
     const { keyBytes, sessionId, suggestedName } = msg
-    fileName = `sd_${Date.now()}_${suggestedName}`
+    fileName = `sd_${Date.now()}_${suggestedName.replace(/[\\/]/g, "_")}`
     
     // Import key
     const key = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["decrypt"])
@@ -83,16 +83,23 @@ async function readLoop() {
     }
     
     let file
+    let opfsName = ""
     if (useOPFS) {
       accessHandle.flush()
       accessHandle.close()
       accessHandle = null
       file = await fileHandle.getFile()
+      // Keep the OPFS file alive until the main thread's download manager
+      // has finished reading it — getFile() may return a lazy reference
+      // backed by OPFS, not an in-memory snapshot, so removing it here
+      // would break large downloads. The main thread schedules removal
+      // after the download has had time to drain.
+      opfsName = fileName
     } else {
       file = new Blob(chunks, { type: "application/octet-stream" })
     }
     
-    self.postMessage({ type: "complete", file })
+    self.postMessage({ type: "complete", file, opfsName })
   } catch (err) {
     cleanup()
     throw err
