@@ -12,8 +12,8 @@ importers:
         specifier: ^2.2.0
         version: 2.2.0
       hono:
-        specifier: ^4.12.28
-        version: 4.12.28
+        specifier: ^4.12.34
+        version: 4.12.34
       qrcode:
         specifier: ^1.5.4
         version: 1.5.4
@@ -348,8 +348,8 @@ packages:
     resolution: {integrity: sha512-DyFP3BM/3YHTQOCUL/w0OZHR0lpKeGrxotcHWcqNEdnltqFwXVfhEBQ94eIo34AfQpo0rGki4cyIiftY06h2Fg==}
     engines: {node: 6.* || 8.* || >= 10.*}
 
-  hono@4.12.28:
-    resolution: {integrity: sha512-YwUvVpSF7m1yOblFPrU3Hbo8XhPheBoiyfGuII6z19LnOr6JpDnyyp7LFNrfV56wS8tpvtBFGRISHN02pDdLOA==}
+  hono@4.12.34:
+    resolution: {integrity: sha512-GqXJqY/xJkJmuloTrnV1ZEXG3fqte+VjkUqoRNZXcrUidiUOP4fMSIHHY4tsqZBK++kVyWmt/AAfSUuy57/eSA==}
     engines: {node: '>=16.9.0'}
 
   ieee754@1.2.1:
@@ -829,7 +829,7 @@ snapshots:
 
   get-caller-file@2.0.5: {}
 
-  hono@4.12.28: {}
+  hono@4.12.34: {}
 
   ieee754@1.2.1: {}
 
