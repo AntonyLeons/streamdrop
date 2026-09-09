@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test"
 import { createApp } from "./app"
 import { createSession, getMaxReceivers } from "./sessions"
+import { MAX_REQUEST_BODY_SIZE } from "./server-config"
 
 function sleep(ms: number) {
   return new Promise<void>((r) => setTimeout(r, ms))
@@ -77,6 +78,57 @@ test("raw receiver-first relay pipes bytes and returns .bin filename", async () 
 
     const uploadRes = await uploadResP
     expect(uploadRes.status).toBe(200)
+  } finally {
+    server.stop(true)
+  }
+})
+
+test("raw relay streams request bodies larger than Bun's 128 MiB default", async () => {
+  const app = createApp()
+  const server = Bun.serve({
+    port: 0,
+    fetch: app.fetch,
+    maxRequestBodySize: MAX_REQUEST_BODY_SIZE,
+  })
+  const base = `http://localhost:${server.port}`
+  const totalBytes = 129 * 1024 * 1024
+  const chunkBytes = 1024 * 1024
+
+  try {
+    const cfg = await fetchSessionCfg(base)
+    const downloadResP = fetch(`${base}/raw/d/${cfg.downloadToken}`)
+    const channelId = await claimChannelId(base, cfg.uploadToken)
+    let sent = 0
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        const remaining = totalBytes - sent
+        if (remaining <= 0) {
+          controller.close()
+          return
+        }
+        const length = Math.min(chunkBytes, remaining)
+        controller.enqueue(new Uint8Array(length))
+        sent += length
+      },
+    })
+
+    const uploadResP = fetch(`${base}/raw/upload/${cfg.uploadToken}/${channelId}`, {
+      method: "PUT",
+      body,
+    })
+    const downloadRes = await downloadResP
+    expect(downloadRes.status).toBe(200)
+
+    const reader = downloadRes.body!.getReader()
+    let received = 0
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      received += value.byteLength
+    }
+
+    expect(received).toBe(totalBytes)
+    expect((await uploadResP).status).toBe(200)
   } finally {
     server.stop(true)
   }

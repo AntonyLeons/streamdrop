@@ -1,5 +1,6 @@
 import { createApp } from "./app"
 import { startSessionReaper } from "./sessions"
+import { MAX_REQUEST_BODY_SIZE } from "./server-config"
 
 process.on("uncaughtException", (err) => {
   console.error("Uncaught Exception:", err)
@@ -18,7 +19,8 @@ try {
   Bun.serve({ 
     port, 
     fetch: app.fetch, 
-    idleTimeout: 0, 
+    idleTimeout: 0,
+    maxRequestBodySize: MAX_REQUEST_BODY_SIZE,
     error(err) {
       console.error("Server Error:", err)
       return new Response("Internal Server Error", { status: 500 })
