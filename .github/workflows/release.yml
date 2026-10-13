@@ -24,7 +24,7 @@ jobs:
         with:
           bun-version: latest
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
       - name: Run linter/typecheck
         run: bun run check
       - name: Run unit tests
@@ -73,10 +73,14 @@ jobs:
         run: |
           TAG="${{ github.event.release.tag_name }}"
           VERSION="${TAG#v}"
-          cd cli && bun pm version "$VERSION"
+          cd cli
+          CURRENT_VERSION=$(bun -e 'console.log(require("./package.json").version)')
+          if [ "$CURRENT_VERSION" != "$VERSION" ]; then
+            bun pm version "$VERSION" --no-git-tag-version
+          fi
 
       - name: Install
-        run: bun install
+        run: bun install --frozen-lockfile
 
       - name: Build CLI
         run: bun build cli/index.ts --compile --target bun-${{ matrix.name }} --outfile dist/streamdrop-cli${{ matrix.ext }}
